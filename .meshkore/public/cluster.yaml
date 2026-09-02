@@ -1,0 +1,93 @@
+# MeshKore cluster config — Standard v35 (schema 'cluster_yaml').
+# Canonical schema: https://meshkore.com/standard.json
+#
+# btc.fun has no running code yet (spec-only). Modules cover the roadmap's
+# domain areas (kind: area); promote one to `kind: code` + `path:` once
+# its folder exists (see PROTOCOL.md §9 for the planned monorepo layout).
+version: 1
+id: btc-fun
+type: dev
+name: "btc.fun"
+description: "Specification-stage community launchpad: Bitcoin-scheduled mining, RGB++ ownership, CKB settlement and transparent reserves. Economics and architecture validation precede the demo and commercial gates."
+
+transport:
+  protocol: websocket
+  endpoint: "ws://localhost:5570/events"
+
+storage:
+  mode: local
+
+modules:
+  # ─── 1. The Project bucket (meta — always first) ─────────────────
+  - id: project
+    name: "Project"
+    kind: area
+    description: "Meta bucket — cross-cutting work without its own code folder. Holds deploy, docs, design, general."
+
+  # ─── 2. Roadmap-aligned domain areas (peers of `project`) ─────────
+  - id: validation
+    name: "Technical validation"
+    kind: area
+    description: "Phase 0 economics, then Phase 1 RGB++ / CKB / clock / recovery and cost validation."
+  - id: protocol
+    name: "Emission core"
+    kind: area
+    description: "Discrete issuance, xUDT authority, authenticated allocation, segregated reserve and integer redemption."
+  - id: token-creation
+    name: "Token launch"
+    kind: area
+    description: "Permissionless launch creation with a publicly committed start height."
+  - id: mining
+    name: "Mining engine"
+    kind: area
+    description: "Mining Tickets, the WebGPU browser miner, epoch settlement, claims and redemption."
+  - id: indexer
+    name: "Indexer & API"
+    kind: area
+    description: "Chain state into discoverable launches: supply, burn, floor, epochs, feeds."
+  - id: web
+    name: "Web application"
+    kind: area
+    description: "The portal, built around the MINE button; includes the Proof Explorer."
+  - id: graduation
+    name: "Graduation & dormancy"
+    kind: area
+    description: "Phase 2 inactive-launch exits; separately funded market activation deferred to Phase 5."
+  - id: liquidity
+    name: "Liquidity integration"
+    kind: area
+    description: "Phase 1 venue feasibility; Phase 5 separately funded liquidity integration if justified."
+  - id: marketplace
+    name: "Unified marketplace"
+    kind: area
+    description: "One surface for active launches and graduated markets."
+  - id: security
+    name: "Security & production hardening"
+    kind: area
+    description: "Early economic and protocol threats; independent review, operations and real-fund readiness gate."
+
+  # ─── 3. Cross-cutting areas (children of `project`) ──────────────
+  - id: deploy
+    name: "Deploy"
+    kind: area
+    parent: project
+    description: "Signet/testnet infra, CI, Cloudflare + Fly.io deploy."
+  - id: docs
+    name: "Docs"
+    kind: area
+    parent: project
+    description: "Narrative docs, runbooks, and the public Build Log pipeline."
+  - id: design
+    name: "Design"
+    kind: area
+    parent: project
+    description: "Visual language for the portal — above all the MINE experience."
+  - id: general
+    name: "General"
+    kind: area
+    parent: project
+    description: "Community/product validation and cross-cutting work without another module."
+
+daemon:
+  auto_update: true
+  auto_update_source: https://architect.meshkore.com/reference/cluster/scripts/daemon.py

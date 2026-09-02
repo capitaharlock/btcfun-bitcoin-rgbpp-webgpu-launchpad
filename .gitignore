@@ -1,0 +1,26 @@
+# MeshKore standard v35 §2 — v27 deny-list.
+# Commit: .meshkore/public/, docs/, modules/, roadmap/initiatives/, STANDARD_VERSION.
+# Ignore: everything else under .meshkore/ (runtime/secret/per-machine state).
+.meshkore/.runtime/
+.meshkore/credentials/
+.meshkore/agents/
+.meshkore/timeline/
+.meshkore/log/
+.meshkore/queues/
+.meshkore/uploads/
+.meshkore/snapshots/
+.meshkore/state.json
+.meshkore/roadmap/state.json
+.meshkore/roadmap/state.js
+.meshkore/scripts/
+
+# Build and tooling
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+
+# Local scratch (operator's own working copies)
+tmp/
+
+.DS_Store
