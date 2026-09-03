@@ -1,0 +1,148 @@
+/* btc.fun — design tokens and base layer.
+   Dark-first by product decision: this is an instrument panel, not a document. */
+
+:root {
+  /* Surfaces: cold near-black, lifted in small steps. */
+  --bg: #07080b;
+  --bg-deep: #050609;
+  --surface-1: #0c0e13;
+  --surface-2: #11141b;
+  --surface-3: #171b24;
+  --line: #1e232e;
+  --line-strong: #2b3241;
+
+  /* Ink */
+  --ink: #e8ecf3;
+  --ink-dim: #9aa4b6;
+  --ink-faint: #5f6878;
+
+  /* Signal colours. Amber = issuance/heat. Cyan = evidence/verification. */
+  --amber: #f7931a;
+  --amber-soft: #ffb454;
+  --cyan: #5be9e9;
+  --cyan-deep: #1fa8b8;
+  --ok: #3fd98b;
+  --warn: #ffc53d;
+  --danger: #ff5f56;
+  --violet: #9d8cff;
+
+  --amber-glow: color-mix(in oklab, var(--amber) 22%, transparent);
+  --cyan-glow: color-mix(in oklab, var(--cyan) 20%, transparent);
+
+  /* Type */
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", monospace;
+
+  /* Geometry */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --gut: 20px;
+  --maxw: 1320px;
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv05" 1, "ss01" 1;
+}
+
+/* Layered backdrop: dot grid + one slow radial bloom + grain. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::before {
+  background:
+    radial-gradient(60rem 40rem at 72% -10%, color-mix(in oklab, var(--amber) 7%, transparent), transparent 62%),
+    radial-gradient(52rem 38rem at 8% 108%, color-mix(in oklab, var(--cyan) 6%, transparent), transparent 60%),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: auto, auto, 34px 34px;
+  opacity: 0.85;
+}
+
+body::after {
+  /* Fine grain keeps the flat blacks from banding. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.032;
+  mix-blend-mode: overlay;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* Numbers are data: always tabular, always mono. */
+.num, .mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 560;
+  letter-spacing: -0.022em;
+  line-height: 1.2;
+}
+
+h1 { font-size: clamp(28px, 4.4vw, 44px); }
+h2 { font-size: 19px; }
+h3 { font-size: 15px; }
+
+p { margin: 0 0 0.9em; color: var(--ink-dim); }
+
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+hr {
+  border: 0;
+  height: 1px;
+  background: var(--line);
+  margin: var(--gut) 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+::selection { background: color-mix(in oklab, var(--amber) 38%, transparent); }
+
+/* Scrollbars, quietly */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
