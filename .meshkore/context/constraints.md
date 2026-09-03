@@ -6,6 +6,20 @@ status: draft
 
 # Constraints
 
+## First premise — engineering quality
+
+This repository is read as evidence of engineering judgement before it is read
+as a product. Code quality is therefore the highest-priority constraint and
+outranks scope: ship less, never worse.
+
+Binding rules. One concept has one implementation — extract a module rather than
+copy a block. Depend on interfaces, not concrete backends, wherever a second
+backend is foreseeable. Keep every language's own idioms and the framework's own
+structure; no bespoke substitute for a facility the framework provides. Types
+describe real states, never `any`. Anything non-obvious carries a comment saying
+*why*, not what. Every rule that can be tested is tested. An unverified claim is
+stated as unverified.
+
 ## Adopted requirements
 
 - Testnet first; no real-fund launch before the Phase 4 independent review and

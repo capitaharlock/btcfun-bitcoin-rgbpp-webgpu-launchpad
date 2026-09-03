@@ -32,6 +32,33 @@ Refresh cadence:
 
 <!-- project-specific extras below this line -->
 
+## First premise — engineering quality outranks scope
+
+This repository is judged as evidence of engineering judgement before it is
+judged as a product. Nothing ships half-made: cut scope instead of quality, and
+say what was cut. Canonical statement in `.meshkore/context/constraints.md`.
+
+What that means when writing code here:
+
+- **One concept, one implementation.** A second copy of a block is a missing
+  module. Before writing something that resembles existing code, import it.
+- **Depend on interfaces where a second backend is foreseeable.** Mining
+  backends, chain providers and the token ledger are ports with adapters, so the
+  CPU/GPU split and the eventual RGB++ settlement swap without touching callers.
+- **Use each language and framework as its authors intended.** React state lives
+  in providers and hooks, effects clean up after themselves, CSS uses the design
+  tokens. No bespoke substitute for a facility the framework already provides.
+- **Types describe real states.** Discriminated unions over optional soup; no
+  `any`; `strict` stays on. A type that permits an impossible state is a bug.
+- **Comments explain why, never what.** The non-obvious choice, the protocol
+  reference, the footgun avoided.
+- **Every rule that can be tested is tested.** Pure logic — emission, ledger
+  validation, encodings, signatures — carries unit tests. UI is verified in a
+  real browser before it is called done.
+- **Never overstate.** An unverified claim is labelled unverified, in the code
+  and in the UI. `PROTOCOL.md` §2 lists what has been withdrawn; do not
+  reintroduce it in a component.
+
 ## This project
 
 Specification-stage community launchpad exploring Bitcoin-scheduled issuance,
