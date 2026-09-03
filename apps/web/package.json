@@ -7,9 +7,15 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:ui": "node scripts/verify-ui.mjs"
   },
   "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0",
+    "@scure/bip32": "^1.7.0",
+    "@scure/bip39": "^1.6.0",
+    "@scure/btc-signer": "^1.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -17,6 +23,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "@webgpu/types": "^0.1.74",
     "playwright": "^1.63.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",
