@@ -64,13 +64,16 @@ export function Chip({
   children,
   tone,
   live,
+  title,
 }: {
   children: ReactNode;
   tone?: "amber" | "cyan" | "ok" | "warn" | "danger";
   live?: boolean;
+  /** Hover text. Used to carry a backend's full detail without crowding the chip. */
+  title?: string;
 }) {
   return (
-    <span className={`chip ${tone ?? ""}`}>
+    <span className={`chip ${tone ?? ""}`} title={title}>
       {live && <i className="dot live" />}
       {children}
     </span>
@@ -91,7 +94,7 @@ export function Notice({
   tone,
 }: {
   children: ReactNode;
-  tone?: "cyan" | "danger";
+  tone?: "cyan" | "warn" | "danger";
 }) {
   return <div className={`notice ${tone ?? ""}`}>{children}</div>;
 }

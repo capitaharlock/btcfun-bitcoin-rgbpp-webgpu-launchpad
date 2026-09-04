@@ -1,0 +1,155 @@
+/* The hash feed: the one surface that has to *feel* like work being done.
+ *
+ * Three effects, each with a job:
+ *   .feed      — the live digest, replaced every frame. Fixed-width glyphs and a
+ *                reserved box, so a 64-character string churning at frame rate
+ *                reads as speed rather than as layout thrash.
+ *   .zeros     — leading zeros swell and glow when a better candidate lands.
+ *                Letting the glyphs grow a couple of pixels inside a settled
+ *                line is what gives the moment its weight.
+ *   .struck    — the containing box flexes and blooms on the same beat.
+ *
+ * Both animations are re-triggered by remounting the node with a React key, not
+ * by toggling a class: restarting a CSS animation by class removal needs a
+ * forced reflow, and the reflow is exactly the jank the effect is there to hide.
+ * `prefers-reduced-motion` is handled globally in tokens.css.
+ */
+
+.hashfeed {
+  position: relative;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--amber) 4%, transparent), transparent 70%),
+    var(--bg-deep);
+  overflow: hidden;
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+/* A slow sheen crossing the panel. Pure decoration, but it is what stops the
+   box looking frozen between improvements. */
+.hashfeed.live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    color-mix(in oklab, var(--amber) 9%, transparent) 50%,
+    transparent 60%
+  );
+  animation: hashfeed-sheen 2.6s linear infinite;
+}
+
+@keyframes hashfeed-sheen {
+  from { transform: translateX(-60%); }
+  to { transform: translateX(60%); }
+}
+
+.hashfeed .digest {
+  position: relative;
+  display: block;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-size: 13px;
+  line-height: 1.75;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+  color: var(--ink-dim);
+  /* Two lines of 64 hex characters at any width this box can take. Reserving
+     the height keeps an improvement from nudging everything below it. */
+  min-height: calc(2 * 1.75em);
+}
+
+.hashfeed .digest.idle { color: var(--ink-faint); }
+
+/* Leading zeros: the part that is actually worth something. */
+.hashfeed .zeros {
+  color: var(--amber);
+  font-weight: 700;
+  font-size: 1.1em;
+  text-shadow: 0 0 8px var(--amber-glow);
+}
+
+.hashfeed .rest { color: var(--ink-dim); }
+
+/* Candidate that beat the session best: swell, glow, settle. */
+.hashfeed .zeros.fresh { animation: zeros-strike 1.8s var(--ease); }
+
+@keyframes zeros-strike {
+  0%   { font-size: 1.1em; text-shadow: 0 0 8px var(--amber-glow); }
+  22%  { font-size: 1.32em; text-shadow: 0 0 16px var(--amber), 0 0 26px var(--amber-glow); }
+  46%  { font-size: 1.4em;  text-shadow: 0 0 22px var(--amber), 0 0 38px var(--amber-glow); }
+  72%  { font-size: 1.28em; text-shadow: 0 0 15px var(--amber), 0 0 24px var(--amber-glow); }
+  100% { font-size: 1.1em;  text-shadow: 0 0 8px var(--amber-glow); }
+}
+
+.hashfeed.struck {
+  border-color: var(--amber);
+  animation: feed-strike 1.8s var(--ease);
+}
+
+@keyframes feed-strike {
+  0%   { transform: scale(1);     box-shadow: 0 0 18px var(--amber-glow); }
+  16%  { transform: scale(1.018); box-shadow: 0 0 34px color-mix(in oklab, var(--amber) 55%, transparent); }
+  34%  { transform: scale(1.026); box-shadow: 0 0 52px color-mix(in oklab, var(--amber) 70%, transparent); }
+  58%  { transform: scale(1.012); box-shadow: 0 0 40px color-mix(in oklab, var(--amber) 50%, transparent); }
+  100% { transform: scale(1);     box-shadow: 0 0 0 transparent; }
+}
+
+/* Header line: label left, live badge right. */
+.hashfeed .feedhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.hashfeed .feedhead .spacer { flex: 1; }
+
+/* Improvement log — one row per candidate that beat the previous best. */
+.hashlog {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 230px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.hashlog .entry {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  color: var(--ink-faint);
+  border: 1px solid transparent;
+}
+
+.hashlog .entry:first-child {
+  border-color: color-mix(in oklab, var(--amber) 28%, transparent);
+  background: color-mix(in oklab, var(--amber) 7%, transparent);
+  color: var(--ink-dim);
+  animation: entry-in 0.5s var(--ease);
+}
+
+@keyframes entry-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.hashlog .entry .clz {
+  color: var(--amber);
+  font-weight: 700;
+  min-width: 2.2ch;
+  text-align: right;
+}
+
+.hashlog .entry .digest { color: inherit; }
+.hashlog .empty { color: var(--ink-faint); padding: 2px 8px; }
