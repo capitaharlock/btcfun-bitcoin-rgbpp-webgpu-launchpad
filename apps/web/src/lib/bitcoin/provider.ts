@@ -1,0 +1,161 @@
+/* Chain access over the mempool.space REST API.
+ *
+ * A narrow, typed surface — UTXOs, balance, tip height, fee rate, broadcast —
+ * rather than a general client, so the wallet never depends on the shape of a
+ * third-party response. Every function validates what it got back: a provider
+ * returning something unexpected must fail here, not three layers later inside
+ * transaction construction.
+ *
+ * The provider is *not* trusted for protocol truth. It reports what it sees;
+ * PROTOCOL.md §3 requires that anything consequential be independently
+ * checkable, which is why balances are derived from UTXOs the caller can look
+ * up rather than from a summary field.
+ */
+
+import { ACTIVE, FALLBACK_FEE_RATE, type NetworkConfig } from "./network";
+
+export interface Utxo {
+  txid: string;
+  vout: number;
+  /** Value in satoshis. */
+  value: number;
+  confirmed: boolean;
+  /** Height of the confirming block, absent while unconfirmed. */
+  height?: number;
+}
+
+export interface AddressBalance {
+  utxos: Utxo[];
+  /** Total spendable, in satoshis. */
+  total: number;
+  /** Portion of `total` still unconfirmed. */
+  pending: number;
+}
+
+export class ProviderError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "ProviderError";
+  }
+}
+
+async function request(path: string, network: NetworkConfig, init?: RequestInit): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(`${network.api}${path}`, init);
+  } catch (cause) {
+    throw new ProviderError(`Cannot reach ${network.label}: ${(cause as Error).message}`);
+  }
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new ProviderError(
+      `${network.label} API ${response.status}: ${body.slice(0, 180) || response.statusText}`,
+      response.status,
+    );
+  }
+  return response;
+}
+
+function toUtxo(raw: unknown): Utxo {
+  const u = raw as Record<string, unknown>;
+  const status = (u.status ?? {}) as Record<string, unknown>;
+  const txid = typeof u.txid === "string" ? u.txid : null;
+  const vout = Number(u.vout);
+  const value = Number(u.value);
+  if (!txid || !Number.isInteger(vout) || !Number.isFinite(value)) {
+    throw new ProviderError("Malformed UTXO in provider response");
+  }
+  return {
+    txid,
+    vout,
+    value,
+    confirmed: status.confirmed === true,
+    height: typeof status.block_height === "number" ? status.block_height : undefined,
+  };
+}
+
+export async function getUtxos(address: string, network: NetworkConfig = ACTIVE): Promise<Utxo[]> {
+  const response = await request(`/address/${address}/utxo`, network);
+  const body: unknown = await response.json();
+  if (!Array.isArray(body)) throw new ProviderError("Expected an array of UTXOs");
+  // Largest first: coin selection wants the fewest inputs, and a stable order
+  // makes a transaction reproducible from the same UTXO set.
+  return body.map(toUtxo).sort((a, b) => b.value - a.value || a.txid.localeCompare(b.txid));
+}
+
+/** Balance derived from the UTXO set, so every satoshi is traceable to an output. */
+export async function getBalance(
+  address: string,
+  network: NetworkConfig = ACTIVE,
+): Promise<AddressBalance> {
+  const utxos = await getUtxos(address, network);
+  let total = 0;
+  let pending = 0;
+  for (const u of utxos) {
+    total += u.value;
+    if (!u.confirmed) pending += u.value;
+  }
+  return { utxos, total, pending };
+}
+
+/** Current chain tip. This is the clock the emission schedule runs on (§6). */
+export async function getTipHeight(network: NetworkConfig = ACTIVE): Promise<number> {
+  const response = await request("/blocks/tip/height", network);
+  const height = Number((await response.text()).trim());
+  if (!Number.isInteger(height) || height <= 0) {
+    throw new ProviderError("Provider returned a nonsensical tip height");
+  }
+  return height;
+}
+
+/** Hash of a block by height — the per-epoch binding in a canonical challenge. */
+export async function getBlockHash(height: number, network: NetworkConfig = ACTIVE): Promise<string> {
+  const response = await request(`/block-height/${height}`, network);
+  const hash = (await response.text()).trim();
+  if (!/^[0-9a-f]{64}$/.test(hash)) throw new ProviderError("Provider returned a malformed block hash");
+  return hash;
+}
+
+/** Recommended fee rate in sat/vB. Falls back rather than blocking a send. */
+export async function getFeeRate(network: NetworkConfig = ACTIVE): Promise<number> {
+  try {
+    const response = await request("/v1/fees/recommended", network);
+    const fees = (await response.json()) as Record<string, unknown>;
+    const rate = Number(fees.halfHourFee ?? fees.fastestFee);
+    return Number.isFinite(rate) && rate > 0 ? Math.ceil(rate) : FALLBACK_FEE_RATE;
+  } catch {
+    return FALLBACK_FEE_RATE;
+  }
+}
+
+/** Publish a signed transaction. Returns its txid as the network computed it. */
+export async function broadcast(rawHex: string, network: NetworkConfig = ACTIVE): Promise<string> {
+  const response = await request("/tx", network, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: rawHex,
+  });
+  const txid = (await response.text()).trim();
+  if (!/^[0-9a-f]{64}$/.test(txid)) throw new ProviderError(`Unexpected broadcast reply: ${txid}`);
+  return txid;
+}
+
+export interface TxStatus {
+  confirmed: boolean;
+  height?: number;
+  /** Seconds since epoch of the confirming block. */
+  time?: number;
+}
+
+export async function getTxStatus(txid: string, network: NetworkConfig = ACTIVE): Promise<TxStatus> {
+  const response = await request(`/tx/${txid}/status`, network);
+  const status = (await response.json()) as Record<string, unknown>;
+  return {
+    confirmed: status.confirmed === true,
+    height: typeof status.block_height === "number" ? status.block_height : undefined,
+    time: typeof status.block_time === "number" ? status.block_time : undefined,
+  };
+}
