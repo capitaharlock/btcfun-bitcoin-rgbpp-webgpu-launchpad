@@ -1,39 +1,57 @@
-/* CPU miner worker.
+/* CPU mining worker.
  *
- * Grinds `sha256d(challenge32 || nonce_le64)` and reports the best candidate by
- * leading zero bits. This is the measurement harness behind task V7 ("PoW
- * verification and browser feasibility measurements") — the numbers it reports
- * are real, not simulated.
+ * Grinds `sha256d(challenge32 || nonce_le64)` — PROTOCOL.md §4.2 — over the
+ * nonce range assigned to its lane, and reports deltas the session accumulates.
+ *
+ * The lane owns the high 32 bits of the nonce and sweeps the low 32, so lanes
+ * never collide and the hot loop needs no bigint arithmetic or modular stride.
+ * Reports carry improvements rather than a running best, so the controller can
+ * merge several lanes without re-deriving anything.
  */
 
 import { sha256d, clz256, wordsToHex } from "../lib/sha256";
+import { PREIMAGE_BYTES } from "../lib/mining/types";
 
 export interface StartMsg {
   type: "start";
   /** 32-byte challenge digest. */
   challenge: Uint8Array;
-  /** Starting nonce, so multiple workers can cover disjoint ranges. */
-  startNonce: number;
-  /** Nonce stride, normally the number of workers. */
-  stride: number;
+  /** High 32 bits of every nonce this worker tries. Unique per worker. */
+  lane: number;
+}
+
+export interface StopMsg {
+  type: "stop";
+}
+
+/** A candidate, flattened: the worker boundary is not the place for bigint. */
+export interface WorkerCandidate {
+  nonceLo: number;
+  nonceHi: number;
+  clz: number;
+  hash: string;
 }
 
 export interface ProgressMsg {
   type: "progress";
+  /** Attempts since the previous message. */
   hashes: number;
-  bestClz: number;
-  bestNonce: number;
-  bestHash: string;
-  elapsedMs: number;
+  improvements: WorkerCandidate[];
+  current: string;
 }
 
-const BATCH = 20_000;
+/** Attempts between clock checks. Large enough that `performance.now()` is
+ *  noise, small enough that a stop request is honoured within a few ms. */
+const CHUNK = 8192;
+
+/** Minimum gap between progress messages. The UI repaints at frame rate; more
+ *  traffic than this only costs structured-clone time. */
+const REPORT_MS = 90;
 
 let running = false;
-const out = new Uint32Array(8);
 
-self.onmessage = (ev: MessageEvent) => {
-  const msg = ev.data as StartMsg | { type: "stop" };
+self.onmessage = (ev: MessageEvent<StartMsg | StopMsg>) => {
+  const msg = ev.data;
 
   if (msg.type === "stop") {
     running = false;
@@ -42,62 +60,64 @@ self.onmessage = (ev: MessageEvent) => {
 
   if (msg.type !== "start") return;
 
-  const challenge = msg.challenge;
-  const buf = new Uint8Array(40);
-  buf.set(challenge.subarray(0, 32), 0);
-
-  let nonce = msg.startNonce >>> 0;
-  const stride = Math.max(1, msg.stride | 0);
-
-  let bestClz = -1;
-  let bestNonce = 0;
-  let bestHash = "";
-  let hashes = 0;
-  const t0 = performance.now();
-  let lastReport = t0;
-
   running = true;
+  grind(msg.challenge, msg.lane >>> 0);
+};
 
-  const step = () => {
+function grind(challenge: Uint8Array, lane: number): void {
+  const buf = new Uint8Array(PREIMAGE_BYTES);
+  buf.set(challenge.subarray(0, 32), 0);
+  // The lane occupies the nonce's high word for the whole run.
+  buf[36] = lane & 0xff;
+  buf[37] = (lane >>> 8) & 0xff;
+  buf[38] = (lane >>> 16) & 0xff;
+  buf[39] = (lane >>> 24) & 0xff;
+
+  const digest = new Uint32Array(8);
+  let nonceLo = 0;
+  let bestClz = -1;
+  let hashes = 0;
+  let improvements: WorkerCandidate[] = [];
+  let lastReport = performance.now();
+
+  const step = (): void => {
     if (!running) return;
 
-    for (let i = 0; i < BATCH; i++) {
-      // little-endian 64-bit nonce; the high word stays zero in this range
-      buf[32] = nonce & 0xff;
-      buf[33] = (nonce >>> 8) & 0xff;
-      buf[34] = (nonce >>> 16) & 0xff;
-      buf[35] = (nonce >>> 24) & 0xff;
+    for (let i = 0; i < CHUNK; i++) {
+      buf[32] = nonceLo & 0xff;
+      buf[33] = (nonceLo >>> 8) & 0xff;
+      buf[34] = (nonceLo >>> 16) & 0xff;
+      buf[35] = (nonceLo >>> 24) & 0xff;
 
-      sha256d(buf, out);
-      const z = clz256(out);
+      sha256d(buf, digest);
+      const clz = clz256(digest);
 
-      if (z > bestClz) {
-        bestClz = z;
-        bestNonce = nonce;
-        bestHash = wordsToHex(out);
+      if (clz > bestClz) {
+        bestClz = clz;
+        improvements.push({ nonceLo, nonceHi: lane, clz, hash: wordsToHex(digest) });
       }
 
-      nonce = (nonce + stride) >>> 0;
+      nonceLo = (nonceLo + 1) >>> 0;
       hashes++;
     }
 
     const now = performance.now();
-    if (now - lastReport >= 200) {
+    if (now - lastReport >= REPORT_MS) {
       lastReport = now;
       const progress: ProgressMsg = {
         type: "progress",
         hashes,
-        bestClz,
-        bestNonce,
-        bestHash,
-        elapsedMs: now - t0,
+        improvements,
+        current: wordsToHex(digest),
       };
       self.postMessage(progress);
+      hashes = 0;
+      improvements = [];
     }
 
-    // Yield so the worker stays responsive to `stop`.
+    // Yield to the event loop so a stop message is actually delivered.
     setTimeout(step, 0);
   };
 
   step();
-};
+}
