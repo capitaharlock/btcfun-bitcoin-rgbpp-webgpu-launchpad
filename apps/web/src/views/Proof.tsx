@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { navigate } from "../App";
 import { getLaunch } from "../data/launches";
 import { challengeDigest, fakeBlockHash, type ChallengeFields } from "../lib/challenge";
-import { sha256d, clz256, wordsToHex, bytesToHex } from "../lib/sha256";
+import { sha256d, clz256, wordsToHex } from "../lib/sha256";
+import { bytesToHex } from "../lib/bytes";
 import { Chip, KV, Notice, Panel } from "../ui/primitives";
 import { shortHash, splitLeadingZeros } from "../lib/format";
 

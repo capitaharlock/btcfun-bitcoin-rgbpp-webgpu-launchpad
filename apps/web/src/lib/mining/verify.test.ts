@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { preimage, recompute, verifyCandidate } from "./verify";
 import { advantageRatio, expectedClz, weightOf } from "./weight";
 import { PREIMAGE_BYTES } from "./types";
-import { hexToBytes } from "../sha256";
+import { hexToBytes } from "../bytes";
 
 const CHALLENGE = hexToBytes("00".repeat(31) + "2a");
 

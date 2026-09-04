@@ -10,7 +10,7 @@
 import { useMiningSession } from "../../hooks/useMiningSession";
 import { expectedClz, weightOf, type BackendChoice } from "../../lib/mining";
 import type { ChallengeFields } from "../../lib/challenge";
-import { bytesToHex } from "../../lib/sha256";
+import { bytesToHex } from "../../lib/bytes";
 import { duration, group, rate, shortHash } from "../../lib/format";
 import { HashFeed, HashLog } from "../../ui/HashFeed";
 import { Chip, KV, Notice, Panel, Stat } from "../../ui/primitives";

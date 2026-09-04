@@ -102,16 +102,3 @@ export function wordsToHex(words: Uint32Array): string {
   for (let i = 0; i < 8; i++) s += words[i].toString(16).padStart(8, "0");
   return s;
 }
-
-export function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.replace(/^0x/, "");
-  const out = new Uint8Array(clean.length >> 1);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
-  return out;
-}
-
-export function bytesToHex(b: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, "0");
-  return s;
-}
