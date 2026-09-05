@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { InsufficientFunds, estimateVsize, selectCoins } from "./payment";
+import { Transaction } from "@scure/btc-signer";
+
+import { InsufficientFunds, buildPayment, estimateVsize, selectCoins } from "./payment";
 import { DUST_SATS } from "./network";
+import { deriveKey } from "./keys";
+import { hexToBytes } from "../bytes";
 import type { Utxo } from "./provider";
+
+/** A second testnet address, derived the same way, to pay into. */
+const RECIPIENT = deriveKey(new Uint8Array(32).fill(4)).address;
 
 function utxo(value: number, n = 0): Utxo {
   return { txid: String(n).padStart(64, "0"), vout: n, value, confirmed: true };
@@ -86,5 +93,87 @@ describe("selectCoins", () => {
     const dear = selectCoins([utxo(100_000)], 50_000, 20);
     expect(dear.fee).toBeGreaterThan(cheap.fee);
     expect(dear.change).toBeLessThan(cheap.change);
+  });
+});
+
+describe("buildPayment", () => {
+  const key = deriveKey(new Uint8Array(32).fill(9));
+  const funding: Utxo[] = [utxo(200_000, 1), utxo(50_000, 2)];
+
+  it("produces a transaction that parses back to what was selected", () => {
+    const signed = buildPayment(key, {
+      to: RECIPIENT,
+      amountSats: 120_000,
+      feeRate: 3,
+      utxos: funding,
+    });
+
+    const tx = Transaction.fromRaw(hexToBytes(signed.hex));
+    expect(tx.inputsLength).toBe(signed.selection.inputs.length);
+    expect(tx.outputsLength).toBe(signed.selection.change > 0 ? 2 : 1);
+    expect(tx.id).toBe(signed.txid);
+
+    // Output 0 pays the recipient exactly the requested amount.
+    const paid = tx.getOutput(0);
+    expect(paid.amount).toBe(120_000n);
+  });
+
+  it("signs and finalises every input it spends", () => {
+    const signed = buildPayment(key, {
+      to: RECIPIENT,
+      amountSats: 220_000,
+      feeRate: 2,
+      utxos: funding,
+    });
+    const tx = Transaction.fromRaw(hexToBytes(signed.hex));
+    expect(tx.inputsLength).toBe(2);
+    for (let i = 0; i < tx.inputsLength; i++) {
+      // A finalised P2WPKH input carries <signature> <pubkey> and an empty
+      // scriptSig. Without both, a node rejects the transaction outright.
+      const input = tx.getInput(i);
+      expect(input.finalScriptWitness).toBeDefined();
+      expect(input.finalScriptWitness).toHaveLength(2);
+      expect(input.finalScriptWitness?.[1]).toEqual(key.publicKey);
+    }
+  });
+
+  it("returns change to the sender's own address", () => {
+    const signed = buildPayment(key, {
+      to: RECIPIENT,
+      amountSats: 50_000,
+      feeRate: 2,
+      utxos: funding,
+    });
+    expect(signed.selection.change).toBeGreaterThan(0);
+    const tx = Transaction.fromRaw(hexToBytes(signed.hex));
+    expect(tx.getOutput(1).script).toEqual(key.script);
+  });
+
+  it("commits a memo in an OP_RETURN output", () => {
+    const memo = new TextEncoder().encode("btcfun:t1:mesh:7:02ab");
+    const signed = buildPayment(key, {
+      to: RECIPIENT,
+      amountSats: 50_000,
+      feeRate: 2,
+      utxos: funding,
+      memo,
+    });
+    const tx = Transaction.fromRaw(hexToBytes(signed.hex), { allowUnknownOutputs: true });
+    const opReturn = tx.getOutput(tx.outputsLength - 1);
+    expect(opReturn.amount).toBe(0n);
+    expect(opReturn.script?.[0]).toBe(0x6a);
+    expect(opReturn.script?.slice(2)).toEqual(memo);
+  });
+
+  it("refuses a memo the network would not relay", () => {
+    expect(() =>
+      buildPayment(key, {
+        to: RECIPIENT,
+        amountSats: 50_000,
+        feeRate: 2,
+        utxos: funding,
+        memo: new Uint8Array(81),
+      }),
+    ).toThrow(RangeError);
   });
 });

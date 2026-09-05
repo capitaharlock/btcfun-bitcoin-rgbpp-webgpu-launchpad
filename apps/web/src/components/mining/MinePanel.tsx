@@ -7,7 +7,7 @@
  * so instead of implying otherwise with a filling meter.
  */
 
-import { useMiningSession } from "../../hooks/useMiningSession";
+import type { UseMiningSession } from "../../hooks/useMiningSession";
 import { expectedClz, weightOf, type BackendChoice } from "../../lib/mining";
 import type { ChallengeFields } from "../../lib/challenge";
 import { bytesToHex } from "../../lib/bytes";
@@ -22,16 +22,18 @@ const CHOICES: Array<{ id: BackendChoice; label: string }> = [
 ];
 
 export interface MinePanelProps {
-  /** 32-byte challenge digest for the current epoch, or null while deriving. */
+  /** The session that owns the backends. Held by the parent so the claim
+   *  action can read the same best candidate this panel displays. */
+  mining: UseMiningSession;
+  /** 32-byte challenge digest, or null while a prerequisite is missing. */
   challenge: Uint8Array | null;
   /** The fields that digest commits to, shown so the binding is inspectable. */
-  fields: ChallengeFields;
-  /** Rendered under the controls — normally the claim action. */
-  children?: React.ReactNode;
+  fields: ChallengeFields | null;
+  /** Why mining cannot start yet, shown in place of the controls. */
+  blocked?: string | null;
 }
 
-export function MinePanel({ challenge, fields, children }: MinePanelProps) {
-  const mining = useMiningSession(challenge);
+export function MinePanel({ mining, challenge, fields, blocked }: MinePanelProps) {
   const { sample, running } = mining;
   const gpu = mining.backends.find((b) => b.kind === "gpu");
 
@@ -92,10 +94,9 @@ export function MinePanel({ challenge, fields, children }: MinePanelProps) {
               ))}
             </div>
 
-            <span className="spacer" />
-            {children}
           </div>
 
+          {blocked && <Notice tone="warn">{blocked}</Notice>}
           {mining.notice && <Notice tone="warn">{mining.notice}</Notice>}
 
           {sample.best && (
@@ -130,16 +131,24 @@ export function MinePanel({ challenge, fields, children }: MinePanelProps) {
 
           <div>
             <div className="eyebrow" style={{ marginBottom: 6 }}>canonical challenge</div>
-            <KV
-              rows={[
-                ["version", fields.version],
-                ["network", fields.network],
-                ["epoch", String(fields.epoch)],
-                ["btc block", shortHash(fields.btcBlockHash, 10, 6)],
-                ["ticket", fields.ticket],
-                ["digest", challenge ? shortHash(bytesToHex(challenge), 10, 6) : "—"],
-              ]}
-            />
+            {fields ? (
+              <KV
+                rows={[
+                  ["version", fields.version],
+                  ["network", fields.network],
+                  ["epoch", String(fields.epoch)],
+                  ["btc block", shortHash(fields.btcBlockHash, 10, 6)],
+                  ["ticket", shortHash(fields.ticket, 10, 6)],
+                  ["owner", shortHash(fields.owner, 8, 6)],
+                  ["digest", challenge ? shortHash(bytesToHex(challenge), 10, 6) : "—"],
+                ]}
+              />
+            ) : (
+              <p className="tiny faint">
+                No challenge yet. It is derived from the launch, epoch, block
+                hash, ticket and your identity — all five have to exist first.
+              </p>
+            )}
           </div>
         </div>
       </div>
