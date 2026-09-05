@@ -32,10 +32,14 @@ export interface LaunchRules {
   /** Network tag bound into every challenge. */
   network: string;
   schedule: Schedule;
-  /** Blocks per epoch. With `h0`, fixes which budget an epoch may mint. */
+  /**
+   * Blocks per epoch. Fixes which slice of the schedule an epoch may mint.
+   *
+   * Note what is absent: the launch's opening height. A record names its epoch
+   * by index, so validation never needs to know when the launch opened — which
+   * is what keeps a stored chain valid as the chain tip advances.
+   */
   epochBlocks: number;
-  /** Bitcoin height the launch opened at. */
-  h0: number;
   /** Leading zero bits a candidate must reach to be admitted. */
   minClz: number;
   /** Price of one ticket, in satoshis. */

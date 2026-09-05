@@ -15,7 +15,6 @@ const RULES: LaunchRules = {
   network: "testnet4",
   schedule: CANDIDATE,
   epochBlocks: 144,
-  h0: 100_000,
   minClz: 8,
   ticketSats: 1_000,
 };
