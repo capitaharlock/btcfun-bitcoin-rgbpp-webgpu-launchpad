@@ -1,5 +1,6 @@
 import { navigate } from "../App";
-import { launches, stateTone, CURRENT_HEIGHT, type Launch } from "../data/launches";
+import { stateTone, type Launch } from "../data/launches";
+import { useLaunches, useTip } from "../hooks/useLaunches";
 import { cumulative, maxAtoms, MILESTONES } from "../lib/emission";
 import { EmissionChart } from "../ui/EmissionChart";
 import { Chip, Meter, Notice, Panel, Stat } from "../ui/primitives";
@@ -16,8 +17,9 @@ function mintedFraction(l: Launch): number {
 }
 
 export function Launches() {
-  const active = launches.filter((l) => l.state === "mining");
-  const hero = active[0] ?? launches[0];
+  const launches = useLaunches();
+  const tip = useTip();
+  const hero = launches.find((l) => l.state === "mining") ?? launches[0];
 
   return (
     <div className="stack-lg">
@@ -27,7 +29,7 @@ export function Launches() {
             <Chip tone={stateTone(hero.state)} live={hero.state === "mining"}>
               {hero.state}
             </Chip>
-            <Chip>epoch {Math.floor(hero.elapsed / hero.epochBlocks)}</Chip>
+            <Chip>epoch {hero.epoch}</Chip>
             <span className="spacer" />
             <span className="eyebrow">block offset {group(hero.elapsed)}</span>
           </div>
@@ -92,7 +94,7 @@ export function Launches() {
             </tr>
           </thead>
           <tbody>
-            {launches.map((l) => {
+            {launches.map((l: Launch) => {
               const sched = scheduledFraction(l);
               const minted = mintedFraction(l);
               const expired = Math.max(0, sched - minted);
@@ -143,7 +145,7 @@ export function Launches() {
                   <td className="n">{group(l.addresses)}</td>
                   <td className="n faint">
                     {l.state === "committed"
-                      ? `opens in ${blocksAsTime(l.h0 - CURRENT_HEIGHT)}`
+                      ? `opens in ${blocksAsTime(Math.max(0, l.h0 - tip))}`
                       : blocksAsTime(l.elapsed)}
                   </td>
                 </tr>

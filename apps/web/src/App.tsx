@@ -4,7 +4,9 @@ import { LaunchView } from "./views/Launch";
 import { Lab } from "./views/Lab";
 import { ProofView } from "./views/Proof";
 import { Holdings } from "./views/Holdings";
-import { CURRENT_HEIGHT } from "./data/launches";
+import { WalletView } from "./views/Wallet";
+import { NETWORK, WalletProvider, formatBtc, shortAddress, useWallet } from "./state/WalletProvider";
+import { group } from "./lib/format";
 import { Chip } from "./ui/primitives";
 
 type Route =
@@ -12,7 +14,8 @@ type Route =
   | { name: "launch"; id: string }
   | { name: "proof"; id: string }
   | { name: "lab" }
-  | { name: "holdings" };
+  | { name: "holdings" }
+  | { name: "wallet" };
 
 function parse(hash: string): Route {
   const path = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
@@ -21,6 +24,7 @@ function parse(hash: string): Route {
   }
   if (path[0] === "lab") return { name: "lab" };
   if (path[0] === "holdings") return { name: "holdings" };
+  if (path[0] === "wallet") return { name: "wallet" };
   return { name: "launches" };
 }
 
@@ -29,6 +33,14 @@ export function navigate(to: string): void {
 }
 
 export default function App() {
+  return (
+    <WalletProvider>
+      <Shell />
+    </WalletProvider>
+  );
+}
+
+function Shell() {
   const [route, setRoute] = useState<Route>(() => parse(window.location.hash));
 
   useEffect(() => {
@@ -40,8 +52,7 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  const tab =
-    route.name === "launch" || route.name === "proof" ? "launches" : route.name;
+  const tab = route.name === "launch" || route.name === "proof" ? "launches" : route.name;
 
   return (
     <div className="shell">
@@ -76,10 +87,8 @@ export default function App() {
         </nav>
 
         <div className="topbar-right">
-          <Chip tone="cyan" live>
-            <span className="mono">btc {CURRENT_HEIGHT.toLocaleString("en-US")}</span>
-          </Chip>
-          <Chip tone="warn">fixtures</Chip>
+          <TipChip />
+          <WalletPill active={tab === "wallet"} />
         </div>
       </header>
 
@@ -90,13 +99,15 @@ export default function App() {
           {route.name === "proof" && <ProofView id={route.id} />}
           {route.name === "lab" && <Lab />}
           {route.name === "holdings" && <Holdings />}
+          {route.name === "wallet" && <WalletView />}
         </div>
       </main>
 
       <footer className="footer">
         <div className="wrap row wrapped" style={{ gap: 14 }}>
           <span>
-            Specification-stage prototype. No chain connection, no economic model adopted.
+            Prototype on {NETWORK.label}. Tickets and balances are real; token
+            settlement is not on chain yet.
           </span>
           <span className="spacer" />
           <a href="https://meshkore.com/standard">MeshKore standard</a>
@@ -105,5 +116,43 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/** The chain tip, which is the clock the emission schedule runs on (§6). */
+function TipChip() {
+  const { tipHeight } = useWallet();
+  return tipHeight ? (
+    <Chip tone="cyan" live title={`${NETWORK.label} chain tip`}>
+      <span className="mono">btc {group(tipHeight)}</span>
+    </Chip>
+  ) : (
+    <Chip title="Waiting for the chain tip">
+      <span className="mono">btc …</span>
+    </Chip>
+  );
+}
+
+function WalletPill({ active }: { active: boolean }) {
+  const { vault, balance } = useWallet();
+
+  if (!vault) {
+    return (
+      <button className="btn" onClick={() => navigate("/wallet")}>
+        Connect wallet
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className="walletpill"
+      aria-current={active ? "page" : undefined}
+      onClick={() => navigate("/wallet")}
+      title={vault.address}
+    >
+      <span className="addr">{shortAddress(vault.address)}</span>
+      <span className="bal">{balance ? formatBtc(balance.total) : "…"}</span>
+    </button>
   );
 }
