@@ -63,3 +63,19 @@ export function splitLeadingZeros(hex: string): { zeros: string; rest: string } 
   const n = m ? m[0].length : 0;
   return { zeros: hex.slice(0, n), rest: hex.slice(n) };
 }
+
+/**
+ * Parse a human decimal amount into token atoms, or null if it is not one.
+ *
+ * The inverse of `atoms()`, and the only place a typed amount becomes a bigint.
+ * Rejects rather than rounds when there are more decimal places than the token
+ * has: silently truncating someone's "0.123456789" is how a transfer moves a
+ * different amount than the one on screen.
+ */
+export function parseAmount(input: string, decimals: number): bigint | null {
+  const trimmed = input.trim();
+  if (trimmed === "" || trimmed === "." || !/^\d*\.?\d*$/.test(trimmed)) return null;
+  const [whole, fraction = ""] = trimmed.split(".");
+  if (fraction.length > decimals) return null;
+  return BigInt(whole || "0") * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
+}

@@ -15,7 +15,8 @@ import { challengeDigest } from "../challenge";
 import { recompute } from "../mining";
 import { verifyDigest } from "../bitcoin";
 import { bytesToHex, hexToBytes } from "../bytes";
-import { parseAtoms, recordDigest, recordId } from "./codec";
+import { recordDigest, recordId } from "./codec";
+import { IDENTITY_PATTERN, TXID_PATTERN, parseAtoms } from "../canonical";
 import {
   GENESIS_PREV,
   LedgerError,
@@ -45,9 +46,6 @@ export interface LaunchRules {
   /** Price of one ticket, in satoshis. */
   ticketSats: number;
 }
-
-const PUBKEY = /^0[23][0-9a-f]{64}$/;
-const TXID = /^[0-9a-f]{64}$/;
 
 // ── allocation ───────────────────────────────────────────────────────────────
 
@@ -150,7 +148,7 @@ export function replay(records: readonly SignedRecord[], rules: LaunchRules): Le
     if (body.launch !== rules.launch) {
       throw new LedgerError(`Record ${index} belongs to launch "${body.launch}"`, index);
     }
-    if (!PUBKEY.test(body.author)) {
+    if (!IDENTITY_PATTERN.test(body.author)) {
       throw new LedgerError(`Record ${index} has a malformed author key`, index);
     }
 
@@ -164,7 +162,7 @@ export function replay(records: readonly SignedRecord[], rules: LaunchRules): Le
     } else {
       const amount = parseAtoms(body.amount);
       if (amount <= 0n) throw new LedgerError(`Record ${index} transfers nothing`, index);
-      if (!PUBKEY.test(body.to)) {
+      if (!IDENTITY_PATTERN.test(body.to)) {
         throw new LedgerError(`Record ${index} has a malformed recipient key`, index);
       }
       if (body.to === body.author) {
@@ -208,10 +206,10 @@ function applyClaim(
   if (!Number.isInteger(claim.epoch) || claim.epoch < 0) {
     throw new LedgerError(`Record ${index} has an invalid epoch`, index);
   }
-  if (!TXID.test(claim.ticket)) {
+  if (!TXID_PATTERN.test(claim.ticket)) {
     throw new LedgerError(`Record ${index} has a malformed ticket txid`, index);
   }
-  if (!TXID.test(claim.btcBlockHash)) {
+  if (!TXID_PATTERN.test(claim.btcBlockHash)) {
     throw new LedgerError(`Record ${index} has a malformed block hash`, index);
   }
   if (acc.spentTickets.has(claim.ticket)) {
