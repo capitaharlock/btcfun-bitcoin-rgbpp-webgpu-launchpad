@@ -1,11 +1,31 @@
+/* Proof Explorer.
+ *
+ * PROTOCOL.md §3 requires that invalid, incomplete and stale evidence stay
+ * distinguishable from a valid proof. So this page never shows a single green
+ * badge: each claim is paired with what it actually establishes and what it
+ * rests on, and the checks that are not implemented say so in the same table as
+ * the ones that are.
+ *
+ * The recomputations are real. The candidate verifier calls the same
+ * `recompute` the miner and the ledger use — not a second implementation that
+ * could agree with the UI while disagreeing with the rules — and the chain
+ * verifier replays every signed record from genesis.
+ */
+
 import { useMemo, useState } from "react";
+
 import { navigate } from "../App";
-import { getLaunch } from "../data/launches";
-import { challengeDigest, fakeBlockHash, type ChallengeFields } from "../lib/challenge";
-import { sha256d, clz256, wordsToHex } from "../lib/sha256";
+import { PROTOCOL_VERSION, type Launch } from "../data/launches";
+import { useEpochBlockHash, useLaunch, useLaunchRules } from "../hooks/useLaunches";
+import { useLedger } from "../hooks/useLedger";
+import { challengeDigest, type ChallengeFields } from "../lib/challenge";
+import { recompute } from "../lib/mining";
+import { recordId, type LaunchRules } from "../lib/ledger";
 import { bytesToHex } from "../lib/bytes";
+import { NETWORK, useWallet } from "../state/WalletProvider";
+import { txUrl } from "../lib/bitcoin";
+import { atoms, shortHash, splitLeadingZeros } from "../lib/format";
 import { Chip, KV, Notice, Panel } from "../ui/primitives";
-import { shortHash, splitLeadingZeros } from "../lib/format";
 
 /** What a check actually establishes, and what it rests on. */
 type Strength = "local" | "inclusion" | "assumption" | "missing";
@@ -24,49 +44,42 @@ interface Check {
   strength: Strength;
 }
 
+const PENDING_BLOCK = "0".repeat(64);
+
 export function ProofView({ id }: { id: string }) {
-  const launch = getLaunch(id);
-  const [nonce, setNonce] = useState(0);
-
-  const fields = useMemo<ChallengeFields | null>(() => {
-    if (!launch) return null;
-    const epoch = Math.floor(launch.elapsed / launch.epochBlocks);
-    return {
-      version: "btcfun/0.1-prototype",
-      network: "signet",
-      launch: launch.id,
-      epoch,
-      btcBlockHash: fakeBlockHash(launch.h0 + epoch * launch.epochBlocks),
-      ticket: "ticket-prototype-0001",
-      owner: "tb1q…prototype-recipient",
-    };
-  }, [launch]);
-
-  const recomputed = useMemo(() => {
-    if (!fields) return null;
-    const challenge = challengeDigest(fields);
-    const buf = new Uint8Array(40);
-    buf.set(challenge, 0);
-    buf[32] = nonce & 0xff;
-    buf[33] = (nonce >>> 8) & 0xff;
-    buf[34] = (nonce >>> 16) & 0xff;
-    buf[35] = (nonce >>> 24) & 0xff;
-    const out = new Uint32Array(8);
-    sha256d(buf, out);
-    return {
-      challengeHex: bytesToHex(challenge),
-      digest: wordsToHex(out),
-      clz: clz256(out),
-    };
-  }, [fields, nonce]);
-
-  if (!launch || !fields || !recomputed) {
+  const launch = useLaunch(id);
+  if (!launch) {
     return (
       <Panel title="Launch not found">
         <button className="btn" onClick={() => navigate("/")}>Back</button>
       </Panel>
     );
   }
+  return <ProofBody launch={launch} />;
+}
+
+function ProofBody({ launch }: { launch: Launch }) {
+  const rules = useLaunchRules(launch);
+  const wallet = useWallet();
+  const epochBlockHash = useEpochBlockHash(launch);
+  const [nonce, setNonce] = useState(0n);
+
+  const fields = useMemo<ChallengeFields>(() => {
+    return {
+      version: PROTOCOL_VERSION,
+      network: NETWORK.id,
+      launch: launch.id,
+      epoch: launch.epoch,
+      btcBlockHash: epochBlockHash ?? PENDING_BLOCK,
+      ticket: "example-ticket",
+      owner: wallet.vault?.identity ?? "unconnected",
+    };
+  }, [launch, epochBlockHash, wallet.vault?.identity]);
+
+  const verified = useMemo(() => {
+    const challenge = challengeDigest(fields);
+    return { challenge, candidate: recompute(challenge, nonce) };
+  }, [fields, nonce]);
 
   const checks: Check[] = [
     {
@@ -78,14 +91,32 @@ export function ProofView({ id }: { id: string }) {
     {
       claim: "Candidate hash matches the submitted nonce",
       establishes: "sha256d(challenge ‖ nonce) equals the digest shown, and its clz is as stated.",
-      rests_on: "SHA-256 implementation in this page. Recomputed in your browser.",
+      rests_on: "The dependency-free SHA-256 in this page, which also re-checks every GPU result.",
       strength: "local",
     },
     {
+      claim: "Records are signed by the identities they name",
+      establishes: "Each record's ECDSA signature verifies against its stated author over its digest.",
+      rests_on: "secp256k1 verification, replayed here from genesis.",
+      strength: "local",
+    },
+    {
+      claim: "No record mints more than the rule allows",
+      establishes: "Each claim's amount equals what the §4.3 backing-limited candidate computes.",
+      rests_on: "Replay of the whole chain. The rule itself is a candidate, not adopted.",
+      strength: "local",
+    },
+    {
+      claim: "The ticket was actually paid",
+      establishes: "A transaction with that id exists on the network and carries the launch commitment.",
+      rests_on: "mempool.space's word for the transaction. Not an inclusion proof.",
+      strength: "inclusion",
+    },
+    {
       claim: "The epoch used the stated Bitcoin block",
-      establishes: "Nothing yet — the block hash here is a deterministic fixture.",
-      rests_on: "A real accepted-clock and SPV policy. Task V8.",
-      strength: "missing",
+      establishes: "The hash came from the provider for the epoch's opening height.",
+      rests_on: "That provider being honest. No SPV proof or accepted-clock policy. Task V8.",
+      strength: "assumption",
     },
     {
       claim: "This block is on the canonical chain",
@@ -95,8 +126,14 @@ export function ProofView({ id }: { id: string }) {
     },
     {
       claim: "Ownership is bound to a Bitcoin UTXO",
-      establishes: "Nothing yet. A UTXO reference is not proof of control (§4.2).",
+      establishes: "Nothing yet. Records are signed, but nothing anchors them to a UTXO.",
       rests_on: "RGB++ binding and an authorization proof. Tasks V3, WA6.",
+      strength: "missing",
+    },
+    {
+      claim: "This chain is the only chain",
+      establishes: "Nothing. Two conflicting signed histories are equally valid to a verifier.",
+      rests_on: "Settlement and consensus. The whole point of tasks V1–V3.",
       strength: "missing",
     },
     {
@@ -106,23 +143,28 @@ export function ProofView({ id }: { id: string }) {
       strength: "missing",
     },
     {
-      claim: "Allocation and reserve reconcile",
-      establishes: "Nothing yet — no allocation rule is adopted.",
-      rests_on: "Tasks E1–E5, then PC-series contract enforcement.",
+      claim: "Redemption pays what the reserve implies",
+      establishes: "Nothing — redemption is simulated, and the reserve is burned satoshis.",
+      rests_on: "A CKB-side reserve asset with script enforcement. Task V3.",
       strength: "missing",
     },
   ];
 
-  const { zeros, rest } = splitLeadingZeros(recomputed.digest);
-  const localCount = checks.filter((c) => c.strength === "local").length;
+  const { zeros, rest } = splitLeadingZeros(verified.candidate.hash);
+  const counts = {
+    local: checks.filter((c) => c.strength === "local").length,
+    missing: checks.filter((c) => c.strength === "missing").length,
+  };
 
   return (
     <div className="stack-lg">
       <div className="row wrapped">
-        <button className="btn ghost" onClick={() => navigate(`/launch/${launch.id}`)}>← {launch.symbol}</button>
+        <button className="btn ghost" onClick={() => navigate(`/launch/${launch.id}`)}>
+          ← {launch.symbol}
+        </button>
         <span className="spacer" />
-        <Chip tone="ok">{localCount} locally verifiable</Chip>
-        <Chip tone="danger">{checks.filter((c) => c.strength === "missing").length} not implemented</Chip>
+        <Chip tone="ok">{counts.local} locally verifiable</Chip>
+        <Chip tone="danger">{counts.missing} not implemented</Chip>
       </div>
 
       <div>
@@ -132,52 +174,60 @@ export function ProofView({ id }: { id: string }) {
 
       <Notice tone="danger">
         <span>
-          <b>Most of this proof does not exist yet.</b> PROTOCOL.md §3 requires that
-          invalid, incomplete and stale evidence stay distinguishable from a valid
-          proof, so this page states what each check actually establishes instead of
-          showing a single green badge. Only the two client-side recomputations below
-          prove anything today.
+          <b>Most of this proof does not exist yet.</b> Signatures, work and the
+          minting rule are checked here in full. Settlement is not: nothing
+          anchors these records to Bitcoin or CKB, so this page tells you exactly
+          which of the two you are looking at rather than showing one badge.
         </span>
       </Notice>
 
-      <Panel eyebrow="recompute in your browser" title="Candidate verification">
-        <div className="row wrapped" style={{ gap: 14, marginBottom: 12 }}>
-          <label className="tiny faint">nonce</label>
-          <input
-            className="input"
-            style={{ width: 160 }}
-            type="number"
-            min={0}
-            value={nonce}
-            onChange={(e) => setNonce(Math.max(0, Number(e.target.value)))}
+      <section className="split">
+        <Panel eyebrow="recompute in your browser" title="Candidate verification">
+          <div className="row wrapped" style={{ gap: 14, marginBottom: 12 }}>
+            <label className="tiny faint" htmlFor="nonce">nonce</label>
+            <input
+              id="nonce"
+              className="input"
+              style={{ width: 180 }}
+              type="number"
+              min={0}
+              value={Number(nonce)}
+              onChange={(e) => setNonce(BigInt(Math.max(0, Math.floor(Number(e.target.value) || 0))))}
+            />
+            <button className="btn" onClick={() => setNonce((n) => n + 1n)}>step</button>
+            <span className="spacer" />
+            <Chip tone="cyan">clz {verified.candidate.clz}</Chip>
+          </div>
+
+          <div className="eyebrow" style={{ marginBottom: 6 }}>challenge digest</div>
+          <div className="hash" style={{ marginBottom: 14 }}>{bytesToHex(verified.challenge)}</div>
+
+          <div className="eyebrow" style={{ marginBottom: 6 }}>sha256d(challenge ‖ nonce)</div>
+          <div className="hash">
+            <span className="z">{zeros}</span>
+            {rest}
+          </div>
+
+          <div className="rule" />
+          <KV
+            rows={[
+              ["version", fields.version],
+              ["network", fields.network],
+              ["launch", fields.launch],
+              ["epoch", String(fields.epoch)],
+              ["btc block", epochBlockHash ? shortHash(epochBlockHash, 14, 8) : "waiting…"],
+              ["ticket", fields.ticket],
+              ["owner", shortHash(fields.owner, 12, 6)],
+            ]}
           />
-          <button className="btn" onClick={() => setNonce((n) => n + 1)}>step</button>
-          <span className="spacer" />
-          <Chip tone="cyan">clz {recomputed.clz}</Chip>
-        </div>
+        </Panel>
 
-        <div className="eyebrow" style={{ marginBottom: 6 }}>challenge digest</div>
-        <div className="hash" style={{ marginBottom: 14 }}>{recomputed.challengeHex}</div>
-
-        <div className="eyebrow" style={{ marginBottom: 6 }}>sha256d(challenge ‖ nonce)</div>
-        <div className="hash">
-          <span className="z">{zeros}</span>
-          {rest}
-        </div>
-
-        <div className="rule" />
-        <KV
-          rows={[
-            ["version", fields.version],
-            ["network", fields.network],
-            ["launch", fields.launch],
-            ["epoch", String(fields.epoch)],
-            ["btc block", shortHash(fields.btcBlockHash, 14, 8)],
-            ["ticket", fields.ticket],
-            ["owner", fields.owner],
-          ]}
+        <ChainVerification
+          launchId={launch.id}
+          rules={rules}
+          decimals={launch.schedule.decimals}
         />
-      </Panel>
+      </section>
 
       <Panel flush eyebrow="§3" title="What each check establishes">
         <table className="table">
@@ -204,5 +254,68 @@ export function ProofView({ id }: { id: string }) {
         </table>
       </Panel>
     </div>
+  );
+}
+
+/** Replays this wallet's chain and shows the verdict per record. */
+function ChainVerification({
+  launchId,
+  rules,
+  decimals,
+}: {
+  launchId: string;
+  rules: LaunchRules;
+  decimals: number;
+}) {
+  const ledger = useLedger(rules);
+
+  return (
+    <Panel
+      eyebrow="replay from genesis"
+      title="This chain"
+      aside={
+        ledger.state ? (
+          <Chip tone="ok">{ledger.state.length} records verified</Chip>
+        ) : (
+          <Chip tone="danger">invalid</Chip>
+        )
+      }
+    >
+      {ledger.records.length === 0 ? (
+        <p className="tiny faint">
+          No records yet. Mine a claim on the{" "}
+          <a href={`#/launch/${launchId}`}>launch page</a> and it will appear here
+          with everything that was checked about it.
+        </p>
+      ) : (
+        <div className="hashlog" style={{ maxHeight: 280 }}>
+          {[...ledger.records].reverse().map((record) => (
+            <div className="entry" key={record.body.seq}>
+              <span className="clz">{record.body.seq}</span>
+              <span>{record.body.kind}</span>
+              <span className="spacer" />
+              {record.body.kind === "claim" && (
+                <a href={txUrl(record.body.ticket)} target="_blank" rel="noreferrer">
+                  ticket ↗
+                </a>
+              )}
+              <span>{atoms(BigInt(record.body.amount), decimals, 4)}</span>
+              <span className="faint">{recordId(record.body).slice(0, 10)}…</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {ledger.error && <Notice tone="danger">{ledger.error}</Notice>}
+
+      <div className="rule" />
+      <p className="tiny faint" style={{ margin: 0 }}>
+        Replay checks every signature, every chain link, every nonce against the
+        work it claims, every ticket for reuse, and every amount against the
+        allocation rule. A single fault rejects the chain rather than returning
+        a valid prefix — a balance derived from a partly-valid history is not a
+        balance.
+      </p>
+    </Panel>
   );
 }
