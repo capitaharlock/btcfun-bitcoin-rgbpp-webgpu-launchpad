@@ -14,9 +14,9 @@ import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { p2wpkh } from "@scure/btc-signer";
-import { secp256k1 } from "@noble/curves/secp256k1";
 
 import { bytesToHex } from "../bytes";
+import { signDigestWith, verifySignature } from "../signatures";
 import { ACTIVE, type NetworkConfig } from "./network";
 
 export interface WalletKey {
@@ -75,22 +75,11 @@ export function deriveAddress(entropy: Uint8Array, network: NetworkConfig = ACTI
  * not hash yourself is how a signature ends up covering the wrong bytes.
  */
 export function signDigest(key: WalletKey, digest: Uint8Array): Uint8Array {
-  if (digest.length !== 32) throw new RangeError("signDigest: expected a 32-byte digest");
-  return secp256k1.sign(digest, key.privateKey).toCompactRawBytes();
+  return signDigestWith(key.privateKey, digest);
 }
 
 /** Verify a compact signature against a public key. Never throws on bad input. */
-export function verifyDigest(
-  publicKey: Uint8Array,
-  digest: Uint8Array,
-  signature: Uint8Array,
-): boolean {
-  try {
-    return secp256k1.verify(signature, digest, publicKey);
-  } catch {
-    return false;
-  }
-}
+export const verifyDigest = verifySignature;
 
 /** Public key as hex — the stable identity used by ledger records. */
 export function identityOf(key: WalletKey): string {
