@@ -19,7 +19,7 @@ import { useLedger, type UseLedger } from "../hooks/useLedger";
 import { signTransfer } from "../lib/ledger";
 import { formatRatio, ratioScaled, redeem } from "../lib/reserve";
 import { useWallet } from "../state/WalletProvider";
-import { atoms, group } from "../lib/format";
+import { atoms, group, parseAmount } from "../lib/format";
 import { Chip, KV, Notice, Panel, Stat } from "../ui/primitives";
 import { Copyable } from "../ui/Copyable";
 
@@ -356,14 +356,6 @@ function RedemptionPreview({
   );
 }
 
-/** Parse a decimal amount into atoms, or null if it is not one. */
-function parseAmount(input: string, decimals: number): bigint | null {
-  const trimmed = input.trim();
-  if (!/^\d*\.?\d*$/.test(trimmed) || trimmed === "" || trimmed === ".") return null;
-  const [whole, fraction = ""] = trimmed.split(".");
-  if (fraction.length > decimals) return null;
-  return BigInt(whole || "0") * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
-}
 
 /** Every launch has a chain, even an empty one, so the grid is stable. */
 export const POSITION_COUNT = SPECS.length;

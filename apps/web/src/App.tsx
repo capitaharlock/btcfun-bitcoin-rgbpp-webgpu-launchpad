@@ -5,6 +5,7 @@ import { Lab } from "./views/Lab";
 import { ProofView } from "./views/Proof";
 import { Holdings } from "./views/Holdings";
 import { WalletView } from "./views/Wallet";
+import { Market } from "./views/Market";
 import { NETWORK, WalletProvider, formatBtc, shortAddress, useWallet } from "./state/WalletProvider";
 import { group } from "./lib/format";
 import { Chip } from "./ui/primitives";
@@ -15,6 +16,7 @@ type Route =
   | { name: "proof"; id: string }
   | { name: "lab" }
   | { name: "holdings" }
+  | { name: "market"; id?: string }
   | { name: "wallet" };
 
 function parse(hash: string): Route {
@@ -24,6 +26,7 @@ function parse(hash: string): Route {
   }
   if (path[0] === "lab") return { name: "lab" };
   if (path[0] === "holdings") return { name: "holdings" };
+  if (path[0] === "market") return { name: "market", id: path[1] };
   if (path[0] === "wallet") return { name: "wallet" };
   return { name: "launches" };
 }
@@ -81,6 +84,9 @@ function Shell() {
           <button aria-current={tab === "lab" ? "page" : undefined} onClick={() => navigate("/lab")}>
             Emission lab
           </button>
+          <button aria-current={tab === "market" ? "page" : undefined} onClick={() => navigate("/market")}>
+            Market
+          </button>
           <button aria-current={tab === "holdings" ? "page" : undefined} onClick={() => navigate("/holdings")}>
             Holdings
           </button>
@@ -99,6 +105,7 @@ function Shell() {
           {route.name === "proof" && <ProofView id={route.id} />}
           {route.name === "lab" && <Lab />}
           {route.name === "holdings" && <Holdings />}
+          {route.name === "market" && <Market launchId={route.id} />}
           {route.name === "wallet" && <WalletView />}
         </div>
       </main>

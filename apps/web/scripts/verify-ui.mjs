@@ -37,6 +37,7 @@ const ROUTES = [
   { path: "/lab", name: "lab", ready: "svg" },
   { path: "/launch/mesh/proof", name: "proof", ready: "table" },
   { path: "/holdings", name: "holdings", ready: ".panel" },
+  { path: "/market", name: "market", ready: ".panel" },
   { path: "/wallet", name: "wallet", ready: ".panel" },
 ];
 
