@@ -1,31 +1,32 @@
 /* Launches placed against the live chain tip.
  *
- * Every view needs the same resolution — a launch's age and current epoch are
- * functions of the tip — so it happens once here rather than in each of them.
- * Until the provider has a tip the placeholder is used, which keeps the first
- * paint coherent instead of rendering dashes.
+ * Thin readers over `LaunchesProvider`, which owns the merge of fixtures,
+ * locally created launches and launches seen through the index. Every view
+ * needs the same resolution — a launch's age and current epoch are functions of
+ * the tip — so it happens once rather than in each of them.
  */
 
 import { useEffect, useMemo, useState } from "react";
 
-import { FALLBACK_TIP, getLaunch, resolveAll, rulesFor, type Launch } from "../data/launches";
-import { NETWORK, useWallet } from "../state/WalletProvider";
+import { getLaunch, resolveAll, rulesFor, type Launch } from "../data/launches";
+import { useLaunchRegistry } from "../state/LaunchesProvider";
+import { NETWORK } from "../state/WalletProvider";
 import { getBlockHash } from "../lib/bitcoin";
 import type { LaunchRules } from "../lib/ledger";
 
 /** Current Bitcoin height, or the placeholder until the provider answers. */
 export function useTip(): number {
-  return useWallet().tipHeight ?? FALLBACK_TIP;
+  return useLaunchRegistry().tip;
 }
 
 export function useLaunches(): Launch[] {
-  const tip = useTip();
-  return useMemo(() => resolveAll(tip), [tip]);
+  const { tip, extra } = useLaunchRegistry();
+  return useMemo(() => resolveAll(tip, extra), [tip, extra]);
 }
 
 export function useLaunch(id: string): Launch | undefined {
-  const tip = useTip();
-  return useMemo(() => getLaunch(id, tip), [id, tip]);
+  const { tip, extra } = useLaunchRegistry();
+  return useMemo(() => getLaunch(id, tip, extra), [id, tip, extra]);
 }
 
 /**

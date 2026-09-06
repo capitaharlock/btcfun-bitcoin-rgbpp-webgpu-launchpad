@@ -46,6 +46,8 @@ export interface LaunchSpec {
   addresses: number;
   schedule: Schedule;
   accent: string;
+  /** Identity that committed this launch. Absent on the seeded fixtures. */
+  createdBy?: string;
 }
 
 /** A launch placed in time against a known tip. */
@@ -67,7 +69,7 @@ export const SPECS: LaunchSpec[] = [
     id: "mesh",
     symbol: "MESH",
     name: "Meshwork",
-    blurb: "Community token for a mesh-relay operators' group.",
+    blurb: "Community token for a mesh-relay operators' group. Bandwidth contributed, not bought.",
     state: "mining",
     blocksSinceOpen: 1_640,
     epochBlocks: 6,
@@ -82,7 +84,7 @@ export const SPECS: LaunchSpec[] = [
     id: "obsv",
     symbol: "OBSV",
     name: "Observatory",
-    blurb: "Shared funding pool for an open telemetry dashboard.",
+    blurb: "Shared funding pool for an open telemetry dashboard. Every panel is public.",
     state: "mining",
     blocksSinceOpen: 212,
     epochBlocks: 6,
@@ -94,10 +96,25 @@ export const SPECS: LaunchSpec[] = [
     accent: "var(--cyan)",
   },
   {
+    id: "forge",
+    symbol: "FORGE",
+    name: "Forge Collective",
+    blurb: "Hardware hackers pooling fabrication time. Mint to book the laser cutter.",
+    state: "mining",
+    blocksSinceOpen: 48,
+    epochBlocks: 6,
+    ticketSats: 3_000,
+    minClz: 24,
+    reserve: 1_980_000_000n,
+    addresses: 27,
+    schedule: CANDIDATE,
+    accent: "var(--magenta)",
+  },
+  {
     id: "quill",
     symbol: "QUILL",
     name: "Quill",
-    blurb: "Writers' collective experimenting with mined membership.",
+    blurb: "Writers' collective experimenting with mined membership instead of subscriptions.",
     state: "committed",
     blocksSinceOpen: -144,
     epochBlocks: 6,
@@ -109,10 +126,55 @@ export const SPECS: LaunchSpec[] = [
     accent: "var(--violet)",
   },
   {
+    id: "tide",
+    symbol: "TIDE",
+    name: "Tidepool",
+    blurb: "Coastal monitoring co-op. Sensors earn, readings stay open.",
+    state: "committed",
+    blocksSinceOpen: -22,
+    epochBlocks: 6,
+    ticketSats: 1_200,
+    minClz: 24,
+    reserve: 0n,
+    addresses: 0,
+    schedule: CANDIDATE,
+    accent: "var(--mint)",
+  },
+  {
+    id: "lumen",
+    symbol: "LUMEN",
+    name: "Lumen",
+    blurb: "Street-photography zine. One epoch per issue, contributors mine their share.",
+    state: "mining",
+    blocksSinceOpen: 640,
+    epochBlocks: 6,
+    ticketSats: 2_500,
+    minClz: 24,
+    reserve: 17_400_000_000n,
+    addresses: 128,
+    schedule: CANDIDATE,
+    accent: "var(--warn)",
+  },
+  {
+    id: "cairn",
+    symbol: "CAIRN",
+    name: "Cairn",
+    blurb: "Trail-maintenance crew. Closed its window with the allowance fully taken.",
+    state: "closed",
+    blocksSinceOpen: 4_300,
+    epochBlocks: 6,
+    ticketSats: 2_000,
+    minClz: 24,
+    reserve: 33_100_000_000n,
+    addresses: 176,
+    schedule: CANDIDATE,
+    accent: "var(--ok)",
+  },
+  {
     id: "relic",
     symbol: "RELIC",
     name: "Relic",
-    blurb: "Archive project. Turnout collapsed after the first week.",
+    blurb: "Archive project. Turnout collapsed after the first week and most allowance expired.",
     state: "dormant",
     blocksSinceOpen: 9_900,
     epochBlocks: 6,
@@ -183,12 +245,16 @@ export function resolve(spec: LaunchSpec, tip: number): Launch {
   };
 }
 
-export function resolveAll(tip: number): Launch[] {
-  return SPECS.map((spec) => resolve(spec, tip));
+export function resolveAll(tip: number, extra: readonly LaunchSpec[] = []): Launch[] {
+  return [...SPECS, ...extra].map((spec) => resolve(spec, tip));
 }
 
-export function getLaunch(id: string, tip: number): Launch | undefined {
-  const spec = SPECS.find((s) => s.id === id);
+export function getLaunch(
+  id: string,
+  tip: number,
+  extra: readonly LaunchSpec[] = [],
+): Launch | undefined {
+  const spec = [...SPECS, ...extra].find((s) => s.id === id);
   return spec ? resolve(spec, tip) : undefined;
 }
 

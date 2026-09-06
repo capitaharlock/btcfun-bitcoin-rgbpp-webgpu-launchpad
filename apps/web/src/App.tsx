@@ -6,7 +6,10 @@ import { ProofView } from "./views/Proof";
 import { Holdings } from "./views/Holdings";
 import { WalletView } from "./views/Wallet";
 import { Market } from "./views/Market";
+import { Activity } from "./views/Activity";
+import { Create } from "./views/Create";
 import { NETWORK, WalletProvider, formatBtc, shortAddress, useWallet } from "./state/WalletProvider";
+import { LaunchesProvider } from "./state/LaunchesProvider";
 import { group } from "./lib/format";
 import { Chip } from "./ui/primitives";
 
@@ -15,8 +18,10 @@ type Route =
   | { name: "launch"; id: string }
   | { name: "proof"; id: string }
   | { name: "lab" }
+  | { name: "create" }
   | { name: "holdings" }
   | { name: "market"; id?: string }
+  | { name: "activity" }
   | { name: "wallet" };
 
 function parse(hash: string): Route {
@@ -25,6 +30,8 @@ function parse(hash: string): Route {
     return path[2] === "proof" ? { name: "proof", id: path[1] } : { name: "launch", id: path[1] };
   }
   if (path[0] === "lab") return { name: "lab" };
+  if (path[0] === "create") return { name: "create" };
+  if (path[0] === "activity") return { name: "activity" };
   if (path[0] === "holdings") return { name: "holdings" };
   if (path[0] === "market") return { name: "market", id: path[1] };
   if (path[0] === "wallet") return { name: "wallet" };
@@ -38,7 +45,9 @@ export function navigate(to: string): void {
 export default function App() {
   return (
     <WalletProvider>
-      <Shell />
+      <LaunchesProvider>
+        <Shell />
+      </LaunchesProvider>
     </WalletProvider>
   );
 }
@@ -55,7 +64,10 @@ function Shell() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  const tab = route.name === "launch" || route.name === "proof" ? "launches" : route.name;
+  // Detail pages belong to the section they were reached from, so the nav
+  // never goes blank halfway through a flow.
+  const tab =
+    route.name === "launch" || route.name === "proof" ? "launches" : route.name;
 
   return (
     <div className="shell">
@@ -77,23 +89,26 @@ function Shell() {
           btc<em>.</em>fun
         </a>
 
+        {/* Four things you can do, on the left. What you own, on the right. */}
         <nav className="nav">
           <button aria-current={tab === "launches" ? "page" : undefined} onClick={() => navigate("/")}>
             Launches
           </button>
-          <button aria-current={tab === "lab" ? "page" : undefined} onClick={() => navigate("/lab")}>
-            Emission lab
+          <button aria-current={tab === "create" ? "page" : undefined} onClick={() => navigate("/create")}>
+            Create
           </button>
           <button aria-current={tab === "market" ? "page" : undefined} onClick={() => navigate("/market")}>
             Market
           </button>
-          <button aria-current={tab === "holdings" ? "page" : undefined} onClick={() => navigate("/holdings")}>
-            Holdings
+          <button aria-current={tab === "activity" ? "page" : undefined} onClick={() => navigate("/activity")}>
+            Activity
           </button>
         </nav>
 
-        <div className="topbar-right">
+        <div className="topbar-right rail">
           <TipChip />
+          <span className="divider" />
+          <HoldingsPill active={tab === "holdings"} />
           <WalletPill active={tab === "wallet"} />
         </div>
       </header>
@@ -104,6 +119,8 @@ function Shell() {
           {route.name === "launch" && <LaunchView id={route.id} />}
           {route.name === "proof" && <ProofView id={route.id} />}
           {route.name === "lab" && <Lab />}
+          {route.name === "create" && <Create />}
+          {route.name === "activity" && <Activity />}
           {route.name === "holdings" && <Holdings />}
           {route.name === "market" && <Market launchId={route.id} />}
           {route.name === "wallet" && <WalletView />}
@@ -137,6 +154,22 @@ function TipChip() {
     <Chip title="Waiting for the chain tip">
       <span className="mono">btc …</span>
     </Chip>
+  );
+}
+
+/** Holdings sits beside the wallet because it *is* the wallet's contents —
+ *  grouping it with the navigation implied it was another place to browse. */
+function HoldingsPill({ active }: { active: boolean }) {
+  const { vault } = useWallet();
+  if (!vault) return null;
+  return (
+    <button
+      className="btn ghost"
+      aria-current={active ? "page" : undefined}
+      onClick={() => navigate("/holdings")}
+    >
+      Holdings
+    </button>
   );
 }
 
