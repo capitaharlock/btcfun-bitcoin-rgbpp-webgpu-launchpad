@@ -45,7 +45,7 @@ export function Stat({
   k: string;
   v: ReactNode;
   unit?: string;
-  tone?: "amber" | "cyan" | "danger";
+  tone?: StatTone;
   small?: boolean;
   hint?: string;
 }) {
@@ -60,6 +60,12 @@ export function Stat({
   );
 }
 
+/** Stat tones follow the same palette meanings as chips. */
+export type StatTone = "amber" | "cyan" | "violet" | "ok" | "danger";
+
+/** Chip tones map to the palette's signal colours, not to arbitrary hues. */
+export type ChipTone = "amber" | "cyan" | "violet" | "ok" | "warn" | "danger";
+
 export function Chip({
   children,
   tone,
@@ -67,7 +73,7 @@ export function Chip({
   title,
 }: {
   children: ReactNode;
-  tone?: "amber" | "cyan" | "ok" | "warn" | "danger";
+  tone?: ChipTone;
   live?: boolean;
   /** Hover text. Used to carry a backend's full detail without crowding the chip. */
   title?: string;

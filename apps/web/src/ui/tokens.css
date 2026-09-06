@@ -1,46 +1,84 @@
 /* btc.fun — design tokens and base layer.
-   Dark-first by product decision: this is an instrument panel, not a document. */
+ *
+ * Dark, but not dim. The earlier palette was desaturated to the point of
+ * looking unfinished: near-black surfaces under grey-blue text with two accent
+ * colours used sparingly. This one keeps the same discipline about what colour
+ * *means* — amber is issuance and heat, cyan is evidence — and adds saturation,
+ * a violet-magenta range for market and social surfaces, and gradients that do
+ * real work: heat for anything about minting, neon for anything about trading.
+ *
+ * Rules that survive from the old palette, because they are about legibility
+ * rather than taste:
+ *   Numbers are always tabular monospace. A figure is data, not prose.
+ *   Colour carries meaning; a screen with five accent colours has none.
+ *   Every animation respects prefers-reduced-motion.
+ */
 
 :root {
-  /* Surfaces: cold near-black, lifted in small steps. */
-  --bg: #07080b;
-  --bg-deep: #050609;
-  --surface-1: #0c0e13;
-  --surface-2: #11141b;
-  --surface-3: #171b24;
-  --line: #1e232e;
-  --line-strong: #2b3241;
+  /* Surfaces: blue-black, lifted in small steps. Not neutral grey — the slight
+     violet cast is what stops the accents looking like stickers on concrete. */
+  --bg: #06060f;
+  --bg-deep: #030309;
+  --surface-1: #0d0d1a;
+  --surface-2: #141426;
+  --surface-3: #1c1c33;
+  --line: #242440;
+  --line-strong: #36365c;
 
-  /* Ink */
-  --ink: #e8ecf3;
-  --ink-dim: #9aa4b6;
-  --ink-faint: #5f6878;
+  /* Ink. Brighter than before across the board: the old --ink-dim was doing
+     the work of body text at a contrast that made everything look washed out. */
+  --ink: #f4f5ff;
+  --ink-dim: #bcc0e0;
+  --ink-faint: #7b82ad;
 
-  /* Signal colours. Amber = issuance/heat. Cyan = evidence/verification. */
-  --amber: #f7931a;
-  --amber-soft: #ffb454;
-  --cyan: #5be9e9;
-  --cyan-deep: #1fa8b8;
-  --ok: #3fd98b;
-  --warn: #ffc53d;
-  --danger: #ff5f56;
-  --violet: #9d8cff;
+  /* Signals.
+     amber   = issuance, mining, heat
+     cyan    = evidence, verification, proof
+     violet  = market, ownership, transfer
+     mint    = settled, confirmed, good
+     rose    = expired, failed, exposed */
+  --amber: #ff9f1c;
+  --amber-soft: #ffc75a;
+  --amber-deep: #ff6a00;
+  --cyan: #26e0f5;
+  --cyan-deep: #0ea5c6;
+  --violet: #a78bfa;
+  --violet-deep: #7c3aed;
+  --magenta: #ec4fc6;
+  --mint: #2fe3a0;
+  --ok: #2fe3a0;
+  --warn: #ffd23f;
+  --danger: #ff4d6d;
 
-  --amber-glow: color-mix(in oklab, var(--amber) 22%, transparent);
-  --cyan-glow: color-mix(in oklab, var(--cyan) 20%, transparent);
+  /* Glows — used for focus, live state and the mining strike. */
+  --amber-glow: color-mix(in oklab, var(--amber) 38%, transparent);
+  --cyan-glow: color-mix(in oklab, var(--cyan) 34%, transparent);
+  --violet-glow: color-mix(in oklab, var(--violet) 36%, transparent);
+
+  /* Gradients. Each one has a job; they are not decoration applied at random.
+     heat  → issuance and mining surfaces
+     neon  → market and trading surfaces
+     proof → verification surfaces
+     dusk  → neutral panel wash */
+  --grad-heat: linear-gradient(135deg, #ff6a00 0%, #ff9f1c 52%, #ffd166 100%);
+  --grad-neon: linear-gradient(135deg, #ec4fc6 0%, #7c3aed 48%, #26e0f5 100%);
+  --grad-proof: linear-gradient(135deg, #0ea5c6 0%, #26e0f5 60%, #7dd3fc 100%);
+  --grad-dusk: linear-gradient(180deg, rgba(167, 139, 250, 0.09), rgba(6, 6, 15, 0) 62%);
 
   /* Type */
   --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", monospace;
 
   /* Geometry */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 16px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
   --gut: 20px;
-  --maxw: 1320px;
+  --maxw: 1360px;
 
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 * { box-sizing: border-box; }
@@ -59,30 +97,40 @@ body {
   font-feature-settings: "cv05" 1, "ss01" 1;
 }
 
-/* Layered backdrop: dot grid + one slow radial bloom + grain. */
+/* Layered backdrop: three slow colour fields, a dot grid and fine grain.
+   The fields drift so the page is never completely static, which is most of
+   what separates "dark theme" from "looks alive". */
 body::before,
 body::after {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: -20%;
   pointer-events: none;
   z-index: 0;
 }
 
 body::before {
   background:
-    radial-gradient(60rem 40rem at 72% -10%, color-mix(in oklab, var(--amber) 7%, transparent), transparent 62%),
-    radial-gradient(52rem 38rem at 8% 108%, color-mix(in oklab, var(--cyan) 6%, transparent), transparent 60%),
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: auto, auto, 34px 34px;
-  opacity: 0.85;
+    radial-gradient(48rem 34rem at 78% -6%, color-mix(in oklab, var(--amber) 20%, transparent), transparent 64%),
+    radial-gradient(44rem 32rem at 6% 14%, color-mix(in oklab, var(--violet) 18%, transparent), transparent 62%),
+    radial-gradient(52rem 38rem at 42% 112%, color-mix(in oklab, var(--cyan) 13%, transparent), transparent 60%);
+  filter: blur(16px);
+  animation: drift 34s var(--ease) infinite alternate;
+}
+
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-2.5%, 2%, 0) scale(1.07); }
 }
 
 body::after {
-  /* Fine grain keeps the flat blacks from banding. */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-  opacity: 0.032;
-  mix-blend-mode: overlay;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 36px 36px, 140px 140px;
+  opacity: 0.4;
+  mix-blend-mode: soft-light;
 }
 
 #root { position: relative; z-index: 1; }
@@ -97,13 +145,13 @@ body::after {
 
 h1, h2, h3, h4 {
   margin: 0;
-  font-weight: 560;
-  letter-spacing: -0.022em;
-  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  line-height: 1.12;
 }
 
-h1 { font-size: clamp(28px, 4.4vw, 44px); }
-h2 { font-size: 19px; }
+h1 { font-size: clamp(30px, 4.6vw, 52px); }
+h2 { font-size: 20px; }
 h3 { font-size: 15px; }
 
 p { margin: 0 0 0.9em; color: var(--ink-dim); }
@@ -121,10 +169,43 @@ hr {
 :focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
-::selection { background: color-mix(in oklab, var(--amber) 38%, transparent); }
+::selection { background: color-mix(in oklab, var(--amber) 42%, transparent); }
+
+/* ---------- gradient utilities ----------
+   Text and borders that carry a gradient, defined once so no component
+   reimplements the background-clip dance or the double-background trick. */
+
+.grad-text {
+  background: var(--grad-heat);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.grad-text.neon { background: var(--grad-neon); -webkit-background-clip: text; background-clip: text; }
+.grad-text.proof { background: var(--grad-proof); -webkit-background-clip: text; background-clip: text; }
+
+/* A 1px gradient border on a dark fill. Two backgrounds, one clipped to the
+   padding box and one to the border box — the only way to do this without a
+   pseudo-element that then has to be z-ordered against the content. */
+.grad-border {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--surface-1), var(--surface-1)) padding-box,
+    var(--grad-heat) border-box;
+}
+.grad-border.neon {
+  background:
+    linear-gradient(var(--surface-1), var(--surface-1)) padding-box,
+    var(--grad-neon) border-box;
+}
+.grad-border.proof {
+  background:
+    linear-gradient(var(--surface-1), var(--surface-1)) padding-box,
+    var(--grad-proof) border-box;
+}
 
 /* Scrollbars, quietly */
 * {

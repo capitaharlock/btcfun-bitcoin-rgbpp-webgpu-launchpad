@@ -1,0 +1,304 @@
+/* Surfaces that carry the product rather than the instrumentation.
+ *
+ * `components.css` holds the panel/table/chip layer every screen uses.
+ * This file holds the pieces that exist to make the thing *legible at a
+ * glance*: the hero, the token cards, the activity feed, the wizard rail.
+ *
+ * Colour is still meaning, not decoration. A card's accent comes from what the
+ * launch is doing — mining is amber, tradable is violet, closed is mint, dormant
+ * is grey — so scanning the grid answers "what can I do here" before any word is
+ * read.
+ */
+
+/* ---------- hero ---------- */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(38rem 22rem at 88% -20%, color-mix(in oklab, var(--amber) 26%, transparent), transparent 66%),
+    radial-gradient(32rem 20rem at 4% 120%, color-mix(in oklab, var(--violet) 24%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--surface-2), var(--bg-deep));
+  padding: 34px 32px;
+}
+
+.hero::after {
+  /* A slow diagonal sheen. Cheap, and it stops the hero reading as a flat card. */
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(
+    115deg,
+    transparent 42%,
+    color-mix(in oklab, var(--amber) 10%, transparent) 50%,
+    transparent 58%
+  );
+  animation: hero-sheen 9s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes hero-sheen {
+  from { transform: translateX(-30%); }
+  to { transform: translateX(30%); }
+}
+
+.hero > * { position: relative; z-index: 1; }
+
+.hero h1 { margin-bottom: 10px; }
+.hero p { max-width: 54ch; font-size: 15px; color: var(--ink-dim); }
+
+.hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid color-mix(in oklab, var(--line-strong) 70%, transparent);
+}
+
+/* ---------- token cards ---------- */
+
+.cardgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+}
+
+.tokencard {
+  --accent: var(--amber);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(22rem 12rem at 110% -30%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--surface-1), var(--bg-deep));
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition:
+    transform 0.22s var(--ease-out),
+    border-color 0.22s var(--ease),
+    box-shadow 0.22s var(--ease);
+}
+
+.tokencard:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--accent) 52%, transparent);
+  box-shadow: 0 16px 38px -22px color-mix(in oklab, var(--accent) 80%, transparent);
+}
+
+.tokencard.featured {
+  /* Featured cards get the gradient edge, so the eye lands on them first. */
+  border-color: transparent;
+  background:
+    linear-gradient(var(--surface-1), var(--bg-deep)) padding-box,
+    var(--grad-heat) border-box;
+}
+.tokencard.featured.neon {
+  background:
+    linear-gradient(var(--surface-1), var(--bg-deep)) padding-box,
+    var(--grad-neon) border-box;
+}
+
+.tokencard .top { display: flex; align-items: center; gap: 11px; }
+
+/* The launch sigil: two letters on an accent-tinted tile. Deterministic from
+   the symbol, so a launch looks the same everywhere without needing an asset. */
+.sigil {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0b0713;
+  background: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 18px -8px var(--accent);
+}
+.sigil.lg { width: 52px; height: 52px; border-radius: 15px; font-size: 17px; }
+.sigil.sm { width: 26px; height: 26px; border-radius: 8px; font-size: 10.5px; }
+
+.tokencard .sym { font-size: 15.5px; font-weight: 640; color: var(--ink); letter-spacing: -0.02em; }
+.tokencard .name { font-size: 12px; color: var(--ink-faint); }
+.tokencard .blurb {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tokencard .foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.tokencard .metric { display: grid; gap: 2px; }
+.tokencard .metric .k {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.tokencard .metric .v {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  color: var(--ink);
+}
+.tokencard .metric .v.accent { color: var(--accent); }
+
+/* ---------- section tabs ---------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+}
+
+.tabs button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  height: 30px;
+  padding: 0 15px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.tabs button:hover { color: var(--ink-dim); }
+.tabs button.on {
+  color: #120a02;
+  background: var(--grad-heat);
+  box-shadow: 0 4px 16px -6px var(--amber-glow);
+}
+.tabs.neon button.on { color: #0d0416; background: var(--grad-neon); box-shadow: 0 4px 16px -6px var(--violet-glow); }
+
+/* ---------- activity feed ---------- */
+
+.feed { display: flex; flex-direction: column; }
+
+.feedrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.feedrow:last-child { border-bottom: 0; }
+.feedrow:hover { background: color-mix(in oklab, var(--surface-1) 70%, transparent); }
+
+/* A coloured dot per event kind, so the feed is scannable as a stripe. */
+.feedrow .kind {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 99px;
+  background: var(--ink-faint);
+  box-shadow: 0 0 10px currentColor;
+}
+.feedrow .kind.mint { background: var(--amber); color: var(--amber); }
+.feedrow .kind.offer { background: var(--violet); color: var(--violet); }
+.feedrow .kind.fill { background: var(--magenta); color: var(--magenta); }
+.feedrow .kind.transfer { background: var(--cyan); color: var(--cyan); }
+.feedrow .kind.launch { background: var(--mint); color: var(--mint); }
+
+.feedrow .what { color: var(--ink); }
+.feedrow .who { font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); }
+.feedrow .when { font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; }
+.feedrow .amount { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* Newly arrived rows flash once so a live feed reads as live. */
+@keyframes feed-in {
+  from { opacity: 0; transform: translateY(-6px); background: color-mix(in oklab, var(--amber) 14%, transparent); }
+  to { opacity: 1; transform: none; }
+}
+.feedrow.fresh { animation: feed-in 0.6s var(--ease-out); }
+
+/* ---------- wizard ---------- */
+
+.wizard { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 22px; align-items: start; }
+
+@media (max-width: 900px) {
+  .wizard { grid-template-columns: minmax(0, 1fr); }
+}
+
+.steps { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 78px; }
+
+.steps button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.steps button:hover:not([disabled]) { color: var(--ink-dim); background: var(--surface-1); }
+.steps button[disabled] { opacity: 0.45; cursor: not-allowed; }
+.steps button.on { color: var(--ink); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+
+.steps .num {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 99px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-faint);
+}
+.steps button.on .num { background: var(--grad-heat); border-color: transparent; color: #140c02; font-weight: 700; }
+.steps button.done .num { background: color-mix(in oklab, var(--mint) 24%, transparent); border-color: color-mix(in oklab, var(--mint) 55%, transparent); color: var(--mint); }
+
+/* ---------- wallet rail ---------- */
+
+.rail { display: flex; align-items: center; gap: 8px; }
+
+.rail .divider {
+  width: 1px;
+  height: 22px;
+  background: var(--line-strong);
+  margin: 0 2px;
+}
+
+/* ---------- sparkline ---------- */
+
+.spark { display: block; width: 100%; height: 34px; overflow: visible; }
