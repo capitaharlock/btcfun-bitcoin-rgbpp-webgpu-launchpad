@@ -163,6 +163,25 @@ token side, pool ownership, withdrawal rights and failure recovery before integr
 Expired allowance cannot be reclaimed to seed a pool. Address thresholds are not
 Sybil-resistant distribution tests; graduation is not necessarily a cross-chain leap.
 
+### 5.1 Peer-to-peer swaps require settlement, not a better client
+
+Finding from the `testnet-spike` offer-book experiment, recorded so it is not
+rediscovered. A signed offer establishes who owes what: it binds launch, amount,
+price, payment address and a height-based expiry under the maker's key, and a
+payment carrying the offer's id proves the price was met. None of that makes the
+swap atomic. The taker pays on Bitcoin and the maker authorises the token
+movement separately, so a maker who takes the payment and never authorises keeps
+both. No client-side design closes this, and an escrow or matching service only
+relocates the trust to an operator — the same objection §2 raised against a
+published admission queue.
+
+The mechanism that does close it is a single-use seal: the offer commits to a
+specific Bitcoin UTXO, the taker's payment spends it, and the transaction that
+moves the satoshis is the one that authorises the token movement. One
+transaction, both legs, no third party. This is a requirement on `V3`, not an
+optional refinement, and any market surface built before it must state which
+party is exposed rather than presenting a swap as complete.
+
 ## 6. Transaction architecture and trust boundaries
 
 ### 6.1 Bitcoin clock and finality
@@ -312,4 +331,5 @@ product and technical gates, not to increase the apparent breadth of the stack.
 | xUDT authority, extensions and liability accounting | V2, PC8 |
 | Commercial segment, pilot thresholds and launch classification review | PV1–PV3, SH7 |
 | Market funding, rights and venue compatibility | GR1, LQ1 |
+| Atomic swap construction via single-use seals (see §5.1) | V3, MK1 |
 | Script versioning, upgrades and migrations | PC8, SH1 |

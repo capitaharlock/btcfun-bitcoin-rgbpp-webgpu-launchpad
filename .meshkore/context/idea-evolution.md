@@ -83,6 +83,24 @@ The initial audience is community-token users, not general project fundraising.
 Pilot evidence determines whether to commercialize, narrow the product or keep a
 technically strong demonstration. Testnet-first and independent review remain.
 
+## 8. What building it on testnet4 taught (spike)
+
+Three findings worth keeping, from making the loop actually run.
+
+Browser mining is not marginal. A WebGPU kernel over the fixed 40-byte preimage
+measured ~290 MH/s against ~5 MH/s on worker threads on one laptop — a 50x gap
+that a CPU-only prototype would have hidden, and a number `V7` needs before it
+can argue about on-chain verification cost.
+
+Ordering enforces the anti-pre-grinding rule for free. Making the challenge
+commit to the ticket's txid means no challenge exists before a ticket is bought,
+so work done early is worth nothing. A dependency beats a rule someone has to
+remember.
+
+A peer-to-peer swap cannot be made safe on the client. That finding moved into
+PROTOCOL.md §5.1 as a requirement on `V3`, because it is the first time the
+project has had a concrete, non-theoretical reason to need single-use seals.
+
 ## Directions still outside the first version
 
 - A return to a real-time trading-first product or bonding-curve issuance.

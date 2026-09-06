@@ -78,8 +78,13 @@ validate community use, and pass the real-fund review gate before commercial rel
 First demo: one launch, wallet and CKB-side reserve asset; operator-free recovery and
 Proof Explorer included. Automatic graduation and marketplace remain deferred.
 
+`interface-prototype` and `testnet-spike` are the research experiments the roadmap
+permits ahead of those gates, not evidence that any gate has been passed. They run
+on testnet4 with a real wallet and real ticket payments; token settlement, a
+redeemable reserve and atomic swaps are explicitly absent and labelled as such.
+
 Conventions:
 - Tasks stay under their declared modules with matching category and one canonical initiative.
 - Preserve task IDs and historical ADRs; mark supersession instead of erasing history.
-- No code module exists yet. Promote an area to `kind: code` with its actual path when created.
+- `web` is `kind: code` at `apps/web`. Promote another area the same way once its folder exists.
 - Do not start a project-local daemon. MeshKore runtime state and snapshots remain gitignored.
