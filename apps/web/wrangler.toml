@@ -1,0 +1,29 @@
+# One Worker serves the SPA and the API from the same origin.
+#
+# That removes CORS, keeps the deploy to a single command, and means the index
+# is reachable at /api on whatever domain the app is on. The assets binding
+# serves the Vite build; anything under /api is handled by the Worker.
+#
+# Cost: Workers free tier covers 100k requests/day, D1 free covers 5 GB and
+# 100k writes/day, and D1 scales to zero — there is no machine to keep warm and
+# no idle charge. See .meshkore/docs/deploy/hosting.md for why not Fly or Vercel.
+
+name = "btcfun"
+main = "worker/index.ts"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "dist"
+binding = "ASSETS"
+# The SPA routes on the hash, but a cold load of any path must still return
+# index.html rather than a 404.
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "btcfun-activity"
+# Replace after `wrangler d1 create btcfun-activity`.
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[observability]
+enabled = true
