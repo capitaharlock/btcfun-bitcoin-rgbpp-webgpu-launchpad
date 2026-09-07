@@ -13,8 +13,9 @@
 import { useState } from "react";
 
 import { navigate } from "../App";
-import { SPECS, type Launch } from "../data/launches";
+import type { Launch } from "../data/launches";
 import { useLaunches, useLaunchRules } from "../hooks/useLaunches";
+import { useHoldings } from "../hooks/useHoldings";
 import { useLedger, type UseLedger } from "../hooks/useLedger";
 import { recordId, signTransfer } from "../lib/ledger";
 import { useAnnounce } from "../hooks/useAnnounce";
@@ -27,6 +28,11 @@ import { Copyable } from "../ui/Copyable";
 export function Holdings() {
   const launches = useLaunches();
   const wallet = useWallet();
+
+  // Only launches this wallet has a position or a history in. A card per
+  // launch made the page a wall of zeros, which is the noise a portfolio
+  // exists to remove.
+  const positions = useHoldings(launches, wallet.vault?.identity);
 
   return (
     <div className="stack-lg">
@@ -45,19 +51,38 @@ export function Holdings() {
         )}
       </div>
 
-      {!wallet.vault && (
-        <Notice tone="cyan">
-          Balances are held against your wallet's public key, so there is
-          nothing to show until one is connected.
-        </Notice>
+      {positions.length === 0 ? (
+        <Panel>
+          <h2 style={{ marginBottom: 6 }}>
+            {wallet.vault ? "Nothing here yet" : "Connect a wallet to see your holdings"}
+          </h2>
+          <p style={{ margin: 0, maxWidth: "52ch" }}>
+            {wallet.vault
+              ? "Mine a claim on a live launch, or buy one on the market. Whatever you end up holding shows here alongside the records that produced it."
+              : "Balances are held against your wallet's public key and replayed from signed records, so there is nothing to show until one is connected."}
+          </p>
+          <div className="rule" />
+          <div className="row wrapped" style={{ gap: 10 }}>
+            {!wallet.vault && (
+              <a className="btn primary" href="#/wallet">Connect a wallet</a>
+            )}
+            <button className={wallet.vault ? "btn primary" : "btn"} onClick={() => navigate("/")}>
+              Find a launch
+            </button>
+            <button className="btn neon" onClick={() => navigate("/market")}>
+              Browse the market
+            </button>
+          </div>
+        </Panel>
+      ) : (
+        <div className="grid g2">
+          {positions.map(({ launch }) => (
+            <LaunchPosition key={launch.id} launch={launch} />
+          ))}
+        </div>
       )}
 
-      <div className="grid g2">
-        {launches.map((launch) => (
-          <Position key={launch.id} launch={launch} />
-        ))}
-      </div>
-
+      {positions.length > 0 && (
       <Notice>
         <b>Redemption is not implemented.</b> The panel inside each position is a
         simulation of <span className="mono">floor(q × R / S)</span> against this
@@ -65,11 +90,13 @@ export function Holdings() {
         ticket's cost, and runs under an allocation rule that has not been
         adopted (PROTOCOL.md §2, §4.4).
       </Notice>
+      )}
     </div>
   );
 }
 
-function Position({ launch }: { launch: Launch }) {
+
+function LaunchPosition({ launch }: { launch: Launch }) {
   const rules = useLaunchRules(launch);
   const ledger = useLedger(rules);
   const wallet = useWallet();
@@ -364,6 +391,3 @@ function RedemptionPreview({
   );
 }
 
-
-/** Every launch has a chain, even an empty one, so the grid is stable. */
-export const POSITION_COUNT = SPECS.length;
