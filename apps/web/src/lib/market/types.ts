@@ -26,6 +26,8 @@
  * never uses the word "trade".
  */
 
+import type { Settlement } from "./settle";
+
 /** The maker's side: an authorisation to give up tokens for satoshis. */
 export interface Offer {
   /** Protocol tag, so an offer for another version cannot be replayed here. */
@@ -87,6 +89,8 @@ export interface OfferView {
   /** Why it is invalid, when it is. */
   fault?: string;
   fill?: Fill;
+  /** Both legs, present exactly when the status is "settled". */
+  settlement?: Settlement;
   /** Satoshis per whole token, for a comparable column. */
   unitPrice: number;
 }

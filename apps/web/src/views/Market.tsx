@@ -19,8 +19,15 @@ import { navigate } from "../App";
 import type { Launch } from "../data/launches";
 import { useLaunches, useLaunchRules, useTip } from "../hooks/useLaunches";
 import { useLedger } from "../hooks/useLedger";
-import { settlementMemo, useMarket, type UseMarket } from "../hooks/useMarket";
-import { exportOffer, fillMemo, offerId, signOffer, type OfferView } from "../lib/market";
+import { useMarket, type UseMarket } from "../hooks/useMarket";
+import {
+  exportOffer,
+  fillMemo,
+  offerId,
+  settlementMemo,
+  signOffer,
+  type OfferView,
+} from "../lib/market";
 import { recordId, signTransfer, type LaunchRules } from "../lib/ledger";
 import { useAnnounce } from "../hooks/useAnnounce";
 import { txUrl } from "../lib/bitcoin";
@@ -285,6 +292,18 @@ function OfferRow({
                           </a>,
                         ],
                         ["Taker", `${view.fill.taker.slice(0, 20)}…`],
+                      ] as Array<[string, React.ReactNode]>)
+                    : []),
+                  ...(view.settlement
+                    ? ([
+                        [
+                          "Delivered",
+                          `${atoms(
+                            BigInt(view.settlement.record.body.amount),
+                            launch.schedule.decimals,
+                            4,
+                          )} — record ${recordId(view.settlement.record.body).slice(0, 16)}…`,
+                        ],
                       ] as Array<[string, React.ReactNode]>)
                     : []),
                 ]}

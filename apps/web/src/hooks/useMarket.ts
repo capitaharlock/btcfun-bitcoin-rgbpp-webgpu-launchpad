@@ -11,7 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   MarketError,
   OfferBook,
-  offerId,
+  settlementsIn,
   viewOffer,
   type Fill,
   type OfferView,
@@ -46,38 +46,18 @@ export function useMarket({ launch, decimals, tipHeight, records }: MarketInputs
 
   const reload = useCallback(() => setRevision((r) => r + 1), []);
 
-  /**
-   * Offer ids whose transfer is already on the ledger.
-   *
-   * A transfer's memo carries the offer id, which is what lets a maker prove
-   * they settled without a receipt from anyone. Ids are matched by prefix
-   * because the memo is capped at 120 characters.
-   */
-  const settled = useMemo(() => {
-    const ids = new Set<string>();
-    for (const record of records) {
-      if (record.body.kind !== "transfer") continue;
-      const memo = record.body.memo ?? "";
-      const match = /^offer:([0-9a-f]{16,64})$/.exec(memo);
-      if (match) ids.add(match[1]);
-    }
-    return ids;
-  }, [records]);
-
   const offers = useMemo(() => {
+    const open = book.offers();
     const fills = book.fills();
-    // `settled` holds id prefixes from memos; expand to full ids present here.
-    const settledFull = new Set<string>();
-    for (const signed of book.offers()) {
-      const id = offerId(signed.offer);
-      for (const prefix of settled) if (id.startsWith(prefix)) settledFull.add(id);
-    }
-    return book
-      .offers()
-      .map((signed) => viewOffer(signed, { launch, decimals, tipHeight, fills, settled: settledFull }))
+    // Settlement is a join across the offer, its payment and the delivering
+    // record — never a memo on its own. `settlementsIn` is where that join
+    // lives, so the market page and anything else asking agree (AUD-11).
+    const settled = settlementsIn(records, open, fills);
+    return open
+      .map((signed) => viewOffer(signed, { launch, decimals, tipHeight, fills, settled }))
       .sort((a, b) => a.unitPrice - b.unitPrice);
     // `revision` is the invalidation signal for the storage-backed book.
-  }, [book, launch, decimals, tipHeight, settled, revision]);
+  }, [book, launch, decimals, tipHeight, records, revision]);
 
   const attempt = useCallback(
     (action: () => void): boolean => {
@@ -104,9 +84,4 @@ export function useMarket({ launch, decimals, tipHeight, records }: MarketInputs
     recordFill: (fill) => attempt(() => book.recordFill(fill)),
     reload,
   };
-}
-
-/** The memo a maker puts on the settling transfer, so anyone can match it. */
-export function settlementMemo(id: string): string {
-  return `offer:${id.slice(0, 32)}`;
 }

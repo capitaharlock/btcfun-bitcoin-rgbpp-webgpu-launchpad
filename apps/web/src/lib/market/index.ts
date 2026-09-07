@@ -14,6 +14,13 @@ export {
   type ViewContext,
 } from "./offers";
 export {
+  offerIdInMemo,
+  settlementFault,
+  settlementMemo,
+  settlementsIn,
+  type Settlement,
+} from "./settle";
+export {
   MarketError,
   OFFER_VERSION,
   type Fill,

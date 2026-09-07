@@ -8,6 +8,7 @@
 import { canonicalDigest, canonicalId, IDENTITY_PATTERN, parseAtoms, TXID_PATTERN, type Field } from "../canonical";
 import { identityOf, matchesNetwork, signDigest, verifyDigest, type Vault } from "../bitcoin";
 import { bytesToHex, hexToBytes } from "../bytes";
+import type { Settlement } from "./settle";
 import {
   MarketError,
   OFFER_VERSION,
@@ -120,8 +121,12 @@ export interface ViewContext {
   tipHeight: number;
   /** Fills recorded locally, by offer id. */
   fills: ReadonlyMap<string, Fill>;
-  /** Offer ids whose transfer record is already on the ledger. */
-  settled: ReadonlySet<string>;
+  /**
+   * Completed sales, by offer id — payment and delivery both checked against
+   * the offer. A set of ids would not be enough: "settled" is a claim about
+   * evidence, so the evidence travels with it (AUD-11).
+   */
+  settled: ReadonlyMap<string, Settlement>;
 }
 
 /** Decide an offer's status. The ranking is by counterparty exposure. */
@@ -129,10 +134,11 @@ export function viewOffer(signed: SignedOffer, ctx: ViewContext): OfferView {
   const id = offerId(signed.offer);
   const fault = faultIn(signed, ctx.launch);
   const fill = ctx.fills.get(id);
+  const settlement = ctx.settled.get(id);
 
   const status: OfferStatus = fault
     ? "invalid"
-    : ctx.settled.has(id)
+    : settlement
       ? "settled"
       : fill
         ? "awaiting-transfer"
@@ -146,6 +152,7 @@ export function viewOffer(signed: SignedOffer, ctx: ViewContext): OfferView {
     status,
     ...(fault ? { fault } : {}),
     ...(fill ? { fill } : {}),
+    ...(settlement ? { settlement } : {}),
     unitPrice: unitPrice(signed.offer, ctx.decimals),
   };
 }
