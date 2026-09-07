@@ -24,7 +24,7 @@ import { useWallet } from "../state/WalletProvider";
 import {
   createLaunch,
   commitmentFor,
-  idFor,
+  slugFor,
   validate,
   type DraftFaults,
   type LaunchDraft,
@@ -219,7 +219,10 @@ function Identity({ draft, faults, set }: StepProps) {
           </p>
           <div className="rule" />
           <div className="tiny faint">
-            URL: <span className="mono">/launch/{idFor(draft.symbol) || "symbol"}</span>
+            URL: <span className="mono">/launch/{slugFor(draft.symbol) || "symbol"}-…</span>
+            <br />
+            The suffix is the digest of everything you commit to, so no two
+            launches can share an identity even under the same symbol.
           </div>
         </Panel>
       </div>

@@ -23,7 +23,13 @@ import {
 
 import { FALLBACK_TIP, type LaunchSpec } from "../data/launches";
 import { feed, faultIn as activityFault, type ActivityEntry } from "../lib/activity";
-import { createdLocally, specFor, type LaunchCommitment } from "../lib/launches/create";
+import {
+  createdLocally,
+  idMatches,
+  specFor,
+  LAUNCH_ID_PATTERN,
+  type LaunchCommitment,
+} from "../lib/launches/create";
 import { useWallet } from "./WalletProvider";
 
 /** How often to look for launches other people committed. */
@@ -67,9 +73,11 @@ export function LaunchesProvider({ children }: { children: ReactNode }) {
   const extra = useMemo(() => {
     const byId = new Map<string, LaunchCommitment>();
     // Local first: a creator's own copy wins over the index's echo of it, so a
-    // launch stays visible the moment it is signed.
+    // launch stays visible the moment it is signed. Since the id is derived
+    // from the terms, two entries under one id are the same launch — there is
+    // no longer a case where deduplicating here discards someone's launch.
     for (const commitment of [...createdLocally(), ...remote]) {
-      if (!byId.has(commitment.id)) byId.set(commitment.id, commitment);
+      if (idMatches(commitment) && !byId.has(commitment.id)) byId.set(commitment.id, commitment);
     }
     return [...byId.values()].map((commitment) => specFor(commitment, tip));
     // `localRevision` is the invalidation signal for the storage-backed list.
@@ -119,6 +127,9 @@ function commitmentIn(entry: ActivityEntry): LaunchCommitment[] {
   // The event's own fields must agree with the payload they carry, or the
   // signature covers one launch while the feed indexes another.
   if (commitment.id !== body.launch || commitment.creator !== body.actor) return [];
+  // And the id must be the one the commitment's own terms produce, or an index
+  // could serve a launch whose namespace belongs to somebody else (AUD-08).
+  if (!idMatches(commitment)) return [];
   if (!isPlausible(commitment)) return [];
 
   return [commitment];
@@ -128,7 +139,7 @@ function commitmentIn(entry: ActivityEntry): LaunchCommitment[] {
  *  creation form's rules; a launch that fails them was never valid. */
 function isPlausible(c: LaunchCommitment): boolean {
   return (
-    /^[a-z][a-z0-9]{1,7}$/.test(c.id) &&
+    LAUNCH_ID_PATTERN.test(c.id) &&
     typeof c.symbol === "string" &&
     typeof c.name === "string" &&
     typeof c.blurb === "string" &&

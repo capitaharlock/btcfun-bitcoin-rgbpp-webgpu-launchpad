@@ -19,8 +19,26 @@ import type { LaunchSpec } from "../../data/launches";
 
 const LOCAL_KEY = "btcfun:created-launches:v1";
 
-/** Reserved ids: the fixture launches, so a creation cannot shadow one. */
-const RESERVED = new Set(["mesh", "obsv", "forge", "quill", "tide", "lumen", "cairn", "relic"]);
+/** Symbols the seeded fixtures already use, so a creation cannot confuse one. */
+const RESERVED_SYMBOLS = new Set([
+  "MESH",
+  "OBSV",
+  "FORGE",
+  "QUILL",
+  "TIDE",
+  "LUMEN",
+  "CAIRN",
+  "RELIC",
+]);
+
+/**
+ * Hex characters of the genesis digest carried in a launch id.
+ *
+ * 64 bits. The id has to stay short enough to live in a URL and long enough
+ * that nobody grinds a second commitment onto an existing launch's namespace —
+ * where the ledger, the reserve address and the ticket memos all live.
+ */
+const ID_DIGEST_CHARS = 16;
 
 /** The signed part of a launch. Mirrors `LaunchSpec` minus derived display. */
 export interface LaunchCommitment {
@@ -41,10 +59,15 @@ export interface LaunchCommitment {
   at: string;
 }
 
+/**
+ * Everything a launch *is*, excluding its id.
+ *
+ * The id is derived from these, so including it would be circular — and would
+ * also let a commitment name an id its own terms do not produce.
+ */
 function fieldsOf(c: LaunchCommitment): Field[] {
   return [
     ["v", c.v],
-    ["id", c.id],
     ["symbol", c.symbol],
     ["name", c.name],
     ["blurb", c.blurb],
@@ -91,8 +114,8 @@ export function validate(draft: LaunchDraft): DraftFaults {
   const symbol = draft.symbol.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9]{1,7}$/.test(symbol)) {
     faults.symbol = "2–8 characters, letters and digits, starting with a letter.";
-  } else if (RESERVED.has(idFor(symbol))) {
-    faults.symbol = "That symbol is already taken.";
+  } else if (RESERVED_SYMBOLS.has(symbol)) {
+    faults.symbol = "A seeded launch already uses that symbol.";
   }
 
   if (draft.name.trim().length < 2 || draft.name.trim().length > 40) {
@@ -129,9 +152,35 @@ export function isReady(draft: LaunchDraft): boolean {
   return Object.keys(validate(draft)).length === 0;
 }
 
-/** Launch id: the lowercase symbol. Short, readable, and the URL. */
-export function idFor(symbol: string): string {
+/** The readable half of a launch id. Not unique on its own. */
+export function slugFor(symbol: string): string {
   return symbol.trim().toLowerCase();
+}
+
+/**
+ * A launch's identity: its symbol, then the digest of its genesis commitment.
+ *
+ * The id used to be the lowercase symbol, which meant two creators could
+ * commit to entirely different terms — different emission, different ticket
+ * price, different creator — and land on the same id (AUD-08). That id is the
+ * namespace for the ledger, the reserve address, ticket memos and discovery, so
+ * the second launch would not merely be confusing: it would inherit the first
+ * one's chain. Deriving it from the commitment makes the identity immutable and
+ * unforgeable — changing any term changes the id — while keeping the symbol
+ * visible at the front of every URL.
+ *
+ * `pattern` below is the shape every consumer checks before trusting an id.
+ */
+export function launchId(c: LaunchCommitment): string {
+  return `${slugFor(c.symbol)}-${canonicalId(fieldsOf(c)).slice(0, ID_DIGEST_CHARS)}`;
+}
+
+/** Ids this scheme produces. Fixture ids are plain slugs and never match. */
+export const LAUNCH_ID_PATTERN = new RegExp(`^[a-z][a-z0-9]{1,7}-[0-9a-f]{${ID_DIGEST_CHARS}}$`);
+
+/** True when a commitment's stated id is the one its own terms produce. */
+export function idMatches(c: LaunchCommitment): boolean {
+  return typeof c.id === "string" && c.id === launchId(c);
 }
 
 /** Build the commitment a draft implies, given the height it is signed at. */
@@ -141,9 +190,10 @@ export function commitmentFor(
   tipHeight: number,
 ): LaunchCommitment {
   const symbol = draft.symbol.trim().toUpperCase();
-  return {
+  const terms: LaunchCommitment = {
     v: "btcfun/launch/1",
-    id: idFor(symbol),
+    // Filled in below, once the terms that determine it are all present.
+    id: "",
     symbol,
     name: draft.name.trim(),
     blurb: draft.blurb.trim(),
@@ -157,6 +207,7 @@ export function commitmentFor(
     creator,
     at: new Date().toISOString(),
   };
+  return { ...terms, id: launchId(terms) };
 }
 
 /** Sign the commitment, keep it locally and publish it to the index. */
