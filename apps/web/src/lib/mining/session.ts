@@ -25,6 +25,25 @@ export type BackendChoice = "auto" | BackendKind;
 /** Trailing window for the rate estimate. */
 const WINDOW_MS = 2000;
 
+/**
+ * How a session obtains a backend.
+ *
+ * The session decides *which* backend to run and what to do when one is
+ * unavailable; it does not need to know how either is constructed. Keeping the
+ * two constructors behind a port means the fallback policy is testable without
+ * a GPU, and that a third backend — WebGPU compute on a worker, say — slots in
+ * without touching the aggregation, the rate window or the self-check.
+ */
+export interface BackendPorts {
+  cpu: () => MiningBackend;
+  gpu: () => Promise<MiningBackend>;
+}
+
+const DEFAULT_PORTS: BackendPorts = {
+  cpu: () => new CpuBackend(),
+  gpu: () => GpuBackend.create(),
+};
+
 export interface SessionCallbacks {
   /** Called at frame rate while mining, with the aggregate state. */
   onSample: (sample: MiningSample) => void;
@@ -48,7 +67,23 @@ export class MiningSession {
   private frame = 0;
   private dirty = false;
 
-  constructor(private readonly callbacks: SessionCallbacks) {}
+  /**
+   * Which run the session is on.
+   *
+   * Starting a backend is asynchronous — `GpuBackend.create` requests an
+   * adapter and compiles a shader — and anything can happen during that await:
+   * the visitor navigates away, cancels, or starts a different challenge. The
+   * generation is bumped by every `start` and every `stop`, and each await
+   * re-checks it before taking ownership of what it built. Without that, a
+   * backend created for a run that no longer exists was published anyway and
+   * kept grinding after the visitor had stopped it (AUD-12).
+   */
+  private generation = 0;
+
+  constructor(
+    private readonly callbacks: SessionCallbacks,
+    private readonly ports: BackendPorts = DEFAULT_PORTS,
+  ) {}
 
   /** What each backend reports about itself, for the UI to show before a run. */
   static async probe(): Promise<BackendAvailability[]> {
@@ -61,14 +96,27 @@ export class MiningSession {
 
   async start(challenge: Uint8Array, choice: BackendChoice = "auto"): Promise<void> {
     this.stop();
+    const run = ++this.generation;
 
     const backend = await this.select(choice);
+    // Cancelled while the adapter was being acquired: discard what was built
+    // rather than publishing it. Tearing it down here is the only chance —
+    // nothing else holds a reference to it.
+    if (run !== this.generation) {
+      backend.stop();
+      return;
+    }
+
     this.backend = backend;
     this.startedAt = performance.now();
     this.window = [{ t: this.startedAt, hashes: 0 }];
     this.sample = { ...EMPTY_SAMPLE, backend: backend.kind, lanes: backend.lanes };
 
     await backend.start(challenge, (progress) => {
+      // Reports can outlive the run that asked for them: a worker message or a
+      // GPU readback already in flight arrives after stop().
+      if (run !== this.generation) return;
+
       const hashes = this.sample.hashes + progress.hashes;
       let best = this.sample.best;
 
@@ -104,8 +152,14 @@ export class MiningSession {
     // Repaint on frames rather than on reports: the CPU backend reports ~11
     // times a second per lane and the GPU ~22, and neither cadence is the
     // display's. Coalescing here keeps React re-renders at one per frame.
+    // `backend.start` is itself awaited, so a stop during it lands here too.
+    if (run !== this.generation) {
+      backend.stop();
+      return;
+    }
+
     const tick = (): void => {
-      if (!this.backend) return;
+      if (run !== this.generation || !this.backend) return;
       if (this.dirty) {
         this.dirty = false;
         this.callbacks.onSample(this.sample);
@@ -125,7 +179,10 @@ export class MiningSession {
     );
   }
 
+  /** End the current run. Safe to call at any point, including mid-start. */
   stop(): void {
+    // Bumping first is what makes a start still in flight discard itself.
+    this.generation++;
     cancelAnimationFrame(this.frame);
     this.frame = 0;
     this.backend?.stop();
@@ -149,14 +206,14 @@ export class MiningSession {
    * rather than leaving a GPU badge lit over CPU numbers.
    */
   private async select(choice: BackendChoice): Promise<MiningBackend> {
-    if (choice === "cpu") return new CpuBackend();
+    if (choice === "cpu") return this.ports.cpu();
     try {
-      return await GpuBackend.create();
+      return await this.ports.gpu();
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       if (choice === "gpu") this.callbacks.onFallback?.(reason);
       else this.callbacks.onFallback?.(`${reason} — using worker threads`);
-      return new CpuBackend();
+      return this.ports.cpu();
     }
   }
 }

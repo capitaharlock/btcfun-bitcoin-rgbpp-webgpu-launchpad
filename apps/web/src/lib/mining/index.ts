@@ -4,7 +4,12 @@
  * split stays an implementation detail of `MiningSession`.
  */
 
-export { MiningSession, type BackendChoice, type SessionCallbacks } from "./session";
+export {
+  MiningSession,
+  type BackendChoice,
+  type BackendPorts,
+  type SessionCallbacks,
+} from "./session";
 export { NONCE_LIMIT, preimage, recompute, verifyCandidate } from "./verify";
 export { advantageRatio, expectedClz, weightOf } from "./weight";
 export {
