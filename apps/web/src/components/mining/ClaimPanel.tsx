@@ -14,10 +14,11 @@ import { useState } from "react";
 
 import type { UseTicket } from "../../hooks/useTicket";
 import type { UseLedger } from "../../hooks/useLedger";
+import { useAnnounce } from "../../hooks/useAnnounce";
 import { formatBtc, useWallet } from "../../state/WalletProvider";
 import { reserveAddress } from "../../lib/bitcoin/reserve";
 import { txUrl } from "../../lib/bitcoin";
-import { previewClaim, signClaim, type LaunchRules } from "../../lib/ledger";
+import { previewClaim, recordId, signClaim, type LaunchRules } from "../../lib/ledger";
 import type { Candidate } from "../../lib/mining";
 import { atoms, group } from "../../lib/format";
 import type { Launch } from "../../data/launches";
@@ -47,6 +48,7 @@ export function ClaimPanel({
   onClaimed,
 }: ClaimPanelProps) {
   const wallet = useWallet();
+  const announce = useAnnounce();
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimed, setClaimed] = useState<bigint | null>(null);
@@ -73,6 +75,14 @@ export function ClaimPanel({
       });
       if (ledger.append(record)) {
         setClaimed(BigInt(record.body.amount));
+        void announce({
+          kind: "mint",
+          launch: launch.id,
+          amount: BigInt(record.body.amount),
+          sats: ticket.sats,
+          ref: recordId(record.body),
+          txid: ticket.txid,
+        });
         onClaimed?.();
       }
     } catch (err) {

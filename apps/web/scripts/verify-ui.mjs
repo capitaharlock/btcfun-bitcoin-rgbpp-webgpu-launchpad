@@ -32,9 +32,11 @@ const SHOTS = arg("shots", null);
 
 /** Routes worth a render check, with the selector that proves they mounted. */
 const ROUTES = [
-  { path: "/", name: "launches", ready: "table" },
+  { path: "/", name: "launches", ready: ".cardgrid" },
   { path: "/launch/mesh", name: "launch", ready: ".panel" },
   { path: "/lab", name: "lab", ready: "svg" },
+  { path: "/create", name: "create", ready: ".wizard" },
+  { path: "/activity", name: "activity", ready: ".panel" },
   { path: "/launch/mesh/proof", name: "proof", ready: "table" },
   { path: "/holdings", name: "holdings", ready: ".panel" },
   { path: "/market", name: "market", ready: ".panel" },

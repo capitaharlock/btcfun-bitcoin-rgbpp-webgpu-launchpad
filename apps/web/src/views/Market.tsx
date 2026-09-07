@@ -20,8 +20,9 @@ import type { Launch } from "../data/launches";
 import { useLaunches, useLaunchRules, useTip } from "../hooks/useLaunches";
 import { useLedger } from "../hooks/useLedger";
 import { settlementMemo, useMarket, type UseMarket } from "../hooks/useMarket";
-import { exportOffer, fillMemo, signOffer, type OfferView } from "../lib/market";
-import { signTransfer, type LaunchRules } from "../lib/ledger";
+import { exportOffer, fillMemo, offerId, signOffer, type OfferView } from "../lib/market";
+import { recordId, signTransfer, type LaunchRules } from "../lib/ledger";
+import { useAnnounce } from "../hooks/useAnnounce";
 import { txUrl } from "../lib/bitcoin";
 import { useWallet } from "../state/WalletProvider";
 import { atoms, group, parseAmount } from "../lib/format";
@@ -168,6 +169,7 @@ function OfferRow({
   tip: number;
 }) {
   const wallet = useWallet();
+  const announce = useAnnounce();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState(false);
@@ -189,6 +191,14 @@ function OfferRow({
         paidSats: Number(offer.priceSats),
         at: new Date().toISOString(),
       });
+      void announce({
+        kind: "fill",
+        launch: launch.id,
+        amount: BigInt(offer.amount),
+        sats: Number(offer.priceSats),
+        ref: view.id,
+        txid,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -208,6 +218,13 @@ function OfferRow({
         memo: settlementMemo(view.id),
       });
       ledger.append(record);
+      void announce({
+        kind: "transfer",
+        launch: launch.id,
+        amount: BigInt(offer.amount),
+        sats: Number(offer.priceSats),
+        ref: recordId(record.body),
+      });
       market.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -298,6 +315,7 @@ function MakeOffer({
   tip: number;
 }) {
   const wallet = useWallet();
+  const announce = useAnnounce();
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
   const [ttl, setTtl] = useState(String(DEFAULT_TTL));
@@ -326,6 +344,13 @@ function MakeOffer({
       });
       if (market.add(signed)) {
         setCreated(exportOffer(signed));
+        void announce({
+          kind: "offer",
+          launch: launch.id,
+          amount: atomsWanted,
+          sats: Number(priceSats),
+          ref: offerId(signed.offer),
+        });
         setAmount("");
         setPrice("");
       }

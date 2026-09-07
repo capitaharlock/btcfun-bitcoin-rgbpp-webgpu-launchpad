@@ -16,7 +16,8 @@ import { navigate } from "../App";
 import { SPECS, type Launch } from "../data/launches";
 import { useLaunches, useLaunchRules } from "../hooks/useLaunches";
 import { useLedger, type UseLedger } from "../hooks/useLedger";
-import { signTransfer } from "../lib/ledger";
+import { recordId, signTransfer } from "../lib/ledger";
+import { useAnnounce } from "../hooks/useAnnounce";
 import { formatRatio, ratioScaled, redeem } from "../lib/reserve";
 import { useWallet } from "../state/WalletProvider";
 import { atoms, group, parseAmount } from "../lib/format";
@@ -144,6 +145,7 @@ function Position({ launch }: { launch: Launch }) {
 
 function SendForm({ launch, ledger, held }: { launch: Launch; ledger: UseLedger; held: bigint }) {
   const wallet = useWallet();
+  const announce = useAnnounce();
   const rules = useLaunchRules(launch);
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
@@ -169,6 +171,12 @@ function SendForm({ launch, ledger, held }: { launch: Launch; ledger: UseLedger;
       });
       if (ledger.append(record)) {
         setSent(true);
+        void announce({
+          kind: "transfer",
+          launch: launch.id,
+          amount: parsed,
+          ref: recordId(record.body),
+        });
         setTo("");
         setAmount("");
         setMemo("");
