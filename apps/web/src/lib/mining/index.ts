@@ -5,7 +5,7 @@
  */
 
 export { MiningSession, type BackendChoice, type SessionCallbacks } from "./session";
-export { preimage, recompute, verifyCandidate } from "./verify";
+export { NONCE_LIMIT, preimage, recompute, verifyCandidate } from "./verify";
 export { advantageRatio, expectedClz, weightOf } from "./weight";
 export {
   EMPTY_SAMPLE,

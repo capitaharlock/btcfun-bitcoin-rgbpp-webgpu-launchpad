@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preimage, recompute, verifyCandidate } from "./verify";
+import { NONCE_LIMIT, preimage, recompute, verifyCandidate } from "./verify";
 import { advantageRatio, expectedClz, weightOf } from "./weight";
 import { PREIMAGE_BYTES } from "./types";
 import { hexToBytes } from "../bytes";
@@ -19,8 +19,18 @@ describe("preimage", () => {
     expect([...buf.subarray(32)]).toEqual(Array(8).fill(255));
   });
 
-  it("rejects a short challenge", () => {
+  it("rejects a challenge that is not exactly 32 bytes", () => {
     expect(() => preimage(new Uint8Array(31), 0n)).toThrow(RangeError);
+    // AUD-14: a longer challenge used to be silently truncated, so two
+    // different challenges proved the same work.
+    expect(() => preimage(new Uint8Array(33), 0n)).toThrow(RangeError);
+  });
+
+  it("rejects nonces outside the 64-bit field", () => {
+    // AUD-14: 0 and 2^64 wrapped to the same preimage.
+    expect(() => preimage(CHALLENGE, NONCE_LIMIT)).toThrow(RangeError);
+    expect(() => preimage(CHALLENGE, -1n)).toThrow(RangeError);
+    expect(() => preimage(CHALLENGE, NONCE_LIMIT - 1n)).not.toThrow();
   });
 });
 
@@ -59,6 +69,11 @@ describe("verifyCandidate", () => {
   it("rejects a candidate lifted onto a different challenge", () => {
     const other = hexToBytes("11".repeat(32));
     expect(verifyCandidate(other, recompute(CHALLENGE, 99n))).toBe(false);
+  });
+
+  it("rejects an out-of-range nonce instead of throwing at the boundary", () => {
+    const wrapped = { ...recompute(CHALLENGE, 0n), nonce: NONCE_LIMIT };
+    expect(verifyCandidate(CHALLENGE, wrapped)).toBe(false);
   });
 });
 

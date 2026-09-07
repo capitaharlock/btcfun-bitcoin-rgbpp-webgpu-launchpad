@@ -16,13 +16,15 @@ import { recompute } from "../mining";
 import { verifyDigest } from "../bitcoin";
 import { bytesToHex, hexToBytes } from "../bytes";
 import { recordDigest, recordId } from "./codec";
-import { IDENTITY_PATTERN, TXID_PATTERN, parseAtoms } from "../canonical";
+import { decodeRecord } from "./decode";
+import { parseAtoms } from "../canonical";
 import {
   GENESIS_PREV,
   LedgerError,
   type ClaimRecord,
   type LedgerState,
   type SignedRecord,
+  type TransferRecord,
 } from "./types";
 
 /** Everything replay needs to know about a launch, beyond its records. */
@@ -126,6 +128,11 @@ interface Accumulator {
  * returning "the valid prefix" would invite showing a balance derived from it.
  */
 export function replay(records: readonly SignedRecord[], rules: LaunchRules): LedgerState {
+  // Decode first, from `unknown`: `records` is typed but nothing checked it —
+  // it came from localStorage, an import or the index. `decodeRecord` is what
+  // makes the switch below exhaustive over kinds that actually exist.
+  const decoded = records.map((record, index) => decodeRecord(record, index));
+
   const acc: Accumulator = {
     balances: new Map(),
     supply: 0n,
@@ -136,7 +143,7 @@ export function replay(records: readonly SignedRecord[], rules: LaunchRules): Le
   };
   const ceiling = maxAtoms(rules.schedule);
 
-  records.forEach((record, index) => {
+  decoded.forEach((record, index) => {
     const { body, signature } = record;
 
     if (body.seq !== index) {
@@ -148,38 +155,24 @@ export function replay(records: readonly SignedRecord[], rules: LaunchRules): Le
     if (body.launch !== rules.launch) {
       throw new LedgerError(`Record ${index} belongs to launch "${body.launch}"`, index);
     }
-    if (!IDENTITY_PATTERN.test(body.author)) {
-      throw new LedgerError(`Record ${index} has a malformed author key`, index);
-    }
 
     const digest = recordDigest(body);
     if (!verifyDigest(hexToBytes(body.author), digest, hexToBytes(signature))) {
       throw new LedgerError(`Record ${index} is not signed by its stated author`, index);
     }
 
-    if (body.kind === "claim") {
-      applyClaim(acc, body, rules, ceiling, index);
-    } else {
-      const amount = parseAtoms(body.amount);
-      if (amount <= 0n) throw new LedgerError(`Record ${index} transfers nothing`, index);
-      if (!IDENTITY_PATTERN.test(body.to)) {
-        throw new LedgerError(`Record ${index} has a malformed recipient key`, index);
-      }
-      if (body.to === body.author) {
-        throw new LedgerError(`Record ${index} transfers to its own author`, index);
-      }
-      if ((body.memo?.length ?? 0) > 120) {
-        throw new LedgerError(`Record ${index} has an over-long memo`, index);
-      }
-      const held = acc.balances.get(body.author) ?? 0n;
-      if (held < amount) {
-        throw new LedgerError(
-          `Record ${index} spends ${amount} atoms against a balance of ${held}`,
-          index,
-        );
-      }
-      acc.balances.set(body.author, held - amount);
-      acc.balances.set(body.to, (acc.balances.get(body.to) ?? 0n) + amount);
+    // Shape is already guaranteed by the decoder; what is left here is meaning.
+    switch (body.kind) {
+      case "claim":
+        applyClaim(acc, body, rules, ceiling, index);
+        break;
+      case "transfer":
+        applyTransfer(acc, body, index);
+        break;
+      default:
+        // Unreachable: `decodeRecord` refuses anything else. Present so adding
+        // a kind fails the build here as well as in the decoder.
+        throw new LedgerError(`Record ${index} has an unhandled kind`, index);
     }
 
     acc.head = bytesToHex(digest);
@@ -196,6 +189,24 @@ export function replay(records: readonly SignedRecord[], rules: LaunchRules): Le
   };
 }
 
+function applyTransfer(acc: Accumulator, transfer: TransferRecord, index: number): void {
+  const amount = parseAtoms(transfer.amount);
+  if (amount <= 0n) throw new LedgerError(`Record ${index} transfers nothing`, index);
+  if (transfer.to === transfer.author) {
+    throw new LedgerError(`Record ${index} transfers to its own author`, index);
+  }
+
+  const held = acc.balances.get(transfer.author) ?? 0n;
+  if (held < amount) {
+    throw new LedgerError(
+      `Record ${index} spends ${amount} atoms against a balance of ${held}`,
+      index,
+    );
+  }
+  acc.balances.set(transfer.author, held - amount);
+  acc.balances.set(transfer.to, (acc.balances.get(transfer.to) ?? 0n) + amount);
+}
+
 function applyClaim(
   acc: Accumulator,
   claim: ClaimRecord,
@@ -203,15 +214,7 @@ function applyClaim(
   ceiling: bigint,
   index: number,
 ): void {
-  if (!Number.isInteger(claim.epoch) || claim.epoch < 0) {
-    throw new LedgerError(`Record ${index} has an invalid epoch`, index);
-  }
-  if (!TXID_PATTERN.test(claim.ticket)) {
-    throw new LedgerError(`Record ${index} has a malformed ticket txid`, index);
-  }
-  if (!TXID_PATTERN.test(claim.btcBlockHash)) {
-    throw new LedgerError(`Record ${index} has a malformed block hash`, index);
-  }
+  // Shape — epoch, txid and block hash formats — was settled by the decoder.
   if (acc.spentTickets.has(claim.ticket)) {
     throw new LedgerError(`Record ${index} reuses ticket ${claim.ticket}`, index);
   }
@@ -243,6 +246,19 @@ function applyClaim(
   const remaining = epochBudget(rules, claim.epoch) - alreadyMinted;
   const expected = allocate(remaining, acc.supply, acc.reserveSats, claim.ticketSats);
   const amount = parseAtoms(claim.amount);
+
+  // A claim that mints nothing still adds its ticket to the reserve, which
+  // raises the backing per token for everyone else at the claimant's expense.
+  // `signClaim` has always refused to author one; the verifier used to accept
+  // it, so author and validator disagreed about what a valid chain is
+  // (AUD-10). Until admission and epoch closing are specified — E1–E5 — the
+  // rule is that an exhausted epoch admits nothing, on both sides.
+  if (expected.amount === 0n) {
+    throw new LedgerError(
+      `Record ${index} claims an epoch whose allowance is exhausted`,
+      index,
+    );
+  }
 
   if (amount !== expected.amount) {
     throw new LedgerError(

@@ -123,5 +123,8 @@ export class LedgerError extends Error {
 /** The `prev` of the first record in a chain. */
 export const GENESIS_PREV = "0".repeat(64);
 
+/** Longest a transfer memo may be. One number, used by the decoder and replay. */
+export const MAX_MEMO_CHARS = 120;
+
 /** Token atoms are 8-decimal, matching the emission schedule's candidate. */
 export const TOKEN_DECIMALS = 8;

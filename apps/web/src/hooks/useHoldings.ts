@@ -37,12 +37,16 @@ export function useHoldings(launches: readonly Launch[], identity: string | unde
 
     const positions: Position[] = [];
     for (const launch of launches) {
-      const ledger = new LocalLedger(rulesFor(launch, NETWORK.id));
-      const records = ledger.records();
-      if (records.length === 0) continue;
+      const rules = rulesFor(launch, NETWORK.id);
+      const ledger = new LocalLedger(rules);
 
       try {
-        const state = replay(records, rulesFor(launch, NETWORK.id));
+        // Reading is inside the try: storage that holds something other than a
+        // chain throws, and that is a position worth showing, not a zero.
+        const records = ledger.records();
+        if (records.length === 0) continue;
+
+        const state = replay(records, rules);
         const held = state.balances.get(identity) ?? 0n;
         if (held === 0n && !touched(records, identity)) continue;
         positions.push({ launch, held, state, fault: null });

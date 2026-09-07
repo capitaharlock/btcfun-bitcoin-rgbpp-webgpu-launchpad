@@ -11,10 +11,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LedgerError,
   LocalLedger,
+  replay,
   type LaunchRules,
   type LedgerState,
   type SignedRecord,
 } from "../lib/ledger";
+
+/** One derivation of the stored chain: what it holds, and why it might not. */
+interface Snapshot {
+  records: SignedRecord[];
+  state: LedgerState | null;
+  error: string | null;
+}
 
 export interface UseLedger {
   ledger: LocalLedger;
@@ -48,17 +56,20 @@ export function useLedger(rules: LaunchRules): UseLedger {
 
   const reload = useCallback(() => setRevision((r) => r + 1), []);
 
-  const records = useMemo(() => ledger.records(), [ledger, revision]);
-
-  // Validation result is derived, not stored: computing it here and setting
-  // state would be a side effect during render, and the value is cheap.
-  const snapshot = useMemo<{ state: LedgerState | null; error: string | null }>(() => {
+  // Reading and validating are one derivation, because reading can fail too:
+  // storage may hold something that is not a chain, and `records()` throws
+  // rather than pretending that is an empty wallet. Derived, not stored —
+  // setting state here would be a side effect during render, and it is cheap.
+  const snapshot = useMemo<Snapshot>(() => {
     try {
-      return { state: ledger.state(), error: null };
+      const records = ledger.records();
+      return { records, state: replay(records, rules), error: null };
     } catch (err) {
-      return { state: null, error: describe(err) };
+      return { records: [], state: null, error: describe(err) };
     }
-  }, [ledger, revision]);
+    // `rules` is destructured into the ledger key above; `revision` is the
+    // invalidation signal for the storage-backed chain.
+  }, [ledger, revision]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A chain written by another tab is still this wallet's chain.
   useEffect(() => {
@@ -85,7 +96,7 @@ export function useLedger(rules: LaunchRules): UseLedger {
     [reload],
   );
 
-  const { state } = snapshot;
+  const { state, records } = snapshot;
 
   return {
     ledger,

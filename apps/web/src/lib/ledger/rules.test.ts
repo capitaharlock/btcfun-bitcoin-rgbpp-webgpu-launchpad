@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { allocate, claimChallenge, epochBudget, replay, type LaunchRules } from "./rules";
 import { signClaim, signTransfer } from "./author";
+import { decodeChain, decodeRecord } from "./decode";
 import { recordDigest, recordId } from "./codec";
 import { GENESIS_PREV, LedgerError, type Ledger, type LedgerState, type SignedRecord } from "./types";
 import { deriveKey, identityOf, signDigest, type Vault, type WalletKey } from "../bitcoin";
@@ -284,5 +285,131 @@ describe("transfers", () => {
     const total = [...state.balances.values()].reduce((a, b) => a + b, 0n);
     expect(total).toBe(minted);
     expect(state.balances.get(bob.identity)).toBe(200n);
+  });
+});
+
+/* AUD-09: the parser used to fall through `if claim / else transfer`, so a
+ * correctly signed record of any other kind moved tokens as a transfer. */
+describe("decoding untrusted records", () => {
+  const alice = testVault(1);
+  const bob = testVault(2);
+
+  /** Sign an arbitrary body, so only the decoder can be what rejects it. */
+  async function signed(body: unknown): Promise<SignedRecord> {
+    return alice.use((key) => ({
+      body: body as SignedRecord["body"],
+      signature: bytesToHex(signDigest(key, recordDigest(body as SignedRecord["body"]))),
+    }));
+  }
+
+  const transfer = {
+    kind: "transfer",
+    seq: 0,
+    prev: GENESIS_PREV,
+    at: "2026-09-23T00:00:00.000Z",
+    launch: RULES.launch,
+    author: alice.identity,
+    to: bob.identity,
+    amount: "1",
+  };
+
+  it("refuses a kind it does not implement", async () => {
+    const record = await signed({ ...transfer, kind: "not-a-transfer" });
+    expect(() => replay([record], RULES)).toThrow(/unknown kind/);
+    expect(() => decodeRecord(record)).toThrow(LedgerError);
+  });
+
+  it("refuses fields the canonical encoder never signs", async () => {
+    // An extra key rides inside a valid signature without being covered by it.
+    const record = await signed({ ...transfer, backdoor: "yes" });
+    expect(() => replay([record], RULES)).toThrow(/unsigned fields: backdoor/);
+  });
+
+  it("refuses a nonce outside the 64-bit field", async () => {
+    const record = await signed({
+      kind: "claim",
+      seq: 0,
+      prev: GENESIS_PREV,
+      at: "2026-09-23T00:00:00.000Z",
+      launch: RULES.launch,
+      author: alice.identity,
+      epoch: 0,
+      btcBlockHash: BLOCK,
+      nonce: (1n << 64n).toString(),
+      clz: 8,
+      amount: "1",
+      ticket: TICKET(1),
+      ticketSats: RULES.ticketSats,
+    });
+    expect(() => replay([record], RULES)).toThrow(/outside the 64-bit field/);
+  });
+
+  it("names every malformed field rather than the first type error", async () => {
+    const cases: Array<[Record<string, unknown>, RegExp]> = [
+      [{ ...transfer, to: "nope" }, /recipient key/],
+      [{ ...transfer, author: "nope" }, /author key/],
+      [{ ...transfer, amount: "-1" }, /amount/],
+      [{ ...transfer, amount: "01" }, /amount/],
+      [{ ...transfer, seq: 1.5 }, /sequence number/],
+      [{ ...transfer, prev: "zz" }, /previous digest/],
+      [{ ...transfer, at: "" }, /timestamp/],
+      [{ ...transfer, launch: "" }, /launch id/],
+      [{ ...transfer, memo: "x".repeat(121) }, /memo/],
+    ];
+    for (const [body, pattern] of cases) {
+      const record = await signed(body);
+      expect(() => decodeRecord(record)).toThrow(pattern);
+    }
+  });
+
+  it("refuses anything that is not a signed record at all", () => {
+    expect(() => decodeRecord(null)).toThrow(/not an object/);
+    expect(() => decodeRecord({ body: {} })).toThrow(/malformed signature/);
+    expect(() => decodeChain({})).toThrow(/not an array/);
+  });
+
+  it("round-trips a record it accepts", async () => {
+    const ledger = new MemoryLedger(RULES);
+    const claim = await claimFor(alice, ledger, 0, TICKET(1));
+    expect(decodeRecord(claim)).toEqual(claim);
+  });
+});
+
+/* AUD-10: `signClaim` refused to author a zero-allocation claim, but `replay`
+ * accepted one — so the author and the verifier disagreed about validity while
+ * the ticket still raised the declared backing. */
+describe("an exhausted epoch", () => {
+  it("is refused by the verifier, not only by the author", async () => {
+    const alice = testVault(1);
+    const ledger = new MemoryLedger(RULES);
+    const first = await claimFor(alice, ledger, 0, TICKET(1));
+    ledger.append(first);
+
+    // Hand-build the second claim for the same epoch: the allocation is now 0,
+    // which is exactly what the author refuses to sign.
+    const draft = {
+      kind: "claim" as const,
+      seq: 1,
+      prev: recordId(first.body),
+      at: "2026-09-23T00:00:00.000Z",
+      launch: RULES.launch,
+      author: alice.identity,
+      epoch: 0,
+      btcBlockHash: BLOCK,
+      nonce: "0",
+      clz: 0,
+      amount: "0",
+      ticket: TICKET(2),
+      ticketSats: RULES.ticketSats,
+    };
+    const { nonce, clz } = mine(claimChallenge(RULES, draft), RULES.minClz);
+    const body = { ...draft, nonce: nonce.toString(), clz };
+    const forged = await alice.use((key) => ({
+      body,
+      signature: bytesToHex(signDigest(key, recordDigest(body))),
+    }));
+
+    expect(() => replay([first, forged], RULES)).toThrow(/allowance is exhausted/);
+    await expect(claimFor(alice, ledger, 0, TICKET(2))).rejects.toThrow(/nothing left to mint/);
   });
 });
