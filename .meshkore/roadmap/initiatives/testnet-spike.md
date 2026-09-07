@@ -8,6 +8,7 @@ modules:
   - web
   - mining
   - marketplace
+  - indexer
 target: Phase 0/1 — research spike, ahead of the economic and architecture gates
 created: 2026-09-23
 updated: 2026-09-23
@@ -52,6 +53,25 @@ changing anything else.
 - Offers are signed, verifiable and priced, with the settlement gap named.
 - No screen claims settlement, redeemability, atomicity or capital protection.
 
+## Second pass — make it legible
+
+The first pass built the machinery and proved it runs. Reading it back, the
+product was unreadable: a table of percentages on the front page, a five-item
+navigation with no order, and a palette desaturated enough to look unfinished.
+None of that is cosmetic when the point is to be understood.
+
+So the app is now four things you can do — Launches, Create, Market, Activity —
+with the wallet and its holdings grouped together, because holdings *is* the
+wallet's contents. The front page leads with launches you can act on, promoted
+by what the feed and the books actually say rather than by an editorial list.
+The emission lab became the third step of a wizard that creates a token, which
+gives its charts a question a person actually has.
+
+It also gained the one thing a single browser cannot do: let strangers see each
+other. The activity index is a Cloudflare Worker over D1, chosen because it
+costs nothing at rest, and deliberately kept to being an index — it verifies
+with the same module the client runs and cannot forge or alter an event.
+
 ## Task plan
 
 - `#MN8` WebGPU kernel and the mining backend port
@@ -59,3 +79,7 @@ changing anything else.
 - `#LB5` signed, replayable token ledger
 - `#LB6` ticket purchase, claim flow and chain verification UI
 - `#MK4` signed offer book and the atomicity boundary
+- `#DS3` vivid palette and product surfaces
+- `#LB7` four-section navigation and the front page
+- `#LB8` create-your-token wizard
+- `#IX5` public activity index on Cloudflare D1

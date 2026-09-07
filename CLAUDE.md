@@ -88,3 +88,6 @@ Conventions:
 - Preserve task IDs and historical ADRs; mark supersession instead of erasing history.
 - `web` is `kind: code` at `apps/web`. Promote another area the same way once its folder exists.
 - Do not start a project-local daemon. MeshKore runtime state and snapshots remain gitignored.
+- Deployment target is one Cloudflare Worker serving the SPA and `/api` over D1,
+  chosen for zero cost at rest. See `.meshkore/docs/hosting.md` before proposing
+  another provider or adding a server-side decision the index is not allowed to make.
