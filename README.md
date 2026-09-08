@@ -75,4 +75,20 @@ npm run verify:ui                              # 9 routes + both miners, in Chro
 npm run db:local && npx wrangler dev           # the Worker over a local D1
 ```
 
+### End to end, on the real network
+
+```bash
+npm run e2e:wallet     # create a testnet4 wallet, print the address to fund
+npm run e2e:dry        # the whole lifecycle except the broadcast
+npm run e2e            # the real thing: pay, mine, claim, transfer, list
+```
+
+`npm run e2e` creates a launch, pays a real ticket to its burn address with an
+OP_RETURN commitment, grinds real proof of work against the challenge that
+txid derives, signs a claim the validator accepts, transfers, lists an offer,
+and replays the whole chain from genesis — then prints the explorer link. It
+runs the app's own modules through Vite's SSR loader, so it exercises the code
+that ships rather than a copy of it. About 2,300 sat per run; testnet only, and
+the runner refuses to start against a mainnet build.
+
 Project management follows the [MeshKore standard](https://meshkore.com/standard).

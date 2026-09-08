@@ -25,3 +25,7 @@ tmp/
 
 .DS_Store
 .wrangler/
+
+# End-to-end runner: the test wallet's key and the chains/reports a run writes.
+apps/web/.e2e-wallet.json
+apps/web/.e2e-runs/

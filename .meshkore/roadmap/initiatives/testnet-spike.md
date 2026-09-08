@@ -107,3 +107,4 @@ anyone else.
 - `#LB8` create-your-token wizard
 - `#IX5` public activity index on Cloudflare D1
 - `#SH8` architecture review and correctness hardening
+- `#LB9` end-to-end runner against live testnet4
