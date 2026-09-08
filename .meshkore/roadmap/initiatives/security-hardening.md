@@ -40,3 +40,9 @@ Gate order and shared evidence: [roadmap](../../docs/roadmap.md).
 - [`SH5` — Production operations and reproducible deployment gate](../../modules/security/tasks/SH5-ops-hardening-monitoring-runbook-mainnet.md)
 - [`SH6` — Independent protocol review and remediation](../../modules/security/tasks/SH6-independent-protocol-review-and-remediation.md)
 - [`SH7` — Commercial readiness and real-fund launch decision](../../modules/security/tasks/SH7-commercial-readiness-and-real-fund-launch-decision.md)
+
+`SH8` lives in this module but belongs to the `testnet-spike` initiative: it
+remediates the first external audit of the prototype, which is spike work, not
+the production gate. Its findings on custody feed `SH7`, and its reproduction
+harness is a starting point for `SH1`–`SH3`. See
+[audit-2026-09-23.md](../../docs/audit-2026-09-23.md).

@@ -23,3 +23,22 @@ Define cumulative integer-atom issuance and epoch differences, including the exe
 - Budgets telescope, are nonnegative, remain bounded and cannot be reclaimed after expiry, including skipped epochs.
 - Specify token/reserve decimals, mul_div rounding, intermediate widths, dust, final redemption and zero-liability states.
 - Publish a high-precision independent reference plus boundary vectors; fixed-point format is justified by error/cycle needs.
+
+## Evidence so far
+
+Partial, from the audit remediation (`SH8`), not enough to close this task.
+
+- Rounding direction is now normative in `PROTOCOL.md` §4.1: the subtraction
+  rounds down, so `A(n) = M − ceil(M × p)`. The prototype had implemented the
+  opposite and declared this one (`AUD-13`).
+- An independent reference exists and is not another implementation of the same
+  approximation: `emission.test.ts` derives `A(n)` from the exact integer
+  criterion `(r−1)^H × 2^n < M^H ≤ r^H × 2^n`, checked over every offset of a
+  schedule small enough to compute, plus a pinned vector for the candidate
+  schedule.
+- Terminal cutoff is computed rather than assumed, and moved under the corrected
+  rounding — the remainder holds at one atom instead of underflowing to zero.
+
+Still outstanding: error bounds stated as bounds rather than demonstrated by
+vectors; reserve decimals and `mul_div` widths; dust, final redemption and
+zero-liability states; expired allowance kept distinct from issued-token burns.

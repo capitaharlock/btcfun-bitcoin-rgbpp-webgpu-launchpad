@@ -72,6 +72,28 @@ other. The activity index is a Cloudflare Worker over D1, chosen because it
 costs nothing at rest, and deliberately kept to being an index — it verifies
 with the same module the client runs and cannot forge or alter an event.
 
+## Third pass — the first external audit
+
+An external review of `25f3709` reproduced fifteen findings against the running
+code. Nine were real defects and are fixed; the rest were framing, and are now
+documented rather than argued with. The register is in
+[audit-2026-09-23.md](../../docs/audit-2026-09-23.md).
+
+The three that mattered most were quiet ones. The fee estimator counted outputs
+instead of measuring them, so every ticket and every offer fill — all of which
+carry an OP_RETURN — underpaid by about 40%. An offer showed `settled` on the
+strength of a memo, so one atom could close a five-token sale with no payment on
+record. And the emission schedule rounded the opposite way from the formula its
+own comment declared, which no property test could catch because monotonicity
+and telescoping hold under either direction.
+
+The audit also asked a question the spike had been answering only implicitly:
+which of this is implemented, and which is the architecture being described?
+[capabilities.md](../../docs/capabilities.md) is now the canonical answer, and
+it is blunt about the summary — every cryptographic step is genuine and
+checkable, and what is missing is the part that makes any of it binding on
+anyone else.
+
 ## Task plan
 
 - `#MN8` WebGPU kernel and the mining backend port
@@ -83,3 +105,4 @@ with the same module the client runs and cannot forge or alter an event.
 - `#LB7` four-section navigation and the front page
 - `#LB8` create-your-token wizard
 - `#IX5` public activity index on Cloudflare D1
+- `#SH8` remediate the first external audit

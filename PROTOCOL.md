@@ -73,6 +73,18 @@ this real-valued expression is not implementation code. Budgets telescope across
 contiguous epochs; minting cannot exceed the cumulative ceiling. Do not sum the
 old continuous-density formula as if it were a discrete per-block budget.
 
+**Rounding direction is normative, and it is the one written above.** The
+subtraction rounds *down*, so `A(n)` is computed as `M − ceil(M × 2^(−n/H))`,
+not `M − floor(M × 2^(−n/H))`. The two differ by one atom whenever `M × p` is
+not an integer, and the prototype implemented the second while declaring the
+first (audit `AUD-13`). A consequence worth stating so no port treats it as a
+bug: at least one atom stays outstanding for as long as the approximation
+distinguishes `p` from zero, so the cumulative ceiling reaches `M` later than
+the other rounding would suggest — with empty epochs long before it. Any
+implementation must reproduce the reference vectors in
+`apps/web/src/lib/emission.test.ts`, which are derived from an exact integer
+criterion rather than from another implementation.
+
 Unused allowance expires permanently. Track scheduled allowance, minted tokens,
 expired allowance, issued-token burns, outstanding redemption liabilities and
 future allowance separately. One occupied epoch does not measure how many people
