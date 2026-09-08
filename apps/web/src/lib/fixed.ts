@@ -72,6 +72,18 @@ export function mulQ(value: bigint, q: bigint): bigint {
   return (value * q) >> SHIFT;
 }
 
+/**
+ * Multiply a plain integer by a Q64.64 fraction, rounding *up*.
+ *
+ * Needed because `floor(M × (1 − p))` is `M − ceil(M × p)`, not `M − floor(M × p)`.
+ * The two differ by one atom whenever `M × p` is not an integer, and the
+ * emission schedule is specified in the first form (PROTOCOL.md §4.1), so the
+ * subtraction has to round the other way to implement what is written.
+ */
+export function mulQCeil(value: bigint, q: bigint): bigint {
+  return (value * q + ONE - 1n) >> SHIFT;
+}
+
 /** Render a Q64.64 value as a decimal string (for display only). */
 export function qToString(q: bigint, places = 6): string {
   const scale = 10n ** BigInt(places);

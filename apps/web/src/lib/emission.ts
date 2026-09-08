@@ -3,14 +3,31 @@
  *   A(n) = floor(M × (1 − 2^(−n/H)))        cumulative ceiling at offset n
  *   B([a,b)) = A(b) − A(a)                  budget scheduled over a range
  *
- * `A` is computed as `M − floor(M × 2^(−n/H))` so the subtraction happens in
- * exact integers and the result is monotone non-decreasing. Budgets telescope
- * across contiguous ranges by construction — you cannot get a different total
- * by slicing the range differently, which is the property the old continuous
- * per-block formula did not have.
+ * `A` is computed as `M − ceil(M × 2^(−n/H))`, which is the same function:
+ * `floor(M − x) = M − ceil(x)` for integer `M`. It was written as
+ * `M − floor(M × p)`, which rounds the *other* way and returned one atom more
+ * than the specification wherever `M × p` was not an integer — 1,443,560,240,063
+ * against a true 1,443,560,240,062 at n=1, H=1008 (AUD-13). Two independent
+ * ports would each implement the specification and disagree with this file,
+ * which is exactly the kind of divergence a reference implementation must not
+ * introduce.
+ *
+ * The subtraction still happens in exact integers, so the result stays monotone
+ * non-decreasing: `p` is non-increasing in `n`, so `ceil(M × p)` is too.
+ * Budgets telescope across contiguous ranges by construction — you cannot get a
+ * different total by slicing the range differently, which is the property the
+ * old continuous per-block formula did not have.
+ *
+ * APPROXIMATION. `p` itself is a Q64.64 value produced by truncating
+ * multiplications, so it is never above the true `2^(−n/H)`. That bound is not
+ * asserted from theory here: `emission.test.ts` checks `A(n)` against an exact
+ * integer reference — one that avoids fixed point entirely, by comparing `M^H`
+ * with `r^H × 2^n` — over a schedule small enough for that to be computable,
+ * and pins the production schedule by vector. An eventual Rust port must pass
+ * the same reference, not merely agree with this file.
  */
 
-import { exp2neg, mulQ } from "./fixed";
+import { exp2neg, mulQCeil } from "./fixed";
 
 export interface Schedule {
   /** Maximum supply in whole tokens (21,000,000 in the current candidate). */
@@ -36,7 +53,7 @@ export function maxAtoms(s: Schedule): bigint {
 export function cumulative(s: Schedule, n: bigint): bigint {
   if (n <= 0n) return 0n;
   const M = maxAtoms(s);
-  return M - mulQ(M, exp2neg(n, s.halfLife));
+  return M - mulQCeil(M, exp2neg(n, s.halfLife));
 }
 
 /** B([a,b)): atoms scheduled across a half-open range of block offsets. */
@@ -53,20 +70,26 @@ export function fractionScheduled(s: Schedule, n: bigint): number {
 }
 
 /**
- * The block offset at which the schedule stops issuing anything further,
- * because `floor(M × 2^(−n/H))` has underflowed to zero in integer arithmetic.
+ * The block offset at which the schedule can issue nothing further, because
+ * `A(n)` has reached `M` exactly and no later range can carry a budget.
  *
  * This is why "perpetual nonzero emission" was withdrawn in PROTOCOL.md §2:
  * with finite arithmetic the tail terminates at a specific, computable block.
+ * It is later under the corrected rounding than under the old one — rounding up
+ * keeps the remainder at one atom rather than letting it underflow to zero —
+ * and that is a consequence of implementing the specified function, not a
+ * change of policy. Long before it, epoch budgets are already zero.
  */
 export function terminalOffset(s: Schedule): bigint {
   const M = maxAtoms(s);
+  const remainder = (n: bigint) => mulQCeil(M, exp2neg(n, s.halfLife));
+
   let lo = 0n;
   let hi = s.halfLife * 2048n;
-  if (mulQ(M, exp2neg(hi, s.halfLife)) !== 0n) return hi; // no terminal in range
+  if (remainder(hi) !== 0n) return hi; // no terminal in range
   while (lo < hi) {
     const mid = (lo + hi) / 2n;
-    if (mulQ(M, exp2neg(mid, s.halfLife)) === 0n) hi = mid;
+    if (remainder(mid) === 0n) hi = mid;
     else lo = mid + 1n;
   }
   return lo;

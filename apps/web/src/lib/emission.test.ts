@@ -85,4 +85,66 @@ describe("terminal offset", () => {
     expect(cumulative(CANDIDATE, t)).toBe(M);
     expect(budget(CANDIDATE, t, t + 100_000n)).toBe(0n);
   });
+
+  it("has a long dead tail before it, holding the last atom back", () => {
+    // From roughly 51 half-lives the remainder is a single atom, so epochs are
+    // empty; the terminal block is only where that atom finally lands. Under
+    // the old rounding the remainder underflowed to zero here instead, which
+    // is what made the tail appear to end earlier than the schedule says.
+    const t = terminalOffset(CANDIDATE);
+    expect(M - cumulative(CANDIDATE, 51_408n)).toBe(1n);
+    expect(budget(CANDIDATE, 55_000n, 55_144n)).toBe(0n);
+    expect(budget(CANDIDATE, t - 1n, t + 1n)).toBe(1n);
+  });
+});
+
+/* AUD-13: the doc comment declared floor(M × (1 − p)) while the code computed
+ * M − floor(M × p), which rounds the other way. A second implementation built
+ * from the specification would have disagreed with this one. */
+describe("A(n) is the function the specification states", () => {
+  /**
+   * floor(M × (1 − 2^(−n/H))), computed exactly in integers.
+   *
+   * Independent of `exp2neg` and of fixed point altogether: it looks for the
+   * remainder `r = M − A` satisfying `(r−1)^H × 2^n < M^H ≤ r^H × 2^n`, which is
+   * the fractional power condition raised to the Hth and therefore exact. Only
+   * usable for small schedules — `M^H` is astronomically large otherwise — which
+   * is why the production schedule is pinned by vector below.
+   */
+  function exactCumulative(maxSupply: bigint, halfLife: bigint, n: bigint): bigint {
+    if (n <= 0n) return 0n;
+    const scale = 2n ** n;
+    const target = maxSupply ** halfLife;
+    let lo = 0n;
+    let hi = maxSupply;
+    while (lo < hi) {
+      const mid = (lo + hi) / 2n;
+      if (target <= mid ** halfLife * scale) hi = mid;
+      else lo = mid + 1n;
+    }
+    return maxSupply - lo;
+  }
+
+  const SMALL = { maxWhole: 1000n, decimals: 0, halfLife: 8n };
+
+  it("matches an exact integer reference across a small schedule", () => {
+    for (let n = 1n; n <= 40n; n++) {
+      expect(cumulative(SMALL, n)).toBe(exactCumulative(1000n, 8n, n));
+    }
+  });
+
+  it("returns the specified value at the offset the audit reproduced", () => {
+    // Reported by the audit's high-precision reference; the implementation
+    // returned 1_443_560_240_063 — one atom high — before the rounding fix.
+    expect(cumulative(CANDIDATE, 1n)).toBe(1_443_560_240_062n);
+  });
+
+  it("is below max supply at every offset before the terminal one", () => {
+    // floor(M × (1 − p)) < M whenever p > 0, so every offset the approximation
+    // still distinguishes from zero leaves at least one atom outstanding.
+    const t = terminalOffset(CANDIDATE);
+    for (const n of [1n, 1008n, 10_000n, 51_408n, t - 1n]) {
+      expect(cumulative(CANDIDATE, n)).toBeLessThan(M);
+    }
+  });
 });
