@@ -8,9 +8,17 @@
  * WHAT IT IS NOT. It is not an authority. It stores events that were already
  * signed by their actor, checks each signature with the *same module the client
  * uses*, and hands them back for the client to check again. It cannot forge an
- * event, alter one, or make an invalid claim look valid. Losing it costs
- * discovery, never ownership — which is the operator posture PROTOCOL.md §2
- * requires and the reason there is no "trust me" surface here.
+ * event or alter one. Losing it costs discovery, never ownership — which is the
+ * operator posture PROTOCOL.md §2 requires and the reason there is no "trust
+ * me" surface here.
+ *
+ * AND IT DOES NOT ESTABLISH THAT ANYTHING HAPPENED. Accepting an event means
+ * its signature is genuine, nothing more: the actor could equally have signed a
+ * mint that never occurred or a purchase nobody paid for, and this Worker holds
+ * no ledger to replay against and no Bitcoin node to confirm with. It therefore
+ * returns no verdict of its own — no `verified` flag — and its rows must never
+ * be totalled into a supply or a volume. `src/lib/activity/types.ts` states the
+ * same boundary for the client (AUD-06).
  *
  * WHY THIS SHAPE COSTS NOTHING. One Worker serves both the SPA assets and the
  * API, so there is no second origin and no CORS. D1 is SQLite that scales to
@@ -121,14 +129,14 @@ async function readFeed(url: URL, env: Env): Promise<Response> {
     } catch {
       return [];
     }
+    // No `authentic` flag is sent. The client checks every signature itself,
+    // and a server-supplied verdict would be a claim it has no standing to
+    // make — believing it is exactly the habit this design is trying to avoid.
     return [
       {
         id: row.id,
         signed: { body, signature: row.signature },
         receivedAt: row.received_at,
-        // The client re-verifies; this flag is only what the index believed
-        // when it accepted the row.
-        verified: true,
       },
     ];
   });

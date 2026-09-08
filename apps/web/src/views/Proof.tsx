@@ -109,7 +109,9 @@ function ProofBody({ launch }: { launch: Launch }) {
     {
       claim: "The ticket was actually paid",
       establishes: "A transaction with that id exists on the network and carries the launch commitment.",
-      rests_on: "mempool.space's word for the transaction. Not an inclusion proof.",
+      rests_on:
+        "mempool.space's word, looked up by this page. Replay does not check it — a stored " +
+        "chain takes the txid and the satoshis from the record itself. Not an inclusion proof.",
       strength: "inclusion",
     },
     {
@@ -117,6 +119,14 @@ function ProofBody({ launch }: { launch: Launch }) {
       establishes: "The hash came from the provider for the epoch's opening height.",
       rests_on: "That provider being honest. No SPV proof or accepted-clock policy. Task V8.",
       strength: "assumption",
+    },
+    {
+      claim: "The epoch had opened when it was claimed",
+      establishes:
+        "Nothing. Replay validates epochs by index and never learns the opening height, so a " +
+        "record can name an epoch the launch had not reached.",
+      rests_on: "An accepted Bitcoin clock and a canonical admission cursor. Tasks V8, V9.",
+      strength: "missing",
     },
     {
       claim: "This block is on the canonical chain",
@@ -275,7 +285,7 @@ function ChainVerification({
       title="This chain"
       aside={
         ledger.state ? (
-          <Chip tone="ok">{ledger.state.length} records verified</Chip>
+          <Chip tone="ok">{ledger.state.length} records replayed</Chip>
         ) : (
           <Chip tone="danger">invalid</Chip>
         )

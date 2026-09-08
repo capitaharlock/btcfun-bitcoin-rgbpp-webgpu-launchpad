@@ -1,17 +1,31 @@
-/* Public activity: the shared, signed record of what people did.
+/* Public activity: the shared, signed record of what people *say* they did.
  *
  * Everything else in this app is private to one browser. This is the one layer
  * that is meant to be shared, so it is the one layer that needs a server — and
  * the server's job is deliberately narrow: it is an *index*, never an authority.
  * It accepts a signed event, checks the signature, stores it, and hands it back.
- * It cannot forge an event, alter one, or make an invalid claim look valid,
- * because every consumer re-verifies. That is the same posture PROTOCOL.md §2
- * takes toward the admission queue: an operator may publish, never decide.
+ * It cannot forge an event or alter one, because every consumer re-verifies.
+ * That is the same posture PROTOCOL.md §2 takes toward the admission queue: an
+ * operator may publish, never decide.
+ *
+ * WHAT A SIGNATURE HERE PROVES, AND WHAT IT DOES NOT. It proves the stated
+ * actor composed these bytes. It does not prove the mint, purchase or transfer
+ * the bytes describe ever happened: an actor can sign a truthful statement or a
+ * false one with equal ease, and this layer cannot tell them apart. It holds no
+ * ledger to replay the mint against, no chain to confirm the payment on, and no
+ * way to know whether the referenced record exists (AUD-06).
+ *
+ * So these events are *declared*, not verified, and the distinction is carried
+ * in the vocabulary: an entry is `authentic`, never "verified" or "confirmed".
+ * They are for discovery — seeing that other people exist and what they say
+ * they are doing. They must never be totalled into a supply, a volume or a
+ * trading history, because a single actor can sign as many as they like. The
+ * ledger and the chain are where those numbers come from.
  *
  * An event does not restate what it refers to. It carries a reference digest —
- * the ledger record's id, the offer's id — so the feed can never disagree with
- * the thing it is reporting. The worst a bad index can do is omit, and omission
- * is visible to anyone holding their own copy.
+ * the ledger record's id, the offer's id — so anyone holding the underlying
+ * object can check the two agree. The worst a bad index can do is omit, and
+ * omission is visible to anyone holding their own copy.
  */
 
 export const ACTIVITY_VERSION = "btcfun/activity/1";
@@ -60,8 +74,13 @@ export interface ActivityEntry {
   signed: SignedActivity;
   /** Unix seconds when the index accepted it. Not authoritative, just ordering. */
   receivedAt: number;
-  /** False when the signature did not verify on this client. */
-  verified: boolean;
+  /**
+   * The stated actor's signature covers these bytes, checked on this client.
+   *
+   * Deliberately not called `verified`: it says the message is genuine, not
+   * that the event it describes occurred. Nothing in this layer can say that.
+   */
+  authentic: boolean;
 }
 
 export class ActivityError extends Error {

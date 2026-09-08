@@ -126,6 +126,24 @@ interface Accumulator {
  * Throws `LedgerError` naming the first offending record. Partial validation is
  * not offered: a chain with one bad record has no defensible state, and
  * returning "the valid prefix" would invite showing a balance derived from it.
+ *
+ * WHAT THIS CHECKS. Structure, authorship, arithmetic and work: sequence and
+ * chaining, a signature by the stated author, a nonce that really produces the
+ * stated leading zeros against a challenge derived from the record's own
+ * fields, no reused ticket, and an amount equal to what the allocation rule
+ * computes from the state so far.
+ *
+ * WHAT THIS DOES NOT CHECK, and it is a large gap. The ticket txid, the
+ * satoshis it paid and the block hash the epoch opened on are all taken from
+ * the record itself. Nothing here talks to Bitcoin, so a chain can be perfectly
+ * self-consistent while naming a payment that was never made, a block that does
+ * not exist, or an epoch the launch had not yet reached. `LaunchRules` has no
+ * opening height, so replay cannot even bound which epochs are plausible
+ * (AUD-05). That is deliberate for a stored chain — it must stay valid as the
+ * tip advances — and it is also the reason this layer is not settlement: PoW
+ * here proves effort, not admission. Closing it means SPV evidence or a
+ * consensus layer, which is what PROTOCOL.md §2 withdrew and task V3 owns. The
+ * Proof Explorer states the same thing per record.
  */
 export function replay(records: readonly SignedRecord[], rules: LaunchRules): LedgerState {
   // Decode first, from `unknown`: `records` is typed but nothing checked it —

@@ -114,12 +114,12 @@ export function Activity() {
         </Panel>
 
         <div className="stack-lg">
-          <Panel eyebrow="in this window" title="Totals">
+          <Panel eyebrow="in this window" title="Announced">
             <div className="statrow">
               <Stat k="mints" v={group(totals.mint)} tone="amber" />
               <Stat k="listings" v={group(totals.offer)} tone="violet" />
               <Stat k="buys" v={group(totals.fill)} tone="cyan" />
-              <Stat k="sats moved" v={group(totals.satsMoved)} small />
+              <Stat k="sats named" v={group(totals.satsMoved)} small />
             </div>
             <div className="rule" />
             <div className="row tiny faint">
@@ -129,12 +129,19 @@ export function Activity() {
             </div>
           </Panel>
 
-          <Panel eyebrow="what this is" title="An index, not an authority">
+          <Panel eyebrow="what this is" title="Announcements, not receipts">
             <p>
-              Events are signed by whoever did them. The server checks the
-              signature, stores the bytes, and hands them back — it cannot forge
-              an event or alter one, and every row above is re-verified in your
-              browser before it is drawn.
+              Every row is signed by the person it names, and the signature is
+              re-checked in your browser before it is drawn. The server cannot
+              forge a row or alter one.
+            </p>
+            <p>
+              A signature proves who wrote the message. It does not prove the
+              mint or the purchase happened — anyone can sign a statement that
+              is not true, and an index has no ledger to replay it against and no
+              Bitcoin node to confirm it with. Treat this as people saying what
+              they are doing, not as a record of supply or volume. The numbers
+              above count announcements.
             </p>
             <Notice tone={activity.online ? "cyan" : "warn"}>
               {activity.online ? (
@@ -203,7 +210,7 @@ function Row({
       <span className="spacer" />
 
       {mine && <Chip tone="cyan">you</Chip>}
-      {!entry.verified && <Chip tone="danger">signature failed</Chip>}
+      {!entry.authentic && <Chip tone="danger">signature failed</Chip>}
 
       {body.txid && (
         <a href={txUrl(body.txid)} target="_blank" rel="noreferrer" className="who">

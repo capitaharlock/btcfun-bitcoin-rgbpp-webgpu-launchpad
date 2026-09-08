@@ -60,7 +60,7 @@ export function remember(signed: SignedActivity): ActivityEntry {
     id: activityId(signed.body),
     signed,
     receivedAt: Math.floor(Date.now() / 1000),
-    verified: true,
+    authentic: true,
   };
   const existing = readLocal().filter((e) => e.id !== entry.id);
   writeLocal([entry, ...existing]);
@@ -119,9 +119,10 @@ export async function record(signed: SignedActivity): Promise<ActivityEntry> {
 /**
  * The feed: remote events merged with local ones, newest first.
  *
- * Every entry is re-verified here rather than trusted because the index said
- * so. An index that serves a forged event gets it rendered as unverified, not
- * rendered as real.
+ * Every signature is re-checked here rather than trusted because the index said
+ * so, and `authentic` records only that result. It means the stated actor wrote
+ * these bytes — not that the mint, purchase or transfer they describe took
+ * place. Nothing in this layer can establish the latter: see `types.ts`.
  */
 export async function feed(query: FeedQuery = {}): Promise<Feed> {
   const local = readLocal();
@@ -147,12 +148,12 @@ export async function feed(query: FeedQuery = {}): Promise<Feed> {
 
   const byId = new Map<string, ActivityEntry>();
   for (const entry of [...remote, ...local]) {
-    const verified = faultIn(entry.signed) === null;
+    const authentic = faultIn(entry.signed) === null;
     const previous = byId.get(entry.id);
     // Prefer whichever copy has the earlier arrival time, so a locally recorded
     // event keeps its own timestamp once the index echoes it back.
     if (!previous || entry.receivedAt < previous.receivedAt) {
-      byId.set(entry.id, { ...entry, verified });
+      byId.set(entry.id, { ...entry, authentic });
     }
   }
 
