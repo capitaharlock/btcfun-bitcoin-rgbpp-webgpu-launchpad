@@ -8,6 +8,16 @@
  * `WalletKey` owns secret material and must be wiped. Every function that
  * derives one takes the entropy and returns a handle with `wipe()`; nothing
  * here keeps a module-level copy.
+ *
+ * WIPING IS BEST-EFFORT, and saying otherwise would be the more dangerous
+ * mistake. The byte arrays this module allocates are zeroed — the seed, the
+ * BIP32 master and child, the private key — but the BIP39 mnemonic is a
+ * JavaScript string, and strings cannot be cleared: it stays readable until the
+ * garbage collector happens to reclaim it, and the engine may have copied it
+ * before then. The mnemonic exists because BIP39/BIP84 derivation is what makes
+ * these coins sweepable by any standard wallet, which is worth more to a
+ * visitor than an unswept address would be. See the threat model in
+ * `passkey.ts`.
  */
 
 import { HDKey } from "@scure/bip32";
@@ -45,6 +55,9 @@ export function deriveKey(entropy: Uint8Array, network: NetworkConfig = ACTIVE):
 
   const privateKey = Uint8Array.from(child.privateKey);
   const publicKey = Uint8Array.from(child.publicKey);
+  // Both nodes, not just the master: the child holds the same private key this
+  // function is about to return, and leaving it live doubles the window.
+  child.wipePrivateData();
   master.wipePrivateData();
 
   const payment = p2wpkh(publicKey, network.params);

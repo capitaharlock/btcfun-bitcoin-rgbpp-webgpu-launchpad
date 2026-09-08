@@ -55,6 +55,9 @@ export function isPasskeySupported(): boolean {
   return passkey.isSupported();
 }
 
+/** Whether PRF is actually available, which is what a passkey wallet needs. */
+export const passkeyPrfSupport = passkey.prfSupport;
+
 function read(): StoredVault | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

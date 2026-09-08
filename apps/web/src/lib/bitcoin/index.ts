@@ -20,6 +20,7 @@ export {
   forget as forgetVault,
   importLocal,
   isPasskeySupported,
+  passkeyPrfSupport,
   type Vault,
   type VaultKind,
 } from "./vault";

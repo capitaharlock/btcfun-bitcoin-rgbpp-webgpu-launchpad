@@ -7,6 +7,17 @@
  * entropy. There is no seed phrase to leak, no password to forget, and no
  * private key in localStorage — only the credential id needed to ask again.
  *
+ * WHAT THIS IS NOT. It is not hardware signing. The authenticator gates the
+ * *derivation*, not each signature: the PRF output crosses into JavaScript, and
+ * so does every key derived from it, for as long as an operation takes. Page
+ * script — a compromised dependency, an XSS, anything served from this origin —
+ * can observe them while they exist. The wipes below and in `keys.ts` are
+ * best-effort: they clear the byte arrays we own, but a JavaScript engine is
+ * free to have copied them and strings cannot be cleared at all. A wallet that
+ * signs inside the authenticator, or an external wallet, is a different and
+ * stronger design; PROTOCOL.md's real-fund gate is the place that decides
+ * whether this one is good enough (AUD-15).
+ *
  * Two rules the implementation depends on:
  *
  *   The salt is domain-separated to this project. Reusing another product's
@@ -14,7 +25,7 @@
  *   is a surprising and dangerous kind of key reuse.
  *
  *   PRF output is wiped by the caller as soon as a key is derived from it. It
- *   is the only secret in the process.
+ *   is the only secret this module holds.
  */
 
 import { fromBase64, fromBase64Url, toBase64, toBase64Url, type Bytes } from "../bytes";
@@ -41,18 +52,30 @@ export interface PrfResult {
 /**
  * The relying party id.
  *
- * Platform authenticators refuse an rpId that is not the page's origin or a
- * registrable suffix of it, and localhost is the only insecure origin they
- * accept — so development has to use it verbatim.
+ * The page's own hostname, verbatim, which is always a valid rpId for that
+ * origin. It used to take the last two labels of the hostname so a passkey
+ * enrolled on `www.` would work on the apex — but that rule is only correct for
+ * single-label public suffixes. On `btcfun.workers.dev`, the deployment target,
+ * it produced `workers.dev`: a public suffix, which every authenticator
+ * rejects, so nobody could have enrolled at all. It was equally wrong for
+ * `example.co.uk` (AUD-15).
+ *
+ * Getting this right in general needs the Public Suffix List, which is not
+ * worth shipping to decide one string. So the apex case is *configured* rather
+ * than guessed: set `VITE_RP_ID` to the registrable domain when the app is
+ * served from several subdomains that must share one wallet. The value is
+ * recorded in the credential, so changing it later is a wallet migration, not a
+ * setting — which is another reason it should be a deliberate act.
  */
 function relyingPartyId(): string {
-  const host = window.location.hostname;
-  if (host === "localhost" || host === "127.0.0.1") return "localhost";
-  // Strip a leading subdomain so a passkey enrolled on www. works on the apex.
-  const parts = host.split(".");
-  return parts.length > 2 ? parts.slice(-2).join(".") : host;
+  const configured = import.meta.env.VITE_RP_ID;
+  if (typeof configured === "string" && configured.length > 0) return configured;
+  // localhost is the only insecure origin authenticators accept, and it is
+  // already a bare hostname, so no special case is needed.
+  return window.location.hostname;
 }
 
+/** Whether WebAuthn is present at all. Says nothing about PRF — see `prfSupport`. */
 export function isSupported(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -60,6 +83,35 @@ export function isSupported(): boolean {
     typeof navigator.credentials?.create === "function" &&
     !!window.crypto?.subtle
   );
+}
+
+/** What is known about PRF availability before asking the authenticator. */
+export type PrfSupport = "available" | "unavailable" | "unknown";
+
+/**
+ * Whether this browser will evaluate the PRF extension.
+ *
+ * `isSupported` only reports that WebAuthn exists, and a wallet needs more than
+ * that: an authenticator without PRF enrols happily and then returns no secret,
+ * which surfaces as a failure *after* the visitor has been asked for Touch ID.
+ * `getClientCapabilities` answers it up front where implemented; where it is
+ * not, the honest answer is "unknown" and the enrolment path still checks.
+ */
+export async function prfSupport(): Promise<PrfSupport> {
+  if (!isSupported()) return "unavailable";
+  const capabilities = (
+    window.PublicKeyCredential as unknown as {
+      getClientCapabilities?: () => Promise<Record<string, boolean>>;
+    }
+  ).getClientCapabilities;
+  if (typeof capabilities !== "function") return "unknown";
+  try {
+    const result = await capabilities.call(window.PublicKeyCredential);
+    const prf = result["extension:prf"];
+    return prf === undefined ? "unknown" : prf ? "available" : "unavailable";
+  } catch {
+    return "unknown";
+  }
 }
 
 async function saltBytes(): Promise<Bytes> {
@@ -85,6 +137,12 @@ function extractPrf(credential: PublicKeyCredential): Bytes {
 /** Enrol a new passkey on this device and derive its secret. */
 export async function enroll(): Promise<PrfResult> {
   if (!isSupported()) throw new Error("Passkeys are not supported in this browser.");
+  if ((await prfSupport()) === "unavailable") {
+    throw new Error(
+      "This browser will not evaluate the WebAuthn PRF extension, which a " +
+        "passkey wallet needs. Use the local demo wallet instead.",
+    );
+  }
 
   const rpId = relyingPartyId();
   const salt = await saltBytes();
