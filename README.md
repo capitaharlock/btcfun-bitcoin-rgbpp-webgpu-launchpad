@@ -50,18 +50,18 @@ chain providers, the token ledger); discriminated unions over optional soup;
 comments that explain *why*. Every rule that can be tested is tested, and the UI
 is verified in a real browser before it is called done.
 
-The repository survived an [external technical
-audit](.meshkore/docs/audit-2026-09-23.md) with reproductions: fifteen findings,
-nine real defects, all fixed with regression tests naming their finding id — a
-fee estimator that underpaid every transaction carrying a memo, a market status
-that implied evidence it did not have, and an emission schedule that rounded the
-opposite way from the formula its own comment declared.
+The last pass over the codebase was a correctness review rather than a feature:
+nine defects found and fixed, each with a regression test. The interesting ones
+were quiet — a fee estimator that underpaid every transaction carrying a memo, a
+market status that implied evidence it did not have, and an emission schedule
+that rounded the opposite way from the formula its own comment declared. None of
+the three could fail loudly, which is why the rule here is that nothing is named
+more strongly than the code can support.
 
 ## Read next
 
 - [What is implemented, experimental and absent](.meshkore/docs/capabilities.md)
 - [Protocol specification](PROTOCOL.md)
-- [Audit findings and disposition](.meshkore/docs/audit-2026-09-23.md)
 - [Hosting: why Cloudflare, and what the index may never be](.meshkore/docs/hosting.md)
 - [Design history — including the directions already rejected](.meshkore/context/idea-evolution.md)
 - [Roadmap and acceptance gates](.meshkore/docs/roadmap.md)

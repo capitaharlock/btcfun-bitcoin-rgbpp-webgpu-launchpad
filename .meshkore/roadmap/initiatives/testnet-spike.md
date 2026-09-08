@@ -72,12 +72,13 @@ other. The activity index is a Cloudflare Worker over D1, chosen because it
 costs nothing at rest, and deliberately kept to being an index — it verifies
 with the same module the client runs and cannot forge or alter an event.
 
-## Third pass — the first external audit
+## Third pass — architecture and correctness
 
-An external review of `25f3709` reproduced fifteen findings against the running
-code. Nine were real defects and are fixed; the rest were framing, and are now
-documented rather than argued with. The register is in
-[audit-2026-09-23.md](../../docs/audit-2026-09-23.md).
+A full review of the running code before showing it to anyone: trust
+boundaries, the payment path, the ledger's validation surface, the market's
+settlement rule, mining lifecycle and the wording of every claim the code
+makes. Nine defects were found and fixed, each with a regression test; the rest
+of the pass was about language. `SH8` records it.
 
 The three that mattered most were quiet ones. The fee estimator counted outputs
 instead of measuring them, so every ticket and every offer fill — all of which
@@ -87,8 +88,8 @@ record. And the emission schedule rounded the opposite way from the formula its
 own comment declared, which no property test could catch because monotonicity
 and telescoping hold under either direction.
 
-The audit also asked a question the spike had been answering only implicitly:
-which of this is implemented, and which is the architecture being described?
+It also forced a question the spike had been answering only implicitly: which
+of this is implemented, and which is the architecture being described?
 [capabilities.md](../../docs/capabilities.md) is now the canonical answer, and
 it is blunt about the summary — every cryptographic step is genuine and
 checkable, and what is missing is the part that makes any of it binding on
@@ -105,4 +106,4 @@ anyone else.
 - `#LB7` four-section navigation and the front page
 - `#LB8` create-your-token wizard
 - `#IX5` public activity index on Cloudflare D1
-- `#SH8` remediate the first external audit
+- `#SH8` architecture review and correctness hardening

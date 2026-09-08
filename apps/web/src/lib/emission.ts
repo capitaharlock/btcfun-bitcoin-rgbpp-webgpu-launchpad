@@ -7,7 +7,7 @@
  * `floor(M − x) = M − ceil(x)` for integer `M`. It was written as
  * `M − floor(M × p)`, which rounds the *other* way and returned one atom more
  * than the specification wherever `M × p` was not an integer — 1,443,560,240,063
- * against a true 1,443,560,240,062 at n=1, H=1008 (AUD-13). Two independent
+ * against a true 1,443,560,240,062 at n=1, H=1008. Two independent
  * ports would each implement the specification and disagree with this file,
  * which is exactly the kind of divergence a reference implementation must not
  * introduce.

@@ -36,7 +36,7 @@ describe("launch identity", () => {
     expect(idMatches(c)).toBe(true);
   });
 
-  /* AUD-08: the id used to be the lowercase symbol, so two creators committing
+  /* The id used to be the lowercase symbol, so two creators committing
    * to different terms landed on one namespace — and the second launch would
    * have inherited the first one's ledger, reserve and ticket memos. */
   it("separates two creators who choose the same symbol", () => {

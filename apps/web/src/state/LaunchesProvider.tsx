@@ -128,7 +128,7 @@ function commitmentIn(entry: ActivityEntry): LaunchCommitment[] {
   // signature covers one launch while the feed indexes another.
   if (commitment.id !== body.launch || commitment.creator !== body.actor) return [];
   // And the id must be the one the commitment's own terms produce, or an index
-  // could serve a launch whose namespace belongs to somebody else (AUD-08).
+  // could serve a launch whose namespace belongs to somebody else.
   if (!idMatches(commitment)) return [];
   if (!isPlausible(commitment)) return [];
 

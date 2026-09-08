@@ -261,7 +261,7 @@ describe("fills", () => {
   });
 });
 
-/* AUD-11: "settled" used to follow from a memo prefix on any transfer, so a
+/* "settled" used to follow from a memo prefix on any transfer, so a
  * one-atom transfer closed a 5-token sale and no payment had to exist. */
 describe("settlement", () => {
   it("names the whole offer id, not a prefix", async () => {

@@ -8,7 +8,7 @@ version: 1
 id: btc-fun
 type: dev
 name: "btc.fun"
-description: "Specification-stage community launchpad: Bitcoin-scheduled mining, RGB++ ownership, CKB settlement and transparent reserves. Economics and architecture validation precede the demo and commercial gates."
+description: "Community launchpad: Bitcoin-scheduled mining, RGB++ ownership, CKB settlement and transparent reserves. A testnet4 prototype runs in apps/web; economics and architecture validation precede the demo and commercial gates."
 
 transport:
   protocol: websocket

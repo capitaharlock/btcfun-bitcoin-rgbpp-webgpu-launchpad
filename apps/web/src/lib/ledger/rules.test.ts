@@ -288,7 +288,7 @@ describe("transfers", () => {
   });
 });
 
-/* AUD-09: the parser used to fall through `if claim / else transfer`, so a
+/* The parser used to fall through `if claim / else transfer`, so a
  * correctly signed record of any other kind moved tokens as a transfer. */
 describe("decoding untrusted records", () => {
   const alice = testVault(1);
@@ -375,7 +375,7 @@ describe("decoding untrusted records", () => {
   });
 });
 
-/* AUD-10: `signClaim` refused to author a zero-allocation claim, but `replay`
+/* `signClaim` refused to author a zero-allocation claim, but `replay`
  * accepted one — so the author and the verifier disagreed about validity while
  * the ticket still raised the declared backing. */
 describe("an exhausted epoch", () => {

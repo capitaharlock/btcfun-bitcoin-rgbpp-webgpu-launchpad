@@ -45,7 +45,7 @@ describe("estimateVsize", () => {
   });
 
   it("charges an OP_RETURN for the bytes it occupies", () => {
-    // AUD-07: an 80-byte memo is a 92 vB output, not a 31 vB one.
+    // An 80-byte memo is a 92 vB output, not a 31 vB one.
     const memo = opReturnScriptBytes(MAX_MEMO_BYTES);
     expect(memo).toBe(83);
     expect(estimateVsize(1, [P2WPKH, P2WPKH, memo])).toBe(233);
@@ -200,7 +200,7 @@ describe("buildPayment", () => {
     expect(opReturn.script?.slice(2)).toEqual(memo);
   });
 
-  /* AUD-07 regression. Before the fix this produced 141 sats over a 233 vB
+  /* Regression. Before the fix this produced 141 sats over a 233 vB
    * transaction — 0.605 sat/vB against a requested 1. */
   it("pays the requested rate over the size a node will measure", () => {
     for (const memoLength of [0, 1, 40, 75, 76, 80]) {

@@ -10,9 +10,8 @@ related: [testnet-spike, web-app, provable-trust]
 
 # Capabilities
 
-The audit of 23 September 2026 asked for one table separating what this
-repository implements from what its architecture describes, so that neither can
-be read as the other (`AUD-01`, `AUD-04`). This is that table. It is the
+One table separating what this repository implements from what its
+architecture describes, so that neither can be read as the other. It is the
 canonical answer to "what does btc.fun actually do"; `PROTOCOL.md` describes the
 target, and `roadmap.md` says which gates stand between the two.
 

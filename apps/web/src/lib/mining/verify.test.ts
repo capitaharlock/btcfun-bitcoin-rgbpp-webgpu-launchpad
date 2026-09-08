@@ -21,13 +21,13 @@ describe("preimage", () => {
 
   it("rejects a challenge that is not exactly 32 bytes", () => {
     expect(() => preimage(new Uint8Array(31), 0n)).toThrow(RangeError);
-    // AUD-14: a longer challenge used to be silently truncated, so two
+    // A longer challenge used to be silently truncated, so two
     // different challenges proved the same work.
     expect(() => preimage(new Uint8Array(33), 0n)).toThrow(RangeError);
   });
 
   it("rejects nonces outside the 64-bit field", () => {
-    // AUD-14: 0 and 2^64 wrapped to the same preimage.
+    // Nonces 0 and 2^64 wrapped to the same preimage.
     expect(() => preimage(CHALLENGE, NONCE_LIMIT)).toThrow(RangeError);
     expect(() => preimage(CHALLENGE, -1n)).toThrow(RangeError);
     expect(() => preimage(CHALLENGE, NONCE_LIMIT - 1n)).not.toThrow();

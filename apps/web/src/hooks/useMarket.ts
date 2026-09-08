@@ -51,7 +51,7 @@ export function useMarket({ launch, decimals, tipHeight, records }: MarketInputs
     const fills = book.fills();
     // Settlement is a join across the offer, its payment and the delivering
     // record — never a memo on its own. `settlementsIn` is where that join
-    // lives, so the market page and anything else asking agree (AUD-11).
+    // lives, so the market page and anything else asking agree.
     const settled = settlementsIn(records, open, fills);
     return open
       .map((signed) => viewOffer(signed, { launch, decimals, tipHeight, fills, settled }))

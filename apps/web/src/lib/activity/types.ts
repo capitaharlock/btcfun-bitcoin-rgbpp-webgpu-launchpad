@@ -13,7 +13,7 @@
  * the bytes describe ever happened: an actor can sign a truthful statement or a
  * false one with equal ease, and this layer cannot tell them apart. It holds no
  * ledger to replay the mint against, no chain to confirm the payment on, and no
- * way to know whether the referenced record exists (AUD-06).
+ * way to know whether the referenced record exists.
  *
  * So these events are *declared*, not verified, and the distinction is carried
  * in the vocabulary: an entry is `authentic`, never "verified" or "confirmed".

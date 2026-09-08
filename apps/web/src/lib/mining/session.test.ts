@@ -67,7 +67,7 @@ describe("MiningSession lifecycle", () => {
     Reflect.deleteProperty(globalThis, "cancelAnimationFrame");
   });
 
-  /* AUD-12: stop() during the await in start() was ignored, so the backend
+  /* Stop() during the await in start() was ignored, so the backend
    * started anyway and the session reported itself as running. */
   it("does not start a backend that was cancelled while it was being built", async () => {
     const backend = new FakeBackend();

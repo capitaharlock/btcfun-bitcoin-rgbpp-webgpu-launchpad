@@ -77,7 +77,7 @@ old continuous-density formula as if it were a discrete per-block budget.
 subtraction rounds *down*, so `A(n)` is computed as `M − ceil(M × 2^(−n/H))`,
 not `M − floor(M × 2^(−n/H))`. The two differ by one atom whenever `M × p` is
 not an integer, and the prototype implemented the second while declaring the
-first (audit `AUD-13`). A consequence worth stating so no port treats it as a
+first. A consequence worth stating so no port treats it as a
 bug: at least one atom stays outstanding for as long as the approximation
 distinguishes `p` from zero, so the cumulative ceiling reaches `M` later than
 the other rounding would suggest — with empty epochs long before it. Any

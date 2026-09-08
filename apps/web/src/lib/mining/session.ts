@@ -76,7 +76,7 @@ export class MiningSession {
    * generation is bumped by every `start` and every `stop`, and each await
    * re-checks it before taking ownership of what it built. Without that, a
    * backend created for a run that no longer exists was published anyway and
-   * kept grinding after the visitor had stopped it (AUD-12).
+   * kept grinding after the visitor had stopped it.
    */
   private generation = 0;
 
@@ -149,15 +149,15 @@ export class MiningSession {
       this.dirty = true;
     });
 
-    // Repaint on frames rather than on reports: the CPU backend reports ~11
-    // times a second per lane and the GPU ~22, and neither cadence is the
-    // display's. Coalescing here keeps React re-renders at one per frame.
     // `backend.start` is itself awaited, so a stop during it lands here too.
     if (run !== this.generation) {
       backend.stop();
       return;
     }
 
+    // Repaint on frames rather than on reports: the CPU backend reports ~11
+    // times a second per lane and the GPU ~22, and neither cadence is the
+    // display's. Coalescing here keeps React re-renders at one per frame.
     const tick = (): void => {
       if (run !== this.generation || !this.backend) return;
       if (this.dirty) {

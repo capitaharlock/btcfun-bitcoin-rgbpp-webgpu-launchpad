@@ -4,7 +4,7 @@
  * ended, so it is the one that has to be earned. It used to be inferred from a
  * memo alone: any transfer whose memo started with an offer id marked that offer
  * settled, whatever it moved and to whom. A one-atom transfer closed a
- * hundred-atom sale, and no payment had to exist at all (AUD-11).
+ * hundred-atom sale, and no payment had to exist at all.
  *
  * A settlement is a join across both legs, and every field of both has to agree:
  *

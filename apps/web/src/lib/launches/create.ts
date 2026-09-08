@@ -162,7 +162,7 @@ export function slugFor(symbol: string): string {
  *
  * The id used to be the lowercase symbol, which meant two creators could
  * commit to entirely different terms — different emission, different ticket
- * price, different creator — and land on the same id (AUD-08). That id is the
+ * price, different creator — and land on the same id. That id is the
  * namespace for the ledger, the reserve address, ticket memos and discovery, so
  * the second launch would not merely be confusing: it would inherit the first
  * one's chain. Deriving it from the commitment makes the identity immutable and

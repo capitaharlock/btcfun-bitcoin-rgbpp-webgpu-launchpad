@@ -98,7 +98,7 @@ describe("terminal offset", () => {
   });
 });
 
-/* AUD-13: the doc comment declared floor(M × (1 − p)) while the code computed
+/* The doc comment declared floor(M × (1 − p)) while the code computed
  * M − floor(M × p), which rounds the other way. A second implementation built
  * from the specification would have disagreed with this one. */
 describe("A(n) is the function the specification states", () => {

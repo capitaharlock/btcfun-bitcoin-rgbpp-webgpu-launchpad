@@ -161,7 +161,7 @@ function decodeClaim(raw: Raw, index?: number): ClaimRecord {
     throw fault("Record", "has a malformed nonce", index);
   }
   // A nonce is a 64-bit field. Outside that range it has no single canonical
-  // decimal form, so two records could prove the same work (AUD-14).
+  // decimal form, so two records could prove the same work.
   if (BigInt(raw.nonce) >= NONCE_LIMIT) {
     throw fault("Record", "has a nonce outside the 64-bit field", index);
   }

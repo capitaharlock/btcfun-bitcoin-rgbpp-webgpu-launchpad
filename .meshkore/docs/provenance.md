@@ -10,10 +10,10 @@ related: [validate-architecture]
 
 # Provenance
 
-The audit of 23 September 2026 found that a reader could mistake the original
-bonding-curve specification for a description of the current design, because
-nothing in it says it was superseded (`AUD-02`). This file fixes the entry
-point: what each document is, whether it is current, and what to read instead.
+A reader can mistake the original bonding-curve specification for a description
+of the current design, because nothing in it says it was superseded. This file
+fixes the entry point: what each document is, whether it is current, and what to
+read instead.
 
 ## Canonical, in reading order
 
@@ -29,13 +29,14 @@ point: what each document is, whether it is current, and what to read instead.
 
 ## Superseded
 
-**`tmp/bitcoin-rgbpp-bonding-curve-project.md`** — the original project
-specification. Untracked: it is the operator's copy of the brief the project
-started from, kept for traceability, not as a design document.
+**The original bonding-curve specification.** The brief this project started
+from is kept outside the repository, because it describes a product this one
+deliberately is not, and a reader finding it beside the current documents would
+reasonably take the two for one design.
 
-It describes a pump.fun-shaped product on RGB++/CKB: a bonding curve as both
+It described a pump.fun-shaped product on RGB++/CKB: a bonding curve as both
 primary issuance and price discovery, graduating into a liquidity venue. The
-September 23 review discarded that loop. The reasoning is in
+September 23 design review discarded that loop. The reasoning is in
 `idea-evolution.md` §1 and §3: pump.fun works because Solana is fast and cheap,
 so on Bitcoin, where a transaction must be worth its cost and its wait, copying
 real-time trading copies the one thing the chain cannot support.
@@ -44,9 +45,6 @@ What survived from it: the RGB++/CKB substrate, the UTXO-model framing, the
 permissionless launch, and the marketplace as an eventual destination. What did
 not: bonding-curve issuance, continuous price discovery, and automatic
 graduation — the last deferred rather than rejected.
-
-The file now carries a banner saying so. Treat any passage in it as history
-unless `PROTOCOL.md` repeats it.
 
 ## A note on the snapshots
 

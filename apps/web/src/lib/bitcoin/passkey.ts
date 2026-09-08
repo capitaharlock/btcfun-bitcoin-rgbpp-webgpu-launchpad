@@ -16,7 +16,7 @@
  * free to have copied them and strings cannot be cleared at all. A wallet that
  * signs inside the authenticator, or an external wallet, is a different and
  * stronger design; PROTOCOL.md's real-fund gate is the place that decides
- * whether this one is good enough (AUD-15).
+ * whether this one is good enough.
  *
  * Two rules the implementation depends on:
  *
@@ -58,7 +58,7 @@ export interface PrfResult {
  * single-label public suffixes. On `btcfun.workers.dev`, the deployment target,
  * it produced `workers.dev`: a public suffix, which every authenticator
  * rejects, so nobody could have enrolled at all. It was equally wrong for
- * `example.co.uk` (AUD-15).
+ * `example.co.uk`.
  *
  * Getting this right in general needs the Public Suffix List, which is not
  * worth shipping to decide one string. So the apex case is *configured* rather

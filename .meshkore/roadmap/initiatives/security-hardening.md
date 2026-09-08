@@ -33,7 +33,7 @@ Gate order and shared evidence: [roadmap](../../docs/roadmap.md).
 
 ## Task plan
 
-- [`SH1` — Early threat model and independent review scope](../../modules/security/tasks/SH1-threat-model-and-contract-audit-scoping.md)
+- [`SH1` — Early threat model and independent review scope](../../modules/security/tasks/SH1-threat-model-and-independent-review-scope.md)
 - [`SH2` — Economic attack model and simulation scenarios](../../modules/security/tasks/SH2-emission-and-epoch-economics-attacks.md)
 - [`SH3` — PoW, admission and concentration attack analysis](../../modules/security/tasks/SH3-pow-specific-attacks.md)
 - [`SH4` — Adversarial reorg and recovery regression suite](../../modules/security/tasks/SH4-reorg-tests-and-indexer-reconciliation.md)
@@ -41,8 +41,7 @@ Gate order and shared evidence: [roadmap](../../docs/roadmap.md).
 - [`SH6` — Independent protocol review and remediation](../../modules/security/tasks/SH6-independent-protocol-review-and-remediation.md)
 - [`SH7` — Commercial readiness and real-fund launch decision](../../modules/security/tasks/SH7-commercial-readiness-and-real-fund-launch-decision.md)
 
-`SH8` lives in this module but belongs to the `testnet-spike` initiative: it
-remediates the first external audit of the prototype, which is spike work, not
-the production gate. Its findings on custody feed `SH7`, and its reproduction
-harness is a starting point for `SH1`–`SH3`. See
-[audit-2026-09-23.md](../../docs/audit-2026-09-23.md).
+`SH8` lives in this module but belongs to the `testnet-spike` initiative: it is
+the prototype's architecture and correctness pass, which is spike work, not the
+production gate. What it found about custody feeds `SH7`, and its method is a
+starting point for `SH1`–`SH3`.

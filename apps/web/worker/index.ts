@@ -18,7 +18,7 @@
  * no ledger to replay against and no Bitcoin node to confirm with. It therefore
  * returns no verdict of its own — no `verified` flag — and its rows must never
  * be totalled into a supply or a volume. `src/lib/activity/types.ts` states the
- * same boundary for the client (AUD-06).
+ * same boundary for the client.
  *
  * WHY THIS SHAPE COSTS NOTHING. One Worker serves both the SPA assets and the
  * API, so there is no second origin and no CORS. D1 is SQLite that scales to

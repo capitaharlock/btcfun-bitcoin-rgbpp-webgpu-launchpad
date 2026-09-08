@@ -26,11 +26,11 @@ Define cumulative integer-atom issuance and epoch differences, including the exe
 
 ## Evidence so far
 
-Partial, from the audit remediation (`SH8`), not enough to close this task.
+Partial, from the review pass in `SH8`, not enough to close this task.
 
 - Rounding direction is now normative in `PROTOCOL.md` §4.1: the subtraction
   rounds down, so `A(n) = M − ceil(M × p)`. The prototype had implemented the
-  opposite and declared this one (`AUD-13`).
+  opposite while declaring this one.
 - An independent reference exists and is not another implementation of the same
   approximation: `emission.test.ts` derives `A(n)` from the exact integer
   criterion `(r−1)^H × 2^n < M^H ≤ r^H × 2^n`, checked over every offset of a

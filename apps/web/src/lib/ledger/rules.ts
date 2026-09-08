@@ -138,8 +138,8 @@ interface Accumulator {
  * the record itself. Nothing here talks to Bitcoin, so a chain can be perfectly
  * self-consistent while naming a payment that was never made, a block that does
  * not exist, or an epoch the launch had not yet reached. `LaunchRules` has no
- * opening height, so replay cannot even bound which epochs are plausible
- * (AUD-05). That is deliberate for a stored chain — it must stay valid as the
+ * opening height, so replay cannot even bound which epochs are plausible.
+ * That is deliberate for a stored chain — it must stay valid as the
  * tip advances — and it is also the reason this layer is not settlement: PoW
  * here proves effort, not admission. Closing it means SPV evidence or a
  * consensus layer, which is what PROTOCOL.md §2 withdrew and task V3 owns. The
@@ -268,8 +268,8 @@ function applyClaim(
   // A claim that mints nothing still adds its ticket to the reserve, which
   // raises the backing per token for everyone else at the claimant's expense.
   // `signClaim` has always refused to author one; the verifier used to accept
-  // it, so author and validator disagreed about what a valid chain is
-  // (AUD-10). Until admission and epoch closing are specified — E1–E5 — the
+  // it, so author and validator disagreed about what a valid chain is.
+  // Until admission and epoch closing are specified — E1–E5 — the
   // rule is that an exhausted epoch admits nothing, on both sides.
   if (expected.amount === 0n) {
     throw new LedgerError(

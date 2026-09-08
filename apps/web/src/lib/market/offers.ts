@@ -124,7 +124,7 @@ export interface ViewContext {
   /**
    * Completed sales, by offer id — payment and delivery both checked against
    * the offer. A set of ids would not be enough: "settled" is a claim about
-   * evidence, so the evidence travels with it (AUD-11).
+   * evidence, so the evidence travels with it.
    */
   settled: ReadonlyMap<string, Settlement>;
 }
