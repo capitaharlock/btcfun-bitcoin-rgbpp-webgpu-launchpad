@@ -46,8 +46,17 @@ function Disconnected() {
 
   const restore = async () => {
     setRestoreError(null);
+    const clean = secret.trim().toLowerCase();
+    // Checked here rather than left to the decoder, whose message names an
+    // internal function — accurate for a developer, meaningless to anyone else.
+    if (!/^[0-9a-f]{64}$/.test(clean)) {
+      setRestoreError(
+        "A demo key secret is 64 hexadecimal characters: digits 0–9 and letters a–f.",
+      );
+      return;
+    }
     try {
-      await wallet.restoreLocal(hexToBytes(secret.trim()));
+      await wallet.restoreLocal(hexToBytes(clean));
     } catch (err) {
       setRestoreError(err instanceof Error ? err.message : String(err));
     }

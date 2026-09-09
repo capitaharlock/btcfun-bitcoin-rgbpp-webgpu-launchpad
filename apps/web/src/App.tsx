@@ -38,6 +38,19 @@ function parse(hash: string): Route {
   return { name: "launches" };
 }
 
+/**
+ * The four things you can do, in the order you would do them.
+ *
+ * Real links rather than buttons: a section is a place, so it has to open in a
+ * new tab, be copied, bookmarked and middle-clicked like any other place.
+ */
+const SECTIONS = [
+  { tab: "launches", path: "/", label: "Launches" },
+  { tab: "create", path: "/create", label: "Create" },
+  { tab: "market", path: "/market", label: "Market" },
+  { tab: "activity", path: "/activity", label: "Activity" },
+] as const;
+
 export function navigate(to: string): void {
   window.location.hash = to;
 }
@@ -91,18 +104,15 @@ function Shell() {
 
         {/* Four things you can do, on the left. What you own, on the right. */}
         <nav className="nav">
-          <button aria-current={tab === "launches" ? "page" : undefined} onClick={() => navigate("/")}>
-            Launches
-          </button>
-          <button aria-current={tab === "create" ? "page" : undefined} onClick={() => navigate("/create")}>
-            Create
-          </button>
-          <button aria-current={tab === "market" ? "page" : undefined} onClick={() => navigate("/market")}>
-            Market
-          </button>
-          <button aria-current={tab === "activity" ? "page" : undefined} onClick={() => navigate("/activity")}>
-            Activity
-          </button>
+          {SECTIONS.map((section) => (
+            <a
+              key={section.tab}
+              href={`#${section.path}`}
+              aria-current={tab === section.tab ? "page" : undefined}
+            >
+              {section.label}
+            </a>
+          ))}
         </nav>
 
         <div className="topbar-right rail">

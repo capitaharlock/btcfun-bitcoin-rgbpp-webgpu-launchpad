@@ -171,6 +171,9 @@
 
 .tabs {
   display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: 4px;
   padding: 4px;
   border-radius: 999px;
@@ -179,6 +182,8 @@
 }
 
 .tabs button {
+  flex: none;
+  white-space: nowrap;
   appearance: none;
   border: 0;
   background: transparent;

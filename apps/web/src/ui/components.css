@@ -41,10 +41,10 @@
 .brand em { color: var(--ink-faint); font-style: normal; font-weight: 400; }
 
 .nav { display: flex; gap: 3px; margin-left: 8px; }
-.nav button {
+.nav a {
   position: relative;
-  appearance: none;
-  border: 0;
+  display: inline-block;
+  text-decoration: none;
   background: transparent;
   color: var(--ink-dim);
   font: inherit;
@@ -55,15 +55,15 @@
   cursor: pointer;
   transition: color 0.15s var(--ease), background 0.15s var(--ease);
 }
-.nav button:hover { color: var(--ink); background: var(--surface-2); }
-.nav button[aria-current="page"] {
+.nav a:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
+.nav a[aria-current="page"] {
   color: var(--ink);
   background: var(--surface-2);
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 /* Gradient underline on the active tab — the one place the heat gradient
    appears in chrome, so the eye can find "where am I" without reading. */
-.nav button[aria-current="page"]::after {
+.nav a[aria-current="page"]::after {
   content: "";
   position: absolute;
   left: 13px;
@@ -395,9 +395,12 @@ input[type="range"] {
 
 .rule { height: 1px; background: var(--line); margin: 14px 0; }
 
-.stack-sm { display: grid; gap: 8px; }
-.stack-md { display: grid; gap: 14px; }
-.stack-lg { display: grid; gap: 22px; }
+/* One column that may shrink below its content: an implicit `auto` column is
+   sized to the widest child, so a single long row widened the whole stack. */
+.stack-sm, .stack-md, .stack-lg { display: grid; grid-template-columns: minmax(0, 1fr); }
+.stack-sm { gap: 8px; }
+.stack-md { gap: 14px; }
+.stack-lg { gap: 22px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .row.wrapped { flex-wrap: wrap; }
 .spacer { flex: 1; }
@@ -406,8 +409,15 @@ input[type="range"] {
    next to the action they modify (mining device, ledger view). Uses buttons
    with aria-pressed rather than radios: there is no form, and the visual is a
    toolbar, so the button role is the honest one. */
+/* Pill groups scroll sideways rather than widen the page: eight launch symbols
+   or five filters are wider than a phone, and a group that forced its own width
+   dragged the whole layout past the viewport. A scroll container's automatic
+   minimum width is zero, which is what lets it shrink inside a flex row. */
 .segmented {
   display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   padding: 2px;
   border-radius: var(--r-sm);
   border: 1px solid var(--line-strong);
@@ -415,6 +425,8 @@ input[type="range"] {
 }
 
 .segmented button {
+  flex: none;
+  white-space: nowrap;
   appearance: none;
   border: 0;
   background: transparent;
