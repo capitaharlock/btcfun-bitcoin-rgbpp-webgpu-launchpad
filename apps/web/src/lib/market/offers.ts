@@ -157,24 +157,6 @@ export function viewOffer(signed: SignedOffer, ctx: ViewContext): OfferView {
   };
 }
 
-/**
- * The OP_RETURN payload that binds a payment to an offer.
- *
- * Without it, a payment of the right size to the right address is only
- * circumstantial: it could be any transfer, and either side could point at
- * someone else's transaction. With it, the payment names the offer it settles.
- */
-export function fillMemo(id: string): Uint8Array {
-  const prefix = new TextEncoder().encode("btcfun:f1:");
-  // Half the digest is 16 bytes, which fits comfortably and is far beyond what
-  // anyone could grind a collision for in the life of an offer.
-  const half = hexToBytes(id.slice(0, 32));
-  const out = new Uint8Array(prefix.length + half.length);
-  out.set(prefix, 0);
-  out.set(half, prefix.length);
-  return out;
-}
-
 /** Validate a fill against the offer it claims to settle. */
 export function checkFill(fill: Fill, signed: SignedOffer): string | null {
   if (fill.offerId !== offerId(signed.offer)) return "This payment settles a different offer.";

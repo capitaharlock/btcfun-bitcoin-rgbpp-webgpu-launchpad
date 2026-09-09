@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { checkFill, faultIn, fillMemo, offerId, signOffer, unitPrice, viewOffer } from "./offers";
+import { checkFill, faultIn, offerId, signOffer, unitPrice, viewOffer } from "./offers";
 import {
   offerIdInMemo,
   settlementFault,
@@ -201,16 +201,6 @@ describe("viewOffer", () => {
 });
 
 describe("fills", () => {
-  it("binds a payment to one offer", async () => {
-    const signed = await makeOffer();
-    const memo = fillMemo(offerId(signed.offer));
-    expect(memo.length).toBeLessThanOrEqual(80);
-    expect(new TextDecoder().decode(memo.slice(0, 10))).toBe("btcfun:f1:");
-    // A different offer produces a different commitment.
-    const other = await makeOffer();
-    expect(fillMemo(offerId(other.offer))).not.toEqual(memo);
-  });
-
   it("accepts a payment that covers the price", async () => {
     const signed = await makeOffer();
     const fill: Fill = {

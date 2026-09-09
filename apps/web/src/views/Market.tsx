@@ -100,13 +100,14 @@ function MarketBody({ launch }: { launch: Launch }) {
   const rules = useLaunchRules(launch);
   const ledger = useLedger(rules);
   const tip = useTip();
+  const wallet = useWallet();
   const market = useMarket({
     launch: launch.id,
     decimals: launch.schedule.decimals,
     tipHeight: tip,
     records: ledger.records,
+    maker: wallet.vault ? { identity: wallet.vault.identity, address: wallet.vault.address } : null,
   });
-  const wallet = useWallet();
   const held = ledger.balanceOf(wallet.vault?.identity);
 
   return (
@@ -183,6 +184,7 @@ function OfferRow({
 
   const { offer } = view.signed;
   const mine = wallet.vault?.identity === offer.maker;
+  const next = nextStep(view.status, mine, wallet.vault?.identity === view.fill?.taker);
 
   /** Taker leg: pay the price, committing to this offer's id. */
   const pay = async () => {
@@ -190,7 +192,11 @@ function OfferRow({
     setBusy(true);
     setError(null);
     try {
-      const { txid } = await wallet.pay(offer.payTo, Number(offer.priceSats), fillMemo(view.id));
+      const { txid } = await wallet.pay(
+        offer.payTo,
+        Number(offer.priceSats),
+        fillMemo(view.id, wallet.vault.identity),
+      );
       market.recordFill({
         offerId: view.id,
         txid,
@@ -273,6 +279,19 @@ function OfferRow({
           </div>
         </td>
       </tr>
+      {(next || error) && (
+        <tr>
+          <td colSpan={6}>
+            <div className="stack-sm" style={{ padding: "4px 0 12px" }}>
+              {/* Outside the details row on purpose: a payment that failed has
+                  to say so where the person just clicked, not behind a toggle. */}
+              {error && <Notice tone="warn">{error}</Notice>}
+              {next && <Notice tone={next.tone}>{next.text}</Notice>}
+              {next?.chain && <Copyable value={ledger.exportChain()} label="your chain, for the buyer" />}
+            </div>
+          </td>
+        </tr>
+      )}
       {shown && (
         <tr>
           <td colSpan={6}>
@@ -313,7 +332,6 @@ function OfferRow({
               <button className="btn ghost" onClick={() => market.remove(view.id)}>
                 Remove from my book
               </button>
-              {error && <Notice tone="warn">{error}</Notice>}
             </div>
           </td>
         </tr>
@@ -499,3 +517,39 @@ function ImportOffer({ market }: { market: UseMarket }) {
   );
 }
 
+
+/**
+ * What the person looking at a paid offer should do next, if anything.
+ *
+ * A sale between two browsers has one hand-over left once the payment is on
+ * chain: the maker's signed chain, back to the buyer. Neither side can be
+ * expected to know that, so each is told at the moment it matters.
+ */
+function nextStep(
+  status: OfferView["status"],
+  mine: boolean,
+  paidByMe: boolean,
+): { tone: "warn" | "cyan"; text: string; chain?: boolean } | null {
+  if (status === "awaiting-transfer" && mine) {
+    return {
+      tone: "warn",
+      text: "The buyer's payment is on chain and names this offer. Sign the transfer to deliver what you sold.",
+    };
+  }
+  if (status === "awaiting-transfer" && paidByMe) {
+    return {
+      tone: "warn",
+      text:
+        "Paid. The seller's page finds your payment on chain by itself. Once they sign the transfer, " +
+        "ask them for their chain and paste it under Holdings → Receive tokens.",
+    };
+  }
+  if (status === "settled" && mine) {
+    return {
+      tone: "cyan",
+      text: "Delivered. Send the buyer this chain — they paste it under Holdings → Receive tokens.",
+      chain: true,
+    };
+  }
+  return null;
+}

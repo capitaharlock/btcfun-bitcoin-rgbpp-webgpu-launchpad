@@ -32,9 +32,13 @@ export {
   getBlockHash,
   getFeeRate,
   getTipHeight,
+  getAddressTxs,
+  getTx,
   getTxStatus,
   getUtxos,
   type AddressBalance,
+  type ChainOutput,
+  type ChainTx,
   type TxStatus,
   type Utxo,
 } from "./provider";

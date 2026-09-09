@@ -159,3 +159,62 @@ export async function getTxStatus(txid: string, network: NetworkConfig = ACTIVE)
     time: typeof status.block_time === "number" ? status.block_time : undefined,
   };
 }
+
+/** One output of a transaction, as the chain recorded it. */
+export interface ChainOutput {
+  /** The address it pays, or null for a script with no address form (OP_RETURN). */
+  address: string | null;
+  /** scriptPubKey, hex. */
+  script: string;
+  value: number;
+}
+
+/** A transaction as the market needs it: who was paid what, and whether it stuck. */
+export interface ChainTx {
+  txid: string;
+  confirmed: boolean;
+  outputs: ChainOutput[];
+}
+
+function toChainTx(raw: unknown): ChainTx {
+  const tx = raw as Record<string, unknown>;
+  const status = (tx.status ?? {}) as Record<string, unknown>;
+  if (typeof tx.txid !== "string" || !/^[0-9a-f]{64}$/.test(tx.txid) || !Array.isArray(tx.vout)) {
+    throw new ProviderError("Malformed transaction in provider response");
+  }
+  return {
+    txid: tx.txid,
+    confirmed: status.confirmed === true,
+    outputs: tx.vout.map((o) => {
+      const out = o as Record<string, unknown>;
+      const value = Number(out.value);
+      if (typeof out.scriptpubkey !== "string" || !Number.isFinite(value)) {
+        throw new ProviderError("Malformed output in provider response");
+      }
+      return {
+        address: typeof out.scriptpubkey_address === "string" ? out.scriptpubkey_address : null,
+        script: out.scriptpubkey,
+        value,
+      };
+    }),
+  };
+}
+
+export async function getTx(txid: string, network: NetworkConfig = ACTIVE): Promise<ChainTx> {
+  const response = await request(`/tx/${txid}`, network);
+  return toChainTx(await response.json());
+}
+
+/**
+ * Recent transactions touching an address, newest first — mempool included.
+ *
+ * The provider returns a bounded page (fifty on mempool.space). That is enough
+ * for a seller watching for payments to open offers; a busier address would
+ * need pagination, which is deliberately not pretended here.
+ */
+export async function getAddressTxs(address: string, network: NetworkConfig = ACTIVE): Promise<ChainTx[]> {
+  const response = await request(`/address/${address}/txs`, network);
+  const body = (await response.json()) as unknown;
+  if (!Array.isArray(body)) throw new ProviderError("Malformed address history in provider response");
+  return body.map(toChainTx);
+}
