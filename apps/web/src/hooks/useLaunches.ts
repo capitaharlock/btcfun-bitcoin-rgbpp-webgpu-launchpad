@@ -42,28 +42,46 @@ export function useLaunchRules(launch: Launch): LaunchRules {
   return useMemo(() => rulesFor(launch, NETWORK.id), [launch]);
 }
 
+/** First retry for a block hash the provider has not indexed yet, doubling to the cap. */
+const HASH_RETRY_MS = 3_000;
+const HASH_RETRY_CAP_MS = 30_000;
+
 /**
  * Hash of the Bitcoin block that opened a launch's current epoch.
  *
  * Every claim binds to it (PROTOCOL.md §4.2), which is what ties an epoch's
  * work to a point on the chain rather than to a timestamp this page chose.
  * Null until the provider answers; a claim cannot be signed before then.
+ *
+ * Retried until it arrives. The moment an epoch opens is exactly when its
+ * block is newest, and a provider commonly reports the new tip a few seconds
+ * before it can serve that block by height. Asking once and giving up left a
+ * buyer who had just paid for a ticket unable to mine for the whole epoch.
  */
 export function useEpochBlockHash(launch: Launch | undefined): string | null {
   const [hash, setHash] = useState<string | null>(null);
   const height = launch ? launch.h0 + launch.epoch * launch.epochBlocks : null;
 
   useEffect(() => {
+    setHash(null);
     if (height === null) return;
     let live = true;
-    getBlockHash(height).then(
-      (value) => live && setHash(value),
-      // A missing block hash disables claiming and says so; it is not fatal to
-      // the page, and the next epoch will ask for a different height anyway.
-      () => live && setHash(null),
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const attempt = (delay: number) => {
+      getBlockHash(height).then(
+        (value) => live && setHash(value),
+        () => {
+          if (!live) return;
+          timer = setTimeout(() => attempt(Math.min(delay * 2, HASH_RETRY_CAP_MS)), delay);
+        },
+      );
+    };
+    attempt(HASH_RETRY_MS);
+
     return () => {
       live = false;
+      clearTimeout(timer);
     };
   }, [height]);
 
