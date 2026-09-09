@@ -15,7 +15,7 @@
  * cannot mine their own launch before anyone else has heard of it (§5).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { navigate } from "../App";
 import { useTip } from "../hooks/useLaunches";
@@ -69,10 +69,58 @@ const OWNED: Record<StepIndex, Array<keyof LaunchDraft>> = {
   3: [],
 };
 
+/**
+ * Where an unfinished draft waits.
+ *
+ * Step four sends a walletless visitor to the wallet page, and a wizard that
+ * forgets everything they typed the moment they follow its own advice is a
+ * wizard nobody finishes. Session storage rather than local: a draft belongs
+ * to this tab's attempt, not to the browser forever.
+ */
+const DRAFT_KEY = "btcfun:create-draft:v1";
+
+interface SavedDraft {
+  step: StepIndex;
+  draft: LaunchDraft;
+}
+
+function loadDraft(): SavedDraft {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return { step: 0, draft: INITIAL };
+    const saved = JSON.parse(raw) as Partial<SavedDraft>;
+    return {
+      step: ([0, 1, 2, 3] as const).includes(saved.step as StepIndex) ? (saved.step as StepIndex) : 0,
+      // Spread over the defaults so a draft saved by an older build that
+      // lacks a field still yields a complete one.
+      draft: { ...INITIAL, ...(saved.draft ?? {}) },
+    };
+  } catch {
+    return { step: 0, draft: INITIAL };
+  }
+}
+
+export function forgetDraft(): void {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Storage unavailable: there was nothing to forget.
+  }
+}
+
 export function Create() {
-  const [step, setStep] = useState<StepIndex>(0);
-  const [draft, setDraft] = useState<LaunchDraft>(INITIAL);
+  const [initial] = useState(loadDraft);
+  const [step, setStep] = useState<StepIndex>(initial.step);
+  const [draft, setDraft] = useState<LaunchDraft>(initial.draft);
   const faults = useMemo(() => validate(draft), [draft]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ step, draft } satisfies SavedDraft));
+    } catch {
+      // Private mode or full storage: the wizard still works, it just forgets.
+    }
+  }, [step, draft]);
 
   const set = <K extends keyof LaunchDraft>(key: K, value: LaunchDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -396,6 +444,7 @@ function Commit({ draft }: { draft: LaunchDraft }) {
     try {
       const commitment = await createLaunch(wallet.vault, draft, tip);
       registry.refresh();
+      forgetDraft();
       setCreated(commitment.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
