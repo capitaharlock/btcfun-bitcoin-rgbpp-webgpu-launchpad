@@ -113,7 +113,23 @@ function MarketBody({ launch }: { launch: Launch }) {
   return (
     <div className="stack-lg">
       <section className="split">
-        <Panel flush eyebrow="book" title={`${launch.symbol} offers`}>
+        <Panel
+          flush
+          eyebrow="book"
+          title={`${launch.symbol} offers`}
+          aside={
+            market.watching ? (
+              <div className="row" style={{ gap: 8 }}>
+                <Chip tone="cyan" live title="Payments to your address are checked every 30 seconds">
+                  watching for payments
+                </Chip>
+                <button className="btn ghost" onClick={market.checkPayments}>
+                  Check now
+                </button>
+              </div>
+            ) : undefined
+          }
+        >
           {market.offers.length === 0 ? (
             <p className="tiny faint" style={{ padding: 18, margin: 0 }}>
               No offers yet. Sign one on the right, or paste one someone sent

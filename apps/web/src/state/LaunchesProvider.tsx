@@ -38,6 +38,8 @@ const POLL_MS = 45_000;
 interface LaunchesContextValue {
   /** Current Bitcoin height, or the placeholder until the provider answers. */
   tip: number;
+  /** False until the provider has answered once — until then `tip` is a stand-in. */
+  synced: boolean;
   /** Specs beyond the fixtures: created here, or seen through the index. */
   extra: LaunchSpec[];
   /** Re-read local creations and re-poll the index. */
@@ -86,13 +88,14 @@ export function LaunchesProvider({ children }: { children: ReactNode }) {
   const value = useMemo<LaunchesContextValue>(
     () => ({
       tip,
+      synced: tipHeight !== null,
       extra,
       refresh: () => {
         setLocalRevision((r) => r + 1);
         void load();
       },
     }),
-    [tip, extra, load],
+    [tip, tipHeight, extra, load],
   );
 
   return <LaunchesContext.Provider value={value}>{children}</LaunchesContext.Provider>;

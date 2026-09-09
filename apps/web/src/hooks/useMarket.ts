@@ -38,6 +38,10 @@ export interface UseMarket {
   remove: (id: string) => void;
   recordFill: (fill: Fill) => boolean;
   reload: () => void;
+  /** True while this wallet has an offer of its own and its address is watched. */
+  watching: boolean;
+  /** Look for payments now rather than at the next poll. */
+  checkPayments: () => void;
 }
 
 export interface MarketInputs {
@@ -68,6 +72,9 @@ export function useMarket({ launch, decimals, tipHeight, records, maker }: Marke
     [book, makerIdentity, revision], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // Bumped by `checkPayments`; restarting the effect polls at once.
+  const [pollRequest, setPollRequest] = useState(0);
+
   useEffect(() => {
     if (!selling || !makerAddress) {
       setIncoming([]);
@@ -89,7 +96,9 @@ export function useMarket({ launch, decimals, tipHeight, records, maker }: Marke
       live = false;
       clearInterval(timer);
     };
-  }, [selling, makerAddress]);
+  }, [selling, makerAddress, pollRequest]);
+
+  const checkPayments = useCallback(() => setPollRequest((n) => n + 1), []);
 
   const reload = useCallback(() => setRevision((r) => r + 1), []);
 
@@ -132,5 +141,7 @@ export function useMarket({ launch, decimals, tipHeight, records, maker }: Marke
     remove: (id) => attempt(() => book.remove(id)),
     recordFill: (fill) => attempt(() => book.recordFill(fill)),
     reload,
+    watching: selling && !!makerAddress,
+    checkPayments,
   };
 }

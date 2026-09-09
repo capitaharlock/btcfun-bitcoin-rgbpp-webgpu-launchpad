@@ -19,6 +19,11 @@ export function useTip(): number {
   return useLaunchRegistry().tip;
 }
 
+/** Whether the chain tip is real yet, or still the placeholder used for first paint. */
+export function useChainSynced(): boolean {
+  return useLaunchRegistry().synced;
+}
+
 export function useLaunches(): Launch[] {
   const { tip, extra } = useLaunchRegistry();
   return useMemo(() => resolveAll(tip, extra), [tip, extra]);

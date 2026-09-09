@@ -499,3 +499,6 @@ input[type="range"] {
   background: color-mix(in oklab, var(--amber) 14%, transparent);
   color: var(--amber);
 }
+
+/* Figures computed against a placeholder height, before the chain tip arrives. */
+.syncing { opacity: 0.45; transition: opacity 0.3s var(--ease); }

@@ -32,6 +32,12 @@ export interface Ticket {
 export interface UseTicket {
   /** The ticket for this launch, epoch and wallet, if one was bought. */
   ticket: Ticket | null;
+  /**
+   * The most recent ticket this wallet bought for an *earlier* epoch of this
+   * launch. Whether it was used is the ledger's to say; the page uses this to
+   * tell someone their unused ticket lapsed rather than letting it vanish.
+   */
+  previous: Ticket | null;
   /** True while the payment is being built, signed and broadcast. */
   buying: boolean;
   error: string | null;
@@ -74,15 +80,23 @@ export function useTicket(launch: string, epoch: number, ticketSats: number): Us
   const wallet = useWallet();
   const identity = wallet.vault?.identity ?? null;
   const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [previous, setPrevious] = useState<Ticket | null>(null);
   const [buying, setBuying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!identity) {
       setTicket(null);
+      setPrevious(null);
       return;
     }
-    setTicket(readAll()[slot(launch, epoch, identity)] ?? null);
+    const all = readAll();
+    setTicket(all[slot(launch, epoch, identity)] ?? null);
+    setPrevious(
+      Object.values(all)
+        .filter((t) => t.launch === launch && t.identity === identity && t.epoch < epoch)
+        .sort((a, b) => b.epoch - a.epoch)[0] ?? null,
+    );
     setError(null);
   }, [launch, epoch, identity]);
 
@@ -126,5 +140,5 @@ export function useTicket(launch: string, epoch: number, ticketSats: number): Us
     setTicket(null);
   }, [launch, epoch, identity]);
 
-  return { ticket, buying, error, buy, discard };
+  return { ticket, previous, buying, error, buy, discard };
 }

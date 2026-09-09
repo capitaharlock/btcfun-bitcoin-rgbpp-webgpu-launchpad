@@ -58,6 +58,12 @@ export function ClaimPanel({
   const ticket = ticketing.ticket;
   const enough = (balance?.total ?? 0) >= launch.ticketSats + 400; // + room for the fee
   const qualified = !!candidate && candidate.clz >= launch.minClz;
+  // A ticket from an earlier epoch that no claim ever spent: paid for, and now
+  // unusable. Saying so is kinder than letting it disappear from the page.
+  const lapsed =
+    ticketing.previous && ledger.state && !ledger.state.spentTickets.has(ticketing.previous.txid)
+      ? ticketing.previous
+      : null;
   const due = ledger.state ? previewClaim(ledger.ledger, rules, launch.epoch, launch.ticketSats) : 0n;
 
   const claim = async () => {
@@ -111,6 +117,12 @@ export function ClaimPanel({
 
       {vault && !ticket && (
         <div className="stack-sm">
+          {lapsed && (
+            <Notice tone="warn">
+              Your ticket for epoch {lapsed.epoch} lapsed unused when that epoch closed. A ticket
+              admits one claim in the epoch it was bought for, so it can no longer be used.
+            </Notice>
+          )}
           <KV
             rows={[
               ["Ticket price", `${group(launch.ticketSats)} sats`],

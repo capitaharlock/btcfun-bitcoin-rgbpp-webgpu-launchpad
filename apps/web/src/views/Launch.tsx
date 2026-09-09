@@ -20,7 +20,7 @@ import { useMemo } from "react";
 
 import { navigate } from "../App";
 import { PROTOCOL_VERSION, stateTone, type Launch } from "../data/launches";
-import { useEpochBlockHash, useLaunch, useLaunchRules, useTip } from "../hooks/useLaunches";
+import { useChainSynced, useEpochBlockHash, useLaunch, useLaunchRules, useTip } from "../hooks/useLaunches";
 import { useLedger } from "../hooks/useLedger";
 import { useMiningSession } from "../hooks/useMiningSession";
 import { useTicket } from "../hooks/useTicket";
@@ -52,6 +52,7 @@ export function LaunchView({ id }: { id: string }) {
 function LaunchBody({ launch }: { launch: Launch }) {
   const rules = useLaunchRules(launch);
   const tip = useTip();
+  const synced = useChainSynced();
   const wallet = useWallet();
   const ledger = useLedger(rules);
   const epochBlockHash = useEpochBlockHash(launch);
@@ -102,11 +103,19 @@ function LaunchBody({ launch }: { launch: Launch }) {
         <button className="btn ghost" onClick={() => navigate("/")}>← Launches</button>
         <span className="spacer" />
         <Chip tone={stateTone(launch.state)} live={launch.state === "mining"}>{launch.state}</Chip>
-        <Chip>epoch {launch.epoch}</Chip>
-        <Chip tone="cyan">{blocksLeft} blk · {blocksAsTime(blocksLeft)} to close</Chip>
+        {synced ? (
+          <>
+            <Chip>epoch {launch.epoch}</Chip>
+            <Chip tone="cyan">{blocksLeft} blk · {blocksAsTime(blocksLeft)} to close</Chip>
+          </>
+        ) : (
+          // Until the provider answers, every figure below is computed against a
+          // stand-in height. Say so, and dim them, rather than show them as fact.
+          <Chip live>reading the chain…</Chip>
+        )}
       </div>
 
-      <section className="split">
+      <section className={synced ? "split" : "split syncing"} aria-busy={!synced}>
         <Panel>
           <div className="row" style={{ alignItems: "flex-start", gap: 14 }}>
             <span
