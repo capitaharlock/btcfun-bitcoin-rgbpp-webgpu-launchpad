@@ -1,0 +1,208 @@
+/* A simulated Bitcoin provider, for the deterministic project.
+ *
+ * The app treats block height as its clock: the emission schedule, epochs and
+ * whether a launch is open all derive from the tip the provider reports. So
+ * controlling the provider is how a test moves time — a day is 144 blocks, a
+ * week 1008 — without waiting for a real chain.
+ *
+ * Only the mempool.space endpoints the app actually calls are answered, and
+ * anything else is refused loudly. A simulator that silently passed unknown
+ * requests through would let a test reach the real network by accident.
+ */
+
+import { createHash } from "node:crypto";
+import type { Page, Route } from "@playwright/test";
+import { Address, OutScript, TEST_NETWORK, Transaction } from "@scure/btc-signer";
+
+const hex = {
+  decode: (s: string) => Uint8Array.from(Buffer.from(s, "hex")),
+  encode: (b: Uint8Array) => Buffer.from(b).toString("hex"),
+};
+
+const API = "https://mempool.space/testnet4/api";
+
+export interface SimUtxo {
+  txid: string;
+  vout: number;
+  value: number;
+  confirmed: boolean;
+}
+
+/** A deterministic, well-formed block hash for any height. */
+export function blockHashAt(height: number): string {
+  return createHash("sha256").update(`sim-block-${height}`).digest("hex");
+}
+
+/** The address a script pays, or null for OP_RETURN and other address-less scripts. */
+function addressOf(script: string): string | null {
+  try {
+    return Address(TEST_NETWORK).encode(OutScript.decode(hex.decode(script)));
+  } catch {
+    return null;
+  }
+}
+
+export class ChainSim {
+  tip: number;
+  /** UTXOs per address. Absent means an empty wallet. */
+  readonly utxos = new Map<string, SimUtxo[]>();
+  /** Every transaction the app broadcast, parsed, in order. */
+  readonly broadcasts: Array<{
+    txid: string;
+    hex: string;
+    outputs: Array<{ script: string; amount: bigint; address: string | null }>;
+    confirmed: boolean;
+  }> = [];
+  /** Unhandled provider paths — a test should end with this empty. */
+  readonly unexpected: string[] = [];
+  /** When set, every provider call fails with this status. */
+  outage: number | null = null;
+  /** Heights the provider answers 404 for this many more times — a tip that
+   *  is announced before its block can be fetched by height. */
+  readonly unindexed = new Map<number, number>();
+
+  constructor(tip = 150_000) {
+    this.tip = tip;
+  }
+
+  /** Move the clock forward. 144 blocks is a day; 1008 a week. Mining a
+   *  block also confirms whatever was waiting in the mempool. */
+  advance(blocks: number): number {
+    this.tip += blocks;
+    if (blocks > 0) {
+      for (const list of this.utxos.values()) for (const u of list) u.confirmed = true;
+      for (const tx of this.broadcasts) tx.confirmed = true;
+    }
+    return this.tip;
+  }
+
+  fund(address: string, ...values: number[]): void {
+    const list = this.utxos.get(address) ?? [];
+    for (const value of values) {
+      const txid = createHash("sha256").update(`fund-${address}-${list.length}-${value}`).digest("hex");
+      list.push({ txid, vout: 0, value, confirmed: true });
+    }
+    this.utxos.set(address, list);
+  }
+
+  async install(page: Page): Promise<void> {
+    await page.route(`${API}/**`, (route) => this.answer(route));
+  }
+
+  private async answer(route: Route): Promise<void> {
+    const request = route.request();
+    const path = new URL(request.url()).pathname.replace(/^\/testnet4\/api/, "");
+
+    if (this.outage) {
+      return route.fulfill({ status: this.outage, body: "simulated outage" });
+    }
+
+    if (path === "/blocks/tip/height") return route.fulfill({ body: String(this.tip) });
+
+    const height = /^\/block-height\/(\d+)$/.exec(path);
+    if (height) {
+      const h = Number(height[1]);
+      const pending = this.unindexed.get(h) ?? 0;
+      if (pending > 0) {
+        this.unindexed.set(h, pending - 1);
+        return route.fulfill({ status: 404, body: "Block not found" });
+      }
+      if (h > this.tip) return route.fulfill({ status: 404, body: "Block height out of range" });
+      return route.fulfill({ body: blockHashAt(h) });
+    }
+
+    const utxo = /^\/address\/([a-z0-9]+)\/utxo$/.exec(path);
+    if (utxo) {
+      const list = (this.utxos.get(utxo[1]) ?? []).map((u) => ({
+        txid: u.txid,
+        vout: u.vout,
+        value: u.value,
+        status: { confirmed: u.confirmed, block_height: u.confirmed ? this.tip - 1 : undefined },
+      }));
+      return route.fulfill({ json: list });
+    }
+
+    if (path === "/v1/fees/recommended") {
+      return route.fulfill({
+        json: { fastestFee: 2, halfHourFee: 1, hourFee: 1, economyFee: 1, minimumFee: 1 },
+      });
+    }
+
+    if (path === "/tx" && request.method() === "POST") return this.broadcast(route, request.postData() ?? "");
+
+    const status = /^\/tx\/([0-9a-f]{64})\/status$/.exec(path);
+    if (status) return route.fulfill({ json: { confirmed: true, block_height: this.tip } });
+
+    const tx = /^\/tx\/([0-9a-f]{64})$/.exec(path);
+    if (tx) {
+      const found = this.broadcasts.find((b) => b.txid === tx[1]);
+      return found
+        ? route.fulfill({ json: this.asMempoolTx(found) })
+        : route.fulfill({ status: 404, body: "Transaction not found" });
+    }
+
+    const history = /^\/address\/([a-z0-9]+)\/txs$/.exec(path);
+    if (history) {
+      const touching = this.broadcasts.filter((b) => b.outputs.some((o) => o.address === history[1]));
+      return route.fulfill({ json: [...touching].reverse().map((b) => this.asMempoolTx(b)) });
+    }
+
+    this.unexpected.push(`${request.method()} ${path}`);
+    return route.fulfill({ status: 501, body: `simulator: no handler for ${path}` });
+  }
+
+  /** Accept a transaction the way a node would: parse it, spend its inputs,
+   *  credit outputs to tracked wallets, and answer with the txid it hashes to. */
+  private async broadcast(route: Route, raw: string): Promise<void> {
+    let tx: Transaction;
+    try {
+      tx = Transaction.fromRaw(hex.decode(raw.trim()), { allowUnknownOutputs: true });
+    } catch (err) {
+      return route.fulfill({ status: 400, body: `sendrawtransaction RPC error: ${String(err)}` });
+    }
+
+    const txid = tx.id;
+    const outputs: Array<{ script: string; amount: bigint; address: string | null }> = [];
+    for (let i = 0; i < tx.outputsLength; i++) {
+      const out = tx.getOutput(i);
+      const script = hex.encode(out.script ?? new Uint8Array());
+      outputs.push({ script, amount: out.amount ?? 0n, address: addressOf(script) });
+    }
+    this.broadcasts.push({ txid, hex: raw.trim(), outputs, confirmed: false });
+
+    // Spend the inputs from whichever wallet held them.
+    const spent = new Set<string>();
+    for (let i = 0; i < tx.inputsLength; i++) {
+      const input = tx.getInput(i);
+      if (input.txid) spent.add(`${hex.encode(input.txid)}:${input.index}`);
+    }
+    for (const [address, list] of this.utxos) {
+      this.utxos.set(
+        address,
+        list.filter((u) => !spent.has(`${u.txid}:${u.vout}`)),
+      );
+    }
+
+    // Credit every output that pays an address we track — change, or a
+    // payment to another simulated wallet — as unconfirmed, as a node would.
+    outputs.forEach((out, vout) => {
+      const list = out.address ? this.utxos.get(out.address) : undefined;
+      if (list) list.push({ txid, vout, value: Number(out.amount), confirmed: false });
+    });
+    return route.fulfill({ body: txid });
+  }
+
+  /** A broadcast transaction in the shape mempool.space returns. */
+  private asMempoolTx(b: ChainSim["broadcasts"][number]) {
+    return {
+      txid: b.txid,
+      status: { confirmed: b.confirmed, ...(b.confirmed ? { block_height: this.tip } : {}) },
+      vout: b.outputs.map((o) => ({
+        scriptpubkey: o.script,
+        scriptpubkey_type: o.script.startsWith("6a") ? "op_return" : "v0_p2wpkh",
+        ...(o.address ? { scriptpubkey_address: o.address } : {}),
+        value: Number(o.amount),
+      })),
+    };
+  }
+}

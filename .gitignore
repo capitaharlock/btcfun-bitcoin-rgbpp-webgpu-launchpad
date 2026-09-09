@@ -29,3 +29,8 @@ tmp/
 # End-to-end runner: the test wallet's key and the chains/reports a run writes.
 apps/web/.e2e-wallet.json
 apps/web/.e2e-runs/
+
+# Browser suite output: traces, screenshots, reports.
+apps/web/e2e-output/
+apps/web/test-results/
+apps/web/playwright-report/
