@@ -17,7 +17,9 @@ import type { Launch } from "../data/launches";
 import { useLaunches, useLaunchRules } from "../hooks/useLaunches";
 import { useHoldings } from "../hooks/useHoldings";
 import { useLedger, type UseLedger } from "../hooks/useLedger";
-import { recordId, signTransfer } from "../lib/ledger";
+import { LedgerError, LocalLedger, launchOfExport, recordId, signTransfer } from "../lib/ledger";
+import { rulesFor } from "../data/launches";
+import { NETWORK } from "../state/WalletProvider";
 import { useAnnounce } from "../hooks/useAnnounce";
 import { formatRatio, ratioScaled, redeem } from "../lib/reserve";
 import { useWallet } from "../state/WalletProvider";
@@ -32,7 +34,10 @@ export function Holdings() {
   // Only launches this wallet has a position or a history in. A card per
   // launch made the page a wall of zeros, which is the noise a portfolio
   // exists to remove.
-  const positions = useHoldings(launches, wallet.vault?.identity);
+  // Bumped when a received chain is stored, so positions re-read storage and
+  // an already-open card remounts onto the chain it now holds.
+  const [revision, setRevision] = useState(0);
+  const positions = useHoldings(launches, wallet.vault?.identity, revision);
 
   return (
     <div className="stack-lg">
@@ -77,9 +82,13 @@ export function Holdings() {
       ) : (
         <div className="grid g2">
           {positions.map(({ launch }) => (
-            <LaunchPosition key={launch.id} launch={launch} />
+            <LaunchPosition key={`${launch.id}:${revision}`} launch={launch} />
           ))}
         </div>
+      )}
+
+      {wallet.vault && (
+        <Receive launches={launches} onReceived={() => setRevision((r) => r + 1)} />
       )}
 
       {positions.length > 0 && (
@@ -95,6 +104,76 @@ export function Holdings() {
   );
 }
 
+
+/**
+ * Receiving tokens someone sent you.
+ *
+ * Until settlement exists, a transfer reaches its recipient as the sender's
+ * exported chain. This is the one place a newcomer can paste it: before their
+ * first token they have no position card, and so no other import box. The
+ * launch is read from the chain itself, and the chain is accepted only if it
+ * extends whatever this browser already holds for that launch.
+ */
+function Receive({
+  launches,
+  onReceived,
+}: {
+  launches: readonly Launch[];
+  onReceived: () => void;
+}) {
+  const [json, setJson] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [received, setReceived] = useState<string | null>(null);
+
+  const receive = () => {
+    setError(null);
+    setReceived(null);
+    try {
+      const id = launchOfExport(json);
+      const launch = launches.find((l) => l.id === id);
+      if (!launch) {
+        throw new LedgerError(
+          `That chain is for a launch this browser has not seen ("${id}"). Open the launch first, then paste it again.`,
+        );
+      }
+      new LocalLedger(rulesFor(launch, NETWORK.id)).import(json, "extend");
+      setReceived(launch.symbol);
+      setJson("");
+      onReceived();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <Panel eyebrow="receive" title="Receive tokens">
+      <p style={{ marginTop: 0, maxWidth: "62ch" }}>
+        Someone who sent you tokens can export their chain and hand it to you.
+        Paste it here: every record is replayed and every signature checked
+        before anything is kept, and nothing you already hold can be overwritten.
+      </p>
+      <div className="field">
+        <label htmlFor="receive-chain">chain you were sent</label>
+        <textarea
+          id="receive-chain"
+          className="input mono"
+          placeholder="paste an exported chain"
+          value={json}
+          onChange={(e) => setJson(e.target.value)}
+        />
+      </div>
+      <button className="btn primary" disabled={!json.trim()} onClick={receive}>
+        Verify and receive
+      </button>
+      {received && (
+        <Notice tone="cyan">
+          Verified. Your {received} position is below.
+        </Notice>
+      )}
+      {error && <Notice tone="warn">{error}</Notice>}
+    </Panel>
+  );
+}
 
 function LaunchPosition({ launch }: { launch: Launch }) {
   const rules = useLaunchRules(launch);
@@ -160,7 +239,7 @@ function LaunchPosition({ launch }: { launch: Launch }) {
       <div style={{ marginTop: 12 }}>
         {tab === "send" && <SendForm launch={launch} ledger={ledger} held={held} />}
         {tab === "records" && <Records ledger={ledger} launch={launch} />}
-        {tab === "backup" && <Backup ledger={ledger} />}
+        {tab === "backup" && <Backup ledger={ledger} launch={launch} />}
       </div>
 
       {held > 0n && state && state.supply > 0n && (
@@ -310,9 +389,13 @@ function Records({ ledger, launch }: { ledger: UseLedger; launch: Launch }) {
   );
 }
 
-function Backup({ ledger }: { ledger: UseLedger }) {
+function Backup({ ledger, launch }: { ledger: UseLedger; launch: Launch }) {
   const [json, setJson] = useState("");
   const [shown, setShown] = useState(false);
+  // Resetting deletes the only copy of these records this browser has, so it
+  // takes two deliberate clicks and says exactly what will be lost.
+  const [confirming, setConfirming] = useState(false);
+  const importId = `import-${launch.id}`;
 
   return (
     <div className="stack-sm">
@@ -320,16 +403,39 @@ function Backup({ ledger }: { ledger: UseLedger }) {
         <button className="btn" onClick={() => setShown((s) => !s)}>
           {shown ? "Hide export" : "Export this chain"}
         </button>
-        <button className="btn ghost" onClick={ledger.clear}>
-          Reset chain
-        </button>
+        {!confirming && (
+          <button className="btn ghost" onClick={() => setConfirming(true)}>
+            Reset chain
+          </button>
+        )}
       </div>
+      {confirming && (
+        <Notice tone="warn">
+          This deletes {ledger.records.length} record{ledger.records.length === 1 ? "" : "s"} from
+          this browser, and with them the balance they prove. Export the chain first
+          if you might want it back.
+          <div className="row" style={{ gap: 8, marginTop: 10 }}>
+            <button
+              className="btn"
+              onClick={() => {
+                ledger.clear();
+                setConfirming(false);
+              }}
+            >
+              Delete {ledger.records.length} record{ledger.records.length === 1 ? "" : "s"}
+            </button>
+            <button className="btn ghost" onClick={() => setConfirming(false)}>
+              Keep them
+            </button>
+          </div>
+        </Notice>
+      )}
       {shown && <Copyable value={ledger.exportChain()} label="ledger chain" />}
 
       <div className="field">
-        <label htmlFor="import">import a chain</label>
+        <label htmlFor={importId}>import a chain</label>
         <textarea
-          id="import"
+          id={importId}
           className="input mono"
           placeholder="paste an exported chain"
           value={json}

@@ -31,7 +31,12 @@ export interface Position {
  * for. A chain that fails to replay is *kept*, with its fault, because silently
  * dropping it would hide the one case the owner most needs to see.
  */
-export function useHoldings(launches: readonly Launch[], identity: string | undefined): Position[] {
+export function useHoldings(
+  launches: readonly Launch[],
+  identity: string | undefined,
+  /** Bump after writing a chain, so the sweep re-reads storage. */
+  revision = 0,
+): Position[] {
   return useMemo(() => {
     if (!identity) return [];
 
@@ -66,7 +71,8 @@ export function useHoldings(launches: readonly Launch[], identity: string | unde
       if (!a.state !== !b.state) return a.state ? 1 : -1;
       return a.held === b.held ? 0 : a.held > b.held ? -1 : 1;
     });
-  }, [launches, identity]);
+    // `revision` is the invalidation signal for the storage-backed sweep.
+  }, [launches, identity, revision]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Did this identity ever author or receive anything on that chain? */

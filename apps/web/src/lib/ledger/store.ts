@@ -17,7 +17,7 @@
  * load until the raw bytes have been handed back for rescue.
  */
 
-import { headOf } from "./codec";
+import { headOf, recordId } from "./codec";
 import { decodeChain } from "./decode";
 import { replay, type LaunchRules } from "./rules";
 import { LedgerError, type Ledger, type LedgerState, type SignedRecord } from "./types";
@@ -132,28 +132,67 @@ export class LocalLedger implements Ledger {
   }
 
   /**
-   * Replace this chain with an imported one, if it validates.
+   * Store an imported chain, if it validates.
    *
-   * Whole-chain replacement rather than a merge: merging two signed histories
-   * needs a rule for which one wins, and that rule is consensus — the thing
-   * this layer explicitly does not have. The UI says as much.
+   * Never a merge: merging two signed histories needs a rule for which one
+   * wins, and that rule is consensus — the thing this layer explicitly does not
+   * have. `replace` is for restoring your own backup; `extend` is for receiving
+   * from someone else, and accepts only a chain that contains yours.
    */
-  import(json: string): LedgerState {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(json);
-    } catch {
-      throw new LedgerError("That is not valid JSON.");
-    }
-    const payload = parsed as { launch?: unknown; records?: unknown };
-    if (payload.launch !== this.launch) {
-      throw new LedgerError(`That chain belongs to launch "${String(payload.launch)}".`);
-    }
-    const records = decodeChain(payload.records);
+  import(json: string, policy: ImportPolicy = "replace"): LedgerState {
+    const records = decodeChain(parseExport(json, this.launch).records);
     const state = replay(records, this.rules);
+
+    if (policy === "extend") {
+      // Receiving is not restoring. Someone handing you a chain can only add to
+      // what you hold; a chain that diverges from yours would silently discard
+      // your own records, and choosing between two signed histories is
+      // consensus — which this layer does not have.
+      const mine = this.records();
+      const theirs = records.map((r) => recordId(r.body));
+      const diverges = mine.some((r, i) => theirs[i] !== recordId(r.body));
+      if (diverges || records.length < mine.length) {
+        throw new LedgerError(
+          `That chain does not extend the one this browser holds for "${this.launch}" — ` +
+            `accepting it would discard ${mine.length} of your records. Ask the sender ` +
+            `for a chain that includes them.`,
+        );
+      }
+    }
+
     localStorage.setItem(keyFor(this.launch), JSON.stringify(records));
     return state;
   }
+}
+
+/**
+ * How an import treats the chain already stored.
+ *
+ *   replace  restore from your own backup: the file is the truth
+ *   extend   receive from someone else: only additions to what you hold
+ */
+export type ImportPolicy = "replace" | "extend";
+
+/** The launch an exported chain says it belongs to, without trusting the rest. */
+export function launchOfExport(json: string): string {
+  return parseExport(json).launch;
+}
+
+function parseExport(json: string, expected?: string): { launch: string; records: unknown } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new LedgerError("That is not valid JSON.");
+  }
+  const payload = parsed as { launch?: unknown; records?: unknown };
+  if (typeof payload?.launch !== "string" || !Array.isArray(payload.records)) {
+    throw new LedgerError("That is not an exported chain — it needs a launch and its records.");
+  }
+  if (expected !== undefined && payload.launch !== expected) {
+    throw new LedgerError(`That chain belongs to launch "${payload.launch}".`);
+  }
+  return { launch: payload.launch, records: payload.records };
 }
 
 function describe(err: unknown): string {

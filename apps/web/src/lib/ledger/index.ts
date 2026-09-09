@@ -12,7 +12,7 @@ export {
 } from "./rules";
 export { decodeChain, decodeRecord } from "./decode";
 export { previewClaim, signClaim, signTransfer, type ClaimDraft, type TransferDraft } from "./author";
-export { CorruptLedger, LocalLedger, type StoredChain } from "./store";
+export { CorruptLedger, LocalLedger, launchOfExport, type ImportPolicy, type StoredChain } from "./store";
 export {
   GENESIS_PREV,
   LedgerError,
