@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["mint-core", "mint", "tests"]
+
+[workspace.dependencies]
+ckb-std = "0.15.1"
+rgbpp-core = { git = "https://github.com/utxostack/rgbpp.git", rev = "4abd216dbd5d25b8f59e843de39643f9b7513f9d" }
+sha2 = { version = "0.10", default-features = false }
+
+# No LTO: with it the linker lays out writes that CKB-VM rejects as
+# MemWriteOnExecutablePage. The size saving is not worth a custom linker script.
+[profile.release]
+overflow-checks = true
+strip = true
+codegen-units = 1

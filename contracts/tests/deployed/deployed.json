@@ -1,0 +1,44 @@
+{
+ "rgbpp_lock": {
+  "out_point": {
+   "tx_hash": "0x0d1567da0979f78b297d5311442669fbd1bd853c8be324c5ab6da41e7a1ed6e5",
+   "index": 0
+  },
+  "type": {
+   "args": "0xa3bc8441df149def76cfe15fec7b1e51d949548bc27fb7a75e9d4b3ef1c12c7f",
+   "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+   "hash_type": "type"
+  },
+  "data_hash": "0x7e458568bc12ba00bfb10ec1805a485ee1c14b16f4a6930ce1498e2e36e6374a",
+  "bytes": 141224,
+  "status": "live"
+ },
+ "rgbpp_config": {
+  "out_point": {
+   "tx_hash": "0x0d1567da0979f78b297d5311442669fbd1bd853c8be324c5ab6da41e7a1ed6e5",
+   "index": 1
+  },
+  "type": {
+   "args": "0x8ea65584bb41eb2403b221b47c92b506ca817b9ebd1b0b2ef5d85b4bff2df293",
+   "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+   "hash_type": "type"
+  },
+  "data_hash": "0xb6fe7dda5de3f946ea2f1ba57195912af1412cb701cf0bfcad23dbfe63d9c798",
+  "bytes": 66,
+  "status": "live"
+ },
+ "xudt": {
+  "out_point": {
+   "tx_hash": "0xbf6fb538763efec2a70a6a3dcb7242787087e1030c4e7d86585bc63a9d337f5f",
+   "index": 0
+  },
+  "type": {
+   "args": "0x44ec8b96663e06cc94c8c468a4d46d7d9af69eaf418f6390c9f11bb763dda0ae",
+   "code_hash": "0x00000000000000000000000000000000000000000000000000545950455f4944",
+   "hash_type": "type"
+  },
+  "data_hash": "0x50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95",
+  "bytes": 33696,
+  "status": "live"
+ }
+}

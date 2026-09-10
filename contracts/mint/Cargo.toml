@@ -1,0 +1,11 @@
+[package]
+name = "btcfun-mint"
+version = "0.1.0"
+edition = "2021"
+description = "The btc.fun mint type script: the standard tokenomics of PROTOCOL.md §4 enforced on CKB."
+
+[dependencies]
+ckb-std = { workspace = true }
+rgbpp-core = { workspace = true }
+ckb-bitcoin-spv-verifier = { git = "https://github.com/ckb-cell/ckb-bitcoin-spv.git", rev = "a3c43fd5fb70044ad438f703212b255af5024476", default-features = false, features = ["no-std"] }
+mint-core = { path = "../mint-core" }

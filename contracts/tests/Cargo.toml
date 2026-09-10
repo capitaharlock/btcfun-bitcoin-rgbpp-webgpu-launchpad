@@ -1,0 +1,12 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ckb-testtool = "0.10.2"
+rgbpp-core = { workspace = true, features = ["bitcoin-encoder"] }
+ckb-bitcoin-spv-verifier = { git = "https://github.com/ckb-cell/ckb-bitcoin-spv.git", rev = "a3c43fd5fb70044ad438f703212b255af5024476" }
+mint-core = { path = "../mint-core" }
+serde_json = "1"
