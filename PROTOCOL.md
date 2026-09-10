@@ -1,8 +1,9 @@
 # btc.fun — Protocol Specification
 
-**Status:** revised design, pre-implementation; economics and architecture unproven.**Stack:** Bitcoin, RGB++, Nervos CKB, xUDT, CKB-VM/RISC-V, Rust and TypeScript.
+**Status:** standard tokenomics adopted; on-chain implementation in progress on testnet.
+**Stack:** Bitcoin, RGB++, Nervos CKB, xUDT, CKB-VM/RISC-V, Rust and TypeScript.
 
-Community launches with verifiable mining and transparent reserves.
+Community tokens mined in the browser, issued on CKB and owned on Bitcoin.
 
 Execution order and acceptance gates: [roadmap](.meshkore/docs/roadmap.md).
 Counterexamples and source notes: [review](.meshkore/docs/design-review.md).
@@ -10,42 +11,47 @@ Historical decisions: [evolution](.meshkore/context/idea-evolution.md).
 
 ## 1. Product and objectives
 
-Build a community token launch lifecycle whose issuance, ownership, settlement and
-redemption can be independently checked. Demonstrate deep technical competence
-through executable evidence, while separately testing demand for the product.
+A launchpad where every token follows the same rules. A person buys a ticket on
+Bitcoin, mines against it in the browser, and mints what the result is worth, in
+that moment, into a Bitcoin output they control. The creator chooses the token's
+identity and receives its ticket income; the protocol chooses everything else.
 
-Initial audience: existing Bitcoin/CKB communities. The first demo is one launch,
-one wallet and one reserve asset, not a fundraising platform or marketplace.
+The project also exists to show that a real product can be built on RGB++ and
+CKB with independently checkable issuance, ownership and settlement, using the
+current tooling as its authors intended rather than around it.
 
-Candidate loop: `COMMIT TICKET → MINE → SUBMIT → SETTLE → VERIFY → REDEEM`.
-Admission and challenge timing remain Phase 0/1 decisions. A paid ticket does not
-guarantee a payout above its cost. Proof-of-work here distributes application
-tokens; it does not secure Bitcoin consensus.
+Loop: `TICKET → MINE → MINT → (TRANSFER | SELL) → VERIFY`.
+
+A ticket does not guarantee a result worth its cost. Proof-of-work here
+distributes application tokens; it does not secure Bitcoin consensus.
 
 ## 2. Decision status
 
-Adopted: Bitcoin-block scheduling; a maximum of 21,000,000 whole tokens per launch;
-permanent expiry of unused epoch allowance; script-enforced issuance and reserve
-rules; segregated backing; independent verification; testnet before reviewed
-real-fund deployment. Token decimals are selected and frozen before implementation.
+Adopted (2026-09-24, [standard tokenomics](.meshkore/context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md)):
+one standard for every launch; fixed ticket price; instant per-ticket mint with
+reward `10^8 × clz² / 2^k`; a halving every 1008 Bitcoin blocks counted from the
+launch's opening; no creator-chosen supply or economic parameter; ticket income
+paid to the promoter; tokens are xUDT on CKB bound to Bitcoin UTXOs by RGB++; the
+mint rule is enforced by a CKB script. Testnet before any reviewed real-fund
+deployment.
 
-Candidate: 1008-block half-life, 3024-block headline period (approximately 21 days),
-PoW-weighted epoch allocation, `clz²`, ticket fee split, backing-limited issuance,
-epoch length and precise admission/close rules. Compare parameter variants in
-simulation, then freeze one parameter set for the first demo; no creator-configurable
-menu of economic rules in v1.
+Withdrawn: capital protection; an automatically rising floor; a per-launch hard
+cap with epoch budgets and pari-mutuel allocation; a ticket-funded reserve with
+redemption; supply as a direct measure of demand; farm immunity; address counts
+as unique people; a public queue as sufficient proof of trustless settlement;
+graduation automatically being a leap; perpetual nonzero emission with finite
+arithmetic.
 
-Withdrawn: capital protection; an automatically rising floor; supply as a direct
-measure of demand; farm immunity; address counts as unique people; a public queue
-as sufficient proof of trustless settlement; graduation automatically being a leap;
-perpetual nonzero emission with finite arithmetic.
+Open: platform fee on tickets (v1 has none); Bitcoin network of the first public
+demo (RGB++ testnet services verify testnet3, see §6.2); wallet support beyond
+the app's own.
 
 ## 3. Verifiable trust
 
 The Proof Explorer and a standalone verifier must inspect evidence independently
-of btc.fun's backend: binding/authorization, accepted Bitcoin clock, issuance,
-validated work, admitted-set completeness under the chosen mechanism, allocation
-and reserve reconciliation. State what each proof establishes and its trust roots.
+of btc.fun's backend: the Bitcoin ticket and mint transactions, the RGB++
+commitment, the SPV-proven height, the mining hash and the minted amount. State
+what each proof establishes and its trust roots.
 
 Fetching from a public endpoint is not itself proof of chain canonicality. Distinguish
 local consistency, inclusion, confirmations and chain-selection assumptions. Export
@@ -53,295 +59,241 @@ portable proof bundles and support user-selected endpoints or local nodes. Inval
 incomplete and stale evidence must be distinguishable from a valid proof.
 
 Publish a Build Log from ADRs, including superseded decisions and unresolved
-hypotheses. A reproducible but incomplete queue must not receive a fairness badge.
+hypotheses.
 
-## 4. Economic model — to validate before contract implementation
+## 4. Standard tokenomics
 
-### 4.1 Discrete issuance ceiling
+The same constants apply to every launch. They are protocol constants, compiled
+into the mint script; a launch cannot override them.
 
-Let `M = 21,000,000 × 10^decimals` token atoms, `n = max(0, h − h0)` and
-candidate half-life `H = 1008`. The mathematical reference is:
+| Constant | Value | Meaning |
+|---|---|---|
+| `DECIMALS` | 8 | atoms per whole token = 10^8 |
+| `UNIT` | 10^8 atoms | reward per `clz²` before halving (one whole token) |
+| `HALVING_BLOCKS` | 1008 | Bitcoin blocks between halvings (about one week) |
+| `MIN_CLZ` | 16 | smallest mintable result |
+| `TICKET_SATS` | 5,000 | price of one ticket, paid in the ticket's Bitcoin transaction |
 
-```text
-A(n) = floor(M × (1 − 2^(−n/H)))
-B([a,b)) = A(b) − A(a)       # a,b are offsets from h0
-```
-
-The implementation must specify a deterministic approximation, error bounds,
-monotonicity, rounding and terminal cutoff. `E2` selects that executable definition;
-this real-valued expression is not implementation code. Budgets telescope across
-contiguous epochs; minting cannot exceed the cumulative ceiling. Do not sum the
-old continuous-density formula as if it were a discrete per-block budget.
-
-**Rounding direction is normative, and it is the one written above.** The
-subtraction rounds *down*, so `A(n)` is computed as `M − ceil(M × 2^(−n/H))`,
-not `M − floor(M × 2^(−n/H))`. The two differ by one atom whenever `M × p` is
-not an integer, and the prototype implemented the second while declaring the
-first. A consequence worth stating so no port treats it as a
-bug: at least one atom stays outstanding for as long as the approximation
-distinguishes `p` from zero, so the cumulative ceiling reaches `M` later than
-the other rounding would suggest — with empty epochs long before it. Any
-implementation must reproduce the reference vectors in
-`apps/web/src/lib/emission.test.ts`, which are derived from an exact integer
-criterion rather than from another implementation.
-
-Unused allowance expires permanently. Track scheduled allowance, minted tokens,
-expired allowance, issued-token burns, outstanding redemption liabilities and
-future allowance separately. One occupied epoch does not measure how many people
-participated. State advancement/sweeping requires transactions and an incentive or
-user-driven path; height alone does not execute a script.
-
-### 4.2 Tickets and work
-
-Tickets have a fixed price within a launch in its named reserve asset. Price and
-fee parameters are selected after cost and incentive simulation. The former 85%
-reserve / 10% protocol / 5% creator split is only a benchmark scenario.
-
-Specify payment/admission before challenge disclosure or another validated defense
-against mining many free candidate tickets/UTXOs and paying only for winners.
-Canonical challenges bind protocol version, network, launch, epoch, accepted Bitcoin
-block, ticket, authorized owner/recipient and nonce. Define replay prevention and
-proof ownership; a UTXO reference is not proof of control.
-
-A possible weight is `clz(hash)^2`. The contract evaluates the submitted candidate,
-not the search history. Hardware advantage, ticket splitting, zero weights, late
-entry, selective submission and withholding require adversarial analysis. The search
-runs in WebGPU/WASM; no equal-hardware or farm-resistance claim is assumed.
-
-### 4.3 Allocation and anti-dilution candidate
-
-The original rule allocated all of `B` whenever any miner participated; this can
-reduce backing per token and transfer old reserves to a cheap new entrant.
-
-For an already initialized reserve with `R > 0`, `S > 0`, and eligible new backing
-`ΔR`, investigate:
+### 4.1 Reward
 
 ```text
-m ≤ min(B, floor(ΔR × S / R))
-allocation_i = floor(m × weight_i / total_weight)
+challenge = sha256(ticket_txid ‖ ticket_vout)
+clz       = leading zero bits of sha256d(challenge ‖ nonce)
+k         = floor((h_mint − h0) / HALVING_BLOCKS)
+reward    = floor(UNIT × clz² / 2^k)      atoms, if clz ≥ MIN_CLZ and h_mint ≥ h0
 ```
 
-This cap is necessary to avoid reducing `R/S` for a pure issuance transition;
-it is not a complete economic design or an adopted mint formula. Define initial
-issuance, exhausted reserve/liabilities, actual versus provisional `m`, rounding
-remainders, zero weight, failed submissions, pending deposits and simultaneous
-redemptions. Choose whether remainder atoms expire or use a deterministic
-allocation rule; preserve conservation and resist ticket-splitting incentives.
+The ticket outpoint is the armed miner cell's Bitcoin UTXO (§4.2): the txid in
+internal byte order followed by the output index as little-endian `u32`. Hashing
+it to 32 bytes keeps the preimage at 40 bytes, one SHA-256 block, which is what
+the GPU kernel grinds. `nonce` is 8 bytes, little-endian. `h_mint` is the
+height of the block that confirms the mint transaction, as proven to the RGB++
+lock by the Bitcoin SPV client; the client never supplies it. `h0` is fixed when
+the launch is created.
 
-New backing and new liabilities must enter the reserve atomically under the chosen
-state transition. Holders must not redeem against deposits whose matching issuance
-or refund remains pending. Simulate the whole lifecycle before adopting this rule.
-The Bitcoin schedule remains the ceiling; it is not replaced by supply-driven decay.
+All arithmetic is exact integer arithmetic. `UNIT × clz²` is at most
+`10^8 × 256² < 2^43`, so it fits a `u64`, and the division is a right shift. The
+client computes the same function to show the reward live; the TypeScript and
+Rust implementations pass the same vectors.
 
-### 4.4 Reserve and redemption
+Worked values: a 24-bit hash in the first week mints 576 tokens; the same hash
+in the fourth week mints 72. A 40-bit hash is 2^16 times more work than a 24-bit
+hash and mints 2.8 times as much, so the reward grows with effort but hardware
+advantage stays logarithmic.
 
-`R` is redeemable backing in one declared asset. Exclude pending deposits, protocol
-fees, creator escrow, liquidity contributions and occupied capacity. `S` denotes
-outstanding redemption liabilities, not a loosely defined circulating-supply metric.
-Specify treatment of unsettled/unclaimed allocations, voluntary burns and lost keys.
+### 4.2 Tickets and the challenge
 
-For `0 < q < S`, investigate integer payout `floor(q × R / S)` in reserve atoms;
-rounding leaves bounded dust and does not give exact real-number invariance. Define
-`q = S`, `S = 0`, insufficient output capacity, minimum practical withdrawal and
-who pays fees. Funds needed to maintain live Cells are not freely redeemable backing.
+A miner holds one **miner cell** per launch: a CKB cell whose lock is an RGB++
+lock bound to one of the miner's Bitcoin UTXOs and whose type is the launch's
+mint script. It is `idle` or `armed`.
 
-The candidate invariant is a nondecreasing redemption ratio for authorized issuance
-and redemption in the reserve asset, under explicit rounding rules. This does not
-promise recovery of a ticket's cost, a BTC/fiat value, or a market price floor.
+- **Open.** A CKB-only transaction creates an idle miner cell bound to a UTXO the
+  miner already owns. It needs CKB capacity; whoever provides it (the miner, the
+  promoter or a sponsor) gains no control over it.
+- **Ticket.** A Bitcoin transaction spends the idle cell's UTXO and pays at least
+  `TICKET_SATS` to the promoter's address. Its RGB++ commitment moves the cell to
+  a new output of the same transaction and marks it armed. That output is the
+  challenge: it does not exist before the ticket is paid, so work cannot be
+  precomputed, and it can be spent once, so work cannot be reused.
+- **Mint.** A Bitcoin transaction spends the armed cell's UTXO. Its CKB side
+  carries the nonce, returns the miner cell to idle — or re-arms it, when the same
+  transaction pays the next ticket — and increases the miner's xUDT balance by
+  exactly `reward`. One transaction mints and buys the next ticket.
+- **Close.** Consuming a miner cell without recreating it returns its capacity.
 
-Neither creator nor protocol may repurpose redemption backing, including during
-market activation. Define creator escrow release, expiry and failed-launch handling
-before taking payments. No money is booked twice as backing and revenue.
+A ticket has no expiry. Minting later only yields less, because `k` is read at
+the mint's height, not the ticket's; the interface shows the blocks left before
+the next halving while a person mines.
 
-## 5. Lifecycle and deferred markets
+### 4.3 Supply
 
-First-demo lifecycle:
+There is no maximum supply. Mints are independent and can run in parallel,
+which a shared cap would forbid. Supply is bounded by the halving instead:
 
-```text
-COMMITTED → MINING → CLOSED
-                 └→ DORMANT
-```
+- The reward reaches exactly zero once `2^k > UNIT × clz²`. For every possible
+  hash that is `k = 43`, about 43 weeks after `h0`; for realistic browser hashes
+  (clz ≤ 40) it is `k = 38`.
+- The ticket price is fixed while the reward halves weekly, so the cost of
+  producing one token doubles every week. Mining continues only while people
+  value the result above that cost.
+- Total supply is the sum of every mint. It is published live, per launch, from
+  the chain, together with the tickets sold and the current halving.
 
-For every state define ticket admission, finalization, pending claims, refunds and
-redemption. `E3` chooses timeouts and terminal rules. Dormancy preserves applicable
-exit rights without an operator, subject to documented chain availability, fees and
-capacity constraints. Do not promise residual emission forever. A launch opens only
-after its committed future `h0` and accepted-clock conditions are satisfied.
+A small launch sells few tickets and issues little; a popular one sells more and
+issues more. Because the rules are identical, those numbers are comparable
+between launches.
 
-Automatic `GRADUATING → MARKET_ACTIVE` is deferred. Market liquidity must come
-from separately funded contributions or an explicitly reviewed new mechanism;
-reserve liabilities cannot disappear through graduation. Define the source of the
-token side, pool ownership, withdrawal rights and failure recovery before integration.
-Expired allowance cannot be reclaimed to seed a pool. Address thresholds are not
-Sybil-resistant distribution tests; graduation is not necessarily a cross-chain leap.
+### 4.4 Revenue
 
-### 5.1 Peer-to-peer swaps require settlement, not a better client
+Each ticket pays `TICKET_SATS` to the promoter's Bitcoin address, inside the
+ticket transaction, and the mint script checks that output. The standard issues
+no reserve, promises no floor and offers no redemption: a token is worth what
+someone will pay for it. The interface states this wherever a ticket is bought.
+
+## 5. Tokens after minting
+
+A minted balance is an ordinary RGB++ xUDT: transferable by a Bitcoin
+transaction that spends its UTXO, visible to any wallet that reads RGB++ assets,
+and identified by its xUDT type hash, which is derived from the launch's mint
+script. Anyone can issue another xUDT; nobody can issue this one outside the
+mint rule, because the owner mode that permits minting requires the mint script.
+
+### 5.1 Peer-to-peer sales without a counterparty online
 
 Finding from the `testnet-spike` offer-book experiment, recorded so it is not
-rediscovered. A signed offer establishes who owes what: it binds launch, amount,
-price, payment address and a height-based expiry under the maker's key, and a
-payment carrying the offer's id proves the price was met. None of that makes the
-swap atomic. The taker pays on Bitcoin and the maker authorises the token
-movement separately, so a maker who takes the payment and never authorises keeps
-both. No client-side design closes this, and an escrow or matching service only
-relocates the trust to an operator — the same objection §2 raised against a
-published admission queue.
+rediscovered: a signed offer plus a separate payment is not a swap. The taker
+pays on Bitcoin and the maker authorises the token movement separately, so a
+maker who takes the payment and never authorises keeps both.
 
-The mechanism that does close it is a single-use seal: the offer commits to a
-specific Bitcoin UTXO, the taker's payment spends it, and the transaction that
-moves the satoshis is the one that authorises the token movement. One
-transaction, both legs, no third party. This is a requirement on `V3`, not an
-optional refinement, and any market surface built before it must state which
-party is exposed rather than presenting a swap as complete.
+The standard sale closes this with the single-use seal RGB++ already provides.
+The seller isolates the amount for sale in its own UTXO and signs, with
+`SIGHASH_SINGLE | ANYONECANPAY`, only two things: that UTXO as an input and the
+price paid to the seller as the matching output. The buyer later completes the
+transaction alone — their funding inputs, their token output and the RGB++
+commitment — and broadcasts it. Payment and delivery are one Bitcoin
+transaction, so neither leg can happen without the other. Cancelling means
+spending the listed UTXO. A listing sells in full; partial sales are several
+listings.
 
 ## 6. Transaction architecture and trust boundaries
 
 ### 6.1 Bitcoin clock and finality
 
-Select a Bitcoin-header/SPV validation path, chain-selection policy, confirmation
-thresholds, freshness/lag bound, monotonic epoch cursor and response to delayed
-relayers. CKB header references are not implicitly Bitcoin proofs. A header proof
-alone does not establish that a submitted header is the latest canonical tip.
+The halving clock is the height of the mint transaction as proven by the
+Bitcoin SPV client that RGB++ already depends on. CKB header references are not
+Bitcoin proofs, and no operator-supplied height is accepted.
 
-Specify same-height hash replacement, shallow/deep Bitcoin and CKB reorgs, and what
-happens when CKB has already accepted a transition referring to a Bitcoin branch.
-Document residual finality assumptions and recovery/pause semantics; indexer rollback
-alone cannot undo accepted protocol state. No arbitrary operator-supplied height.
+Specify confirmation thresholds, what the interface shows while a mint waits for
+them, and what happens when CKB has accepted a transition referring to a Bitcoin
+branch that is later reorganised. Document residual finality assumptions;
+indexer rollback alone cannot undo accepted protocol state.
 
-### 6.2 RGB++ ownership
+### 6.2 RGB++ binding
 
-Prove the actual Bitcoin UTXO ↔ CKB Cell authorization flow with a real wallet.
-Record lock/type scripts, commitments, SPV dependencies, spend rules and who signs
-every step. Separate Bitcoin-bound control from any CKB-local execution phase.
+RGB++ binds each CKB cell to a Bitcoin UTXO: the Bitcoin transaction that spends
+the UTXO commits, in an `OP_RETURN`, to the CKB transaction that consumes the
+cell, and the RGB++ lock accepts the CKB transaction only with an SPV proof of
+that Bitcoin transaction. The mint script relies on that check rather than
+repeating it, and reads the same proof for `h_mint` and the ticket output.
 
-Test leap and folding only where needed. Neither replaces an authorization proof
-nor automatically removes Bitcoin confirmation latency. Label provisional,
-CKB-confirmed and Bitcoin-anchored states honestly.
+Tooling: the current RGB++ SDK (`rgbpp`, built on CCC) with CCC for CKB. The
+public RGB++ testnet services verify Bitcoin testnet3; the Signet service was
+unreachable when checked on 2026-09-24, and testnet4 has no SPV client on CKB.
+The app's own ticket experiments stay on testnet4 until the RGB++ path replaces
+them. Label provisional, CKB-confirmed and Bitcoin-anchored states honestly.
 
-### 6.3 Epoch admission, closure and settlement
+### 6.3 The mint script
 
-The settler proposes transactions; scripts enforce the economic rules. Choose an
-admission/closure mechanism with authenticated tickets and submissions, completeness
-relative to a canonical admitted set, durable evidence and bounded deadlines.
-Publication alone does not prevent omission or censorship.
+A Rust `no_std` type script on CKB-VM, one code hash for every launch. Its args
+carry the launch terms: format version, `h0`, the promoter's Bitcoin
+`scriptPubKey` and the hash of the launch metadata. It validates, per
+transaction:
 
-Define withholding, omitted submissions, late messages, zero-work tickets, empty
-epochs, total-weight calculation and competing settlers. No silent requeue into a
-different challenge/epoch. Specify permissionless completion or a bounded refund/exit
-when the official service fails. A public reconstruction tool is necessary but is
-not a replacement for these protocol-enforced paths.
+- open: one idle miner cell created, no xUDT balance change;
+- ticket: idle in, armed out, the Bitcoin transaction pays `TICKET_SATS` to the
+  promoter, no xUDT balance change;
+- mint: armed in, idle or armed out (armed requires another ticket payment), the
+  xUDT balance under this launch increases by exactly `reward`;
+- close: miner cell consumed, xUDT balance does not increase.
 
-Benchmark maximum participants, bytes, inputs/outputs, proofs, total VM cycles and
-capacity. A single transaction is a candidate optimization, not an unbounded design
-requirement. If chunking is needed, prove atomic accounting and closure across chunks.
+The launch's xUDT uses owner mode by input type (`flags & 0x80000000`) with the
+mint script's hash as owner, so minting is possible only in a transaction the
+mint script has approved.
 
 ### 6.4 State and indexer
 
-Use explicit per-launch state and independently admissible intents where justified.
-Measure conflicts between mining, settlement and redemption. Derive indexed events
-from transactions/Cell transitions; the API is a rebuildable projection. Verify
-canonical state from both chains and expose provisional status until the chosen
-confirmation policy permits final display.
+Launches, mints, transfers and listings are derived from transactions; the API
+is a rebuildable projection. The index may hold listings, which are public signed
+data and give it no control over funds. Expose provisional status until the
+chosen confirmation policy permits final display.
 
-## 7. xUDT and economic state
+## 7. xUDT identity and metadata
 
-Before implementation, define full token Type identity, decimals, canonical binary
-schemas, allowed owner-mode/extension paths, unique mint authority and mint/burn
-accounting. A generic owner key must not bypass issuance caps. Decide whether and
-how voluntary xUDT burns update redemption liabilities without serializing all
-ordinary transfers through a global counter. Validate compatibility with RGB++.
-
-Immutable configuration includes version/network, token identity, reserve asset,
-`h0`, emission parameters, ticket economics and relevant script identities. Mutable
-state includes epoch cursor/closure, issued/expired amounts, outstanding liabilities,
-segregated balances and lifecycle status. Spell out which script checks each field.
+Decimals are 8 for every launch. Name, symbol and description are recorded with
+the launch and hashed into the mint script's args, so the token's identity
+commits to them. The image is stored by content hash; where the bytes live
+(on-chain cell, the app's storage or a content-addressed network) is decided by
+`TC2`. Wallets that do not read the metadata still show the balance under the
+type hash.
 
 ## 8. Liquidity and business boundary
 
-Evaluate existing RGB++/CKB venues early (`LQ1`) for actual asset/extension support,
-liquidity funding, custody, permissions, pool creation and exits. UTXOSwap is a
-candidate, not a guaranteed supported integration. Do not implement a custom AMM
-before this evaluation. Later SDK adapters build unsigned actions for user review;
-they do not hold funds or override reserve rules.
+Evaluate existing RGB++/CKB venues (`LQ1`) for actual asset support, custody,
+permissions and exits before building anything of our own. Adapters build
+unsigned actions for user review; they never hold funds.
 
-The initial business hypothesis is ticket-fee revenue. Measure all operating costs
-and subsidy budgets. External venue volume does not automatically create protocol
-revenue. Community pilots must test engagement and economic comprehension separately
-from correctness; testnet behavior alone does not establish willingness to pay.
+Promoter revenue is ticket income. Measure operating costs, including CKB
+capacity for miner cells, and who pays them. Community pilots test engagement
+and comprehension separately from correctness; testnet behaviour does not
+establish willingness to pay.
 
 ## 9. Implementation baseline
 
-Rust `no_std` + `ckb-std`/CKB-VM for scripts; exact integer amounts, checked wide
-intermediates and explicitly chosen fixed-point approximation for decay. Rust and
-TypeScript agree on shared vectors and an independent high-precision reference.
-
-Compare currently maintained RGB++ tooling, pin tested releases and deployment
-hashes, and verify one complete wallet/network/SPV combination. First reserve:
-one asset directly controlled by CKB scripts. Native BTC custody is deferred.
-
-Grow a minimal monorepo toward this layout only when needed:
+Rust `no_std` + `ckb-std` for scripts, tested with `ckb-testtool` and measured
+in cycles. TypeScript client with CCC and the RGB++ SDK. Exact integer amounts
+everywhere; the Rust and TypeScript reward functions pass the same vectors.
 
 ```text
-contracts/      protocol scripts and shared primitives
-packages/       math, protocol, SDK/verifier, miner, adapters as justified
-apps/           minimal web, read API/indexer
-services/       replaceable epoch settler
-infra/ tests/   reproducible networks, evidence fixtures and CI
+contracts/      the mint script and its tests
+apps/web        the client, including the browser miner
 ```
 
-React/Vite/TypeScript for the client; PostgreSQL for rebuildable indexed state and
-durable service records; Redis/Valkey only if measurements justify it. Cloudflare,
-Fly.io and GitHub Actions are deployment candidates, not prerequisites for modeling.
+React/Vite/TypeScript for the client, one Cloudflare Worker with D1 for the
+public index (`.meshkore/docs/hosting.md`).
 
 ## 10. Acceptance properties
 
-- Authorized, bounded minting and irreversible expiry, including skipped epochs.
-- Exact integer conservation of deposits, liabilities, fees, refunds and payouts.
-- No unauthorized access to backing and no dilution under the eventually adopted rule.
-- Correct proof binding, unique consumption, admission deadlines and allocation.
-- Operator-free settlement or bounded recovery with available verification data.
-- Explicit finality assumptions and tested dual-chain reorg handling.
-- Bit-identical client/script results, bounded approximation error and no overflow.
-- Costs and contention measured at intended load, including locked capacity.
-
-These are requirements to prove, not a statement that the specification already
-satisfies them. Phase 0 supplies counterexamples and executable economic rules;
-Phase 1 supplies architecture evidence; Phase 2 supplies the integrated demo.
+- A mint approved only for a valid proof of work against an armed, paid ticket.
+- `reward` identical in script and client; no overflow; zero from the terminal halving.
+- Each ticket mints at most once; a mint without a ticket fails.
+- The promoter receives every ticket payment the script accepts.
+- A sale delivers tokens and payment in one transaction or not at all.
+- Costs, capacity and latency measured on testnet and published.
 
 ## 11. First successful demonstration
 
-A reviewer can reproduce a launch from a pinned environment, use a real wallet,
-inspect the Bitcoin authorization, mine/submit work, settle at least two participants,
-observe an empty epoch expire, claim and redeem, and independently verify the evidence.
+A reviewer opens a launch, buys a ticket, mines, mints and sees the balance in
+the app and in an RGB++-aware explorer; transfers part to a second wallet;
+lists part for sale; and a third person buys it without the seller online.
 
-Then the reviewer can corrupt a proof, attempt unauthorized issuance, simulate an
-omission/replay/reorg, and shut off the official operator. Invalid actions must fail;
-legitimate users must complete the documented recovery path. Publish transaction
-IDs, script hashes, cycle/byte/capacity measurements and known limitations.
-
-Graduation is not required for this demonstration.
+Then the reviewer attempts a mint with an insufficient hash, a reused ticket, an
+inflated amount and an unpaid ticket. Each must fail on-chain. Publish
+transaction IDs, script hashes, cycles, bytes and capacity, and known limitations.
 
 ## 12. Deferred scope
 
-Full marketplace, automatic graduation, multiple wallets/assets, native BTC reserve,
-Fiber/Lightning, jackpots, fundraising/vesting, custom chain/wallet/AMM, governance
-token and creator-configurable economics. Add features only after the appropriate
-product and technical gates, not to increase the apparent breadth of the stack.
+Automatic graduation, multiple chains, Fiber/Lightning, jackpots, fundraising or
+vesting, a custom AMM, governance, and any creator-configurable economics.
 
 ## 13. Open decisions and owners
 
 | Decision | Task |
 |---|---|
-| Safe issuance/reserve model and accepted economic invariants | E1–E5 |
-| Discrete schedule, rounding and terminal emission | E2, V5 |
-| Ticket timing, challenge, weight and withholding policy | E3, SH3, V7 |
-| Header/SPV clock, confirmations and reorg treatment | V8 |
-| Admission completeness and operator-free recovery | V9, MN7 |
-| SDK, wallet and network compatibility | V3 |
-| Named reserve asset, capacity and fee payer | V6 |
-| Epoch length and batch limits at intended load | V4, V10 |
-| xUDT authority, extensions and liability accounting | V2, PC8 |
-| Commercial segment, pilot thresholds and launch classification review | PV1–PV3, SH7 |
-| Market funding, rights and venue compatibility | GR1, LQ1 |
-| Atomic swap construction via single-use seals (see §5.1) | V3, MK1 |
-| Script versioning, upgrades and migrations | PC8, SH1 |
+| Mint script, owner mode and cycle budget | OC2 |
+| RGB++ tooling, network and wallet visibility | OC1, V3 |
+| Capacity for miner cells: who pays | OC3 |
+| Confirmation policy and reorg treatment | V8 |
+| Metadata and image storage | TC2 |
+| Sale construction with `SIGHASH_SINGLE \| ANYONECANPAY` | OC5 |
+| Platform fee on tickets | PV3 |
+| Venue compatibility | LQ1 |

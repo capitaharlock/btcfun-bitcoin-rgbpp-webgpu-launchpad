@@ -8,7 +8,7 @@ version: 1
 id: btc-fun
 type: dev
 name: "btc.fun"
-description: "Community launchpad: Bitcoin-scheduled mining, RGB++ ownership, CKB settlement and transparent reserves. A testnet4 prototype runs in apps/web; economics and architecture validation precede the demo and commercial gates."
+description: "Community launchpad with one standard tokenomics: pay a ticket on Bitcoin, mine in the browser, mint an RGB++ xUDT into your own UTXO. Mint script in contracts/, client in apps/web."
 
 transport:
   protocol: websocket
@@ -30,9 +30,10 @@ modules:
     kind: area
     description: "Phase 0 economics, then Phase 1 RGB++ / CKB / clock / recovery and cost validation."
   - id: protocol
-    name: "Emission core"
-    kind: area
-    description: "Discrete issuance, xUDT authority, authenticated allocation, segregated reserve and integer redemption."
+    name: "Mint script"
+    kind: code
+    path: contracts
+    description: "The standard tokenomics enforced on CKB: the mint type script, its shared vectors and its CKB-VM tests."
   - id: token-creation
     name: "Token launch"
     kind: area

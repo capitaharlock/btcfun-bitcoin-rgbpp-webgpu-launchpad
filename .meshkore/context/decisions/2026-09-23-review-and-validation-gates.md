@@ -4,6 +4,10 @@ updated: 2026-09-23
 status: stable
 ---
 
+> **Partly superseded by [2026-09-24-standard-tokenomics-and-instant-mint](2026-09-24-standard-tokenomics-and-instant-mint.md).**
+> The evidence gates and claim discipline below still apply. The 21M ceiling, epoch
+> allocation, reserve and redemption do not: the standard tokenomics replaces them.
+
 # Decision
 
 The September 23 design review demonstrated that the existing epoch allocation

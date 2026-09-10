@@ -1,21 +1,27 @@
 ---
-title: "Emission and reserve core"
+title: "Mint script"
 category: modules
 tags: [protocol]
-updated: 2026-09-23
+updated: 2026-09-24
 owner: rjj
-status: stub
+status: active
 related: [project]
 ---
 
-# Emission and reserve core
+# Mint script
 
-**Status:** specification only; no code module exists.
+**Code:** `contracts/` — `mint-core` (the standard tokenomics as pure Rust),
+`mint` (the CKB type script), `tests` (CKB-VM tests with `ckb-testtool`) and
+`vectors/reward.json`, which the browser client also reproduces.
 
-**Execution:** Phase 2, after economic and architecture gates.
+**Build and test:**
 
-**Surface:** PC1–PC8: canonical schemas, discrete allowance, xUDT authority, accepted-set allocation and integer redemption.
+```sh
+cd contracts
+cargo build -p btcfun-mint --release --target riscv64imac-unknown-none-elf
+cargo test
+```
 
-[Roadmap gates](../../docs/roadmap.md) and [current protocol](../../../PROTOCOL.md)
-are authoritative. Historical guarantees in superseded ADRs are not implementation
-requirements. Promote this area to a code module only when its code folder exists.
+The rules are `PROTOCOL.md` §4 and §6.3. Earlier tasks PC1–PC8 specified an
+epoch-and-reserve model that the standard tokenomics replaced; they are kept as
+history.
