@@ -20,7 +20,7 @@
 import { createHash } from "node:crypto";
 import { test, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { amountOf, kv } from "../support/fixtures";
-import { fetchTx, fundedSecret, tipHeight } from "../support/funded";
+import { fetchTx, findAddressTx, fundedSecret, tipHeight } from "../support/funded";
 
 const LIVE = process.env.E2E_LIVE === "1";
 const MESH_TICKET = 2_000;
@@ -186,25 +186,25 @@ test("Alice pays Bob for real; the payment names the offer and Alice", async () 
     timeout: 60_000,
   });
 
-  const history = (await (await fetch(`https://mempool.space/testnet4/api/address/${bobAddress}/txs`)).json()) as Array<{
-    txid: string;
-    vout: Array<{ scriptpubkey: string; scriptpubkey_address?: string; value: number }>;
-  }>;
-  const payment = history.find((tx) => tx.vout.some((o) => o.scriptpubkey_address === bobAddress));
-  expect(payment, "the payment reached Bob's address on testnet4").toBeTruthy();
-  expect(payment!.vout.find((o) => o.scriptpubkey_address === bobAddress)?.value).toBe(PRICE);
-  const memo = payment!.vout.find((o) => o.scriptpubkey.startsWith("6a"))!.scriptpubkey;
+  const payment = await findAddressTx(bobAddress, (tx) =>
+    tx.vout.some((o) => o.scriptpubkey_address === bobAddress),
+  );
+  expect(payment.vout.find((o) => o.scriptpubkey_address === bobAddress)?.value).toBe(PRICE);
+  const memo = payment.vout.find((o) => o.scriptpubkey.startsWith("6a"))!.scriptpubkey;
   expect(memo).toContain(Buffer.from("btcfun:f2:").toString("hex"));
   expect(memo).toContain(aliceIdentity);
-  notes.push(`Payment ${payment!.txid}: ${PRICE} sat to Bob, memo naming the offer and Alice's key.`);
+  notes.push(`Payment ${payment.txid}: ${PRICE} sat to Bob, memo naming the offer and Alice's key.`);
 });
 
 test("Bob's page finds the payment on testnet4 by itself, and he delivers", async () => {
-  await bob.goto("/#/");
   await bob.goto("/#/market/mesh");
-  await expect(bob.getByText(/The buyer's payment is on chain and names this offer/)).toBeVisible({
-    timeout: 120_000,
-  });
+  await expect(bob.getByText("watching for payments")).toBeVisible();
+  const found = bob.getByText(/The buyer's payment is on chain and names this offer/);
+  // The address index can trail a broadcast by a few seconds; check until it shows.
+  await expect(async () => {
+    await bob.getByRole("button", { name: "Check now" }).click();
+    await expect(found).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 120_000 });
   await bob.getByRole("button", { name: "Sign the transfer" }).click();
   await expect(bob.getByText(/^Delivered\./)).toBeVisible();
   const chain = await copyable(bob, "your chain, for the buyer");

@@ -49,3 +49,29 @@ export async function fetchTx(txid: string, attempts = 20): Promise<ChainTx> {
 export async function tipHeight(): Promise<number> {
   return Number(await (await fetch(`${MEMPOOL}/blocks/tip/height`)).text());
 }
+
+export interface AddressTx {
+  txid: string;
+  vout: Array<{ scriptpubkey: string; scriptpubkey_address?: string; value: number }>;
+}
+
+/**
+ * The first transaction in an address's history that satisfies `match`,
+ * retrying while the provider's address index catches up with a broadcast —
+ * a payment can be accepted by the node a few seconds before it is listed.
+ */
+export async function findAddressTx(
+  address: string,
+  match: (tx: AddressTx) => boolean,
+  attempts = 30,
+): Promise<AddressTx> {
+  for (let i = 0; i < attempts; i++) {
+    const response = await fetch(`${MEMPOOL}/address/${address}/txs`);
+    if (response.ok) {
+      const found = ((await response.json()) as AddressTx[]).find(match);
+      if (found) return found;
+    }
+    await new Promise((r) => setTimeout(r, 3_000));
+  }
+  throw new Error(`no matching transaction appeared for ${address} on testnet4`);
+}
