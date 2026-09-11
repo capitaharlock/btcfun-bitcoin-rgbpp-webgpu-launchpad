@@ -27,7 +27,7 @@ use ckb_std::{
         load_witness_args, QueryIter,
     },
 };
-use mint_core::{pays_ticket, reward, ticket_challenge, udt_amount, work_clz, LaunchTerms, MinerCell, MinerState};
+use mint_core::{pays_tickets, reward, ticket_challenge, udt_amount, work_clz, LaunchTerms, MinerCell, MinerState};
 use rgbpp_core::{
     bitcoin::{parse_btc_tx, BTCTx},
     schemas::rgbpp::{RGBPPLock, RGBPPUnlock},
@@ -206,7 +206,7 @@ fn verified_bitcoin_tx() -> Result<VerifiedBitcoin, Error> {
     let txid: [u8; 32] = seal.btc_txid().as_slice().try_into().map_err(|_| Error::BadRgbppWitness)?;
     let vout: u32 = seal.out_index().unpack();
 
-    let unlock = rgbpp_unlock()?;
+    let unlock = rgbpp_unlock(&lock)?;
     let tx = parse_btc_tx(&unlock.btc_tx().raw_data()).map_err(|_| Error::BadBitcoinTx)?;
     let proof_bytes = unlock.btc_tx_proof().raw_data();
     let proof = TransactionProofReader::from_slice(&proof_bytes).map_err(|_| Error::BadSpvProof)?;
@@ -214,11 +214,25 @@ fn verified_bitcoin_tx() -> Result<VerifiedBitcoin, Error> {
     Ok(VerifiedBitcoin { tx, height, sealed: (txid, vout) })
 }
 
-/// The RGB++ unlock for the miner cell, following the lock's own convention: a
-/// four-byte witness is the index of the input whose witness holds it.
-fn rgbpp_unlock() -> Result<RGBPPUnlock, Error> {
-    let own = load_witness_args(0, Source::GroupInput)?;
-    let field = own.lock().to_opt().ok_or(Error::BadRgbppWitness)?.raw_data();
+/// The RGB++ unlock the lock actually verified for the miner cell.
+///
+/// The RGB++ lock runs once per lock group — every input with the identical
+/// lock, which cells sealed to the same UTXO share — and verifies only the
+/// witness of that group's first input. The miner cell need not be first: a
+/// token cell sealed to the same UTXO may precede it. Reading the miner cell's
+/// own witness would then read one nobody verified, and a forged one could
+/// claim a ticket payment or a height. So this finds the group's first input
+/// and follows the lock's own convention from there: a four-byte witness is
+/// the index of the input whose witness holds the unlock.
+fn rgbpp_unlock(lock: &Script) -> Result<RGBPPUnlock, Error> {
+    let first = QueryIter::new(load_cell_lock, Source::Input)
+        .position(|candidate| candidate.as_slice() == lock.as_slice())
+        .ok_or(Error::BadRgbppWitness)?;
+    let field = load_witness_args(first, Source::Input)?
+        .lock()
+        .to_opt()
+        .ok_or(Error::BadRgbppWitness)?
+        .raw_data();
     let field = if field.len() == 4 {
         let index = u32::from_le_bytes(field[..].try_into().unwrap()) as usize;
         load_witness_args(index, Source::Input)?
@@ -232,9 +246,30 @@ fn rgbpp_unlock() -> Result<RGBPPUnlock, Error> {
     RGBPPUnlock::from_slice(&field).map_err(|_| Error::BadRgbppWitness)
 }
 
+/// The Bitcoin transaction pays the promoter one ticket for every miner cell
+/// it arms, across every launch of this script that names the same promoter.
 fn require_ticket(tx: &BTCTx, terms: &LaunchTerms) -> Result<(), Error> {
+    let own = load_script()?;
+    let mut armed = 0u64;
+    for (index, type_script) in QueryIter::new(load_cell_type, Source::Output).enumerate() {
+        let Some(type_script) = type_script else { continue };
+        if type_script.code_hash().as_slice() != own.code_hash().as_slice()
+            || type_script.hash_type() != own.hash_type()
+        {
+            continue;
+        }
+        let args: Bytes = type_script.args().unpack();
+        let Ok(other) = LaunchTerms::parse(&args) else { continue };
+        if other.promoter_script != terms.promoter_script {
+            continue;
+        }
+        let data = load_cell_data(index, Source::Output)?;
+        if MinerCell::parse(&data).is_some_and(|cell| cell.state == MinerState::Armed) {
+            armed += 1;
+        }
+    }
     let outputs = tx.outputs.iter().map(|out| (out.value, out.script.as_ref()));
-    if pays_ticket(outputs, terms.promoter_script) {
+    if pays_tickets(outputs, terms.promoter_script, armed) {
         Ok(())
     } else {
         Err(Error::TicketUnpaid)

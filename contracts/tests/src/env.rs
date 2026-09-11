@@ -226,6 +226,8 @@ pub struct Op {
     /// Typed inputs, RGB++-locked, first; their seals are spent by the Bitcoin tx.
     pub inputs: Vec<(CellInput, Option<([u8; 32], u32)>)>,
     pub outputs: Vec<Out>,
+    /// Witnesses to put in place of the generated ones, by input index.
+    pub witness_overrides: Vec<(usize, Bytes)>,
     /// Bitcoin outputs after the commitment: seals and payments.
     pub btc_outputs: Vec<(i64, Vec<u8>)>,
     pub height: u32,
@@ -233,7 +235,7 @@ pub struct Op {
 
 impl Op {
     pub fn new() -> Self {
-        Op { inputs: vec![], outputs: vec![], btc_outputs: vec![], height: H0 }
+        Op { inputs: vec![], outputs: vec![], witness_overrides: vec![], btc_outputs: vec![], height: H0 }
     }
 
     /// Build the Bitcoin transaction and the CKB transaction committed by it.
@@ -342,6 +344,10 @@ impl Op {
             witnesses.push(witness.pack());
         }
 
+        for (index, witness) in &self.witness_overrides {
+            witnesses[*index] = witness.pack();
+        }
+
         let tx = tx
             .as_advanced_builder()
             .set_outputs(sealed)
@@ -349,6 +355,30 @@ impl Op {
             .build();
         (tx, btc_txid)
     }
+}
+
+/// A syntactically valid RGB++ unlock for an arbitrary Bitcoin transaction —
+/// what an attacker could write into a witness nobody verifies.
+pub fn forged_unlock(outputs: Vec<(i64, Vec<u8>)>, seal: ([u8; 32], u32), height: u32) -> Bytes {
+    let btc = BTCTx {
+        txid: [0u8; 32].pack(),
+        version: 2,
+        lock_time: 0,
+        inputs: vec![TxIn { previous_output: (seal.0.pack(), seal.1), script: Bytes::new(), sequence: 0 }],
+        outputs: outputs
+            .into_iter()
+            .map(|(value, script)| TxOut { value, script: script.into() })
+            .collect(),
+    };
+    let proof = ckb_bitcoin_spv_verifier::types::packed::TransactionProof::new_builder()
+        .height(ckb_bitcoin_spv_verifier::types::prelude::Pack::pack(&height))
+        .build();
+    let unlock = RGBPPUnlock::new_builder()
+        .extra_data(ExtraCommitmentData::new_builder().input_len(1.into()).output_len(1.into()).build())
+        .btc_tx(encode_btc_tx(btc).pack())
+        .btc_tx_proof(proof.as_slice().to_vec().pack())
+        .build();
+    WitnessArgs::new_builder().lock(Some(unlock.as_bytes()).pack()).build().as_bytes()
 }
 
 /// The RGB++ commitment, computed as the lock computes it.

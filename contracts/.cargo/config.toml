@@ -1,6 +1,0 @@
-# CKB-VM maps memory in pages that are either writable or executable, never
-# both. Recent linkers pack .text and .data into shared pages, which the VM
-# rejects as MemWriteOnExecutablePage; keeping loadable segments page-separated
-# avoids that without a custom linker script.
-[target.riscv64imac-unknown-none-elf]
-rustflags = ["-C", "link-arg=-zseparate-loadable-segments"]

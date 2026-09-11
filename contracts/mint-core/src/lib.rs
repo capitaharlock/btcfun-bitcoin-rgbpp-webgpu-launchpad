@@ -165,11 +165,22 @@ impl MinerCell {
     }
 }
 
-/// True when some output pays at least one ticket to the promoter.
-pub fn pays_ticket<'o>(outputs: impl IntoIterator<Item = (i64, &'o [u8])>, promoter: &[u8]) -> bool {
-    outputs
+/// True when the outputs pay `promoter` at least `tickets` full tickets.
+///
+/// Counted in total rather than per output: one transaction may arm miner
+/// cells of several launches by the same promoter, and each needs its own
+/// ticket — a single payment must not be counted twice.
+pub fn pays_tickets<'o>(
+    outputs: impl IntoIterator<Item = (i64, &'o [u8])>,
+    promoter: &[u8],
+    tickets: u64,
+) -> bool {
+    let paid: i128 = outputs
         .into_iter()
-        .any(|(value, script)| script == promoter && value >= TICKET_SATS as i64)
+        .filter(|(_, script)| *script == promoter)
+        .map(|(value, _)| i128::from(value.max(0)))
+        .sum();
+    paid >= i128::from(tickets) * i128::from(TICKET_SATS)
 }
 
 /// The amount in an xUDT cell's data: the first 16 bytes, little-endian.

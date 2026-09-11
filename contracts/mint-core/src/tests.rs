@@ -87,9 +87,14 @@ fn parses_launch_terms_exactly() {
 fn a_ticket_must_pay_the_promoter_in_full() {
     let promoter: &[u8] = &[0x00, 0x14, 9, 9];
     let other: &[u8] = &[0x00, 0x14, 8, 8];
-    assert!(pays_ticket([(TICKET_SATS as i64, promoter)], promoter));
-    assert!(!pays_ticket([(TICKET_SATS as i64 - 1, promoter)], promoter));
-    assert!(!pays_ticket([(TICKET_SATS as i64, other)], promoter));
+    let ticket = TICKET_SATS as i64;
+    assert!(pays_tickets([(ticket, promoter)], promoter, 1));
+    assert!(!pays_tickets([(ticket - 1, promoter)], promoter, 1));
+    assert!(!pays_tickets([(ticket, other)], promoter, 1));
+    // Two tickets need two tickets' worth, in one output or several.
+    assert!(!pays_tickets([(ticket, promoter)], promoter, 2));
+    assert!(pays_tickets([(ticket, promoter), (ticket, promoter)], promoter, 2));
+    assert!(pays_tickets([(2 * ticket, promoter)], promoter, 2));
 }
 
 #[test]

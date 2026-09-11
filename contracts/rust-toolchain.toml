@@ -1,0 +1,5 @@
+[toolchain]
+# Pinned so the deployed mint script can be rebuilt byte for byte: its data
+# hash is the code hash every launch names.
+channel = "1.91.1"
+targets = ["riscv64imac-unknown-none-elf"]

@@ -24,6 +24,7 @@
     "test:report": "node scripts/test-report.mjs"
   },
   "dependencies": {
+    "@ckb-ccc/core": "^1.22.0",
     "@noble/curves": "^1.9.7",
     "@noble/hashes": "^1.8.0",
     "@scure/bip32": "^1.7.0",
