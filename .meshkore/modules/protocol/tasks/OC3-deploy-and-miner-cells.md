@@ -27,3 +27,11 @@ provides the capacity that opening a miner cell needs.
   `0x73ea88fe…0616` (`data1`), 73,552 bytes, under a lock nobody holds a key
   for. `contracts/rust-toolchain.toml` pins the compiler; a rebuild reproduces
   the same hash. Record: `contracts/deployments/testnet.json`.
+- 2026-09-24 — redeployed after pricing mints at the ticket's anchor:
+  `0x3869513d5debb86e1334b268067e31cb322d06ad20353fde1e9b105d89e34611`, code
+  hash `0xb8af59e9…c72f`. The first deployment stays on chain and in the record
+  under `superseded`; no launch was created against it.
+- Capacity policy: a miner cell is opened through the RGB++ paymaster (7,000
+  sats on testnet), sized at its occupied capacity plus 10 CKB for fees; a
+  first mint borrows the token cell's capacity the same way. A person holding
+  only Bitcoin can therefore mine.

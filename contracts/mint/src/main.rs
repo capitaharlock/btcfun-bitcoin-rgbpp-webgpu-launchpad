@@ -27,7 +27,10 @@ use ckb_std::{
         load_witness_args, QueryIter,
     },
 };
-use mint_core::{pays_tickets, reward, ticket_challenge, udt_amount, work_clz, LaunchTerms, MinerCell, MinerState};
+use mint_core::{
+    anchor_valid, pays_tickets, reward, ticket_challenge, udt_amount, work_clz, LaunchTerms, MinerCell,
+    MinerState,
+};
 use rgbpp_core::{
     bitcoin::{parse_btc_tx, BTCTx},
     schemas::rgbpp::{RGBPPLock, RGBPPUnlock},
@@ -55,6 +58,8 @@ enum Error {
     WrongAmount,
     BalanceIncreased,
     ArmedWithoutTicket,
+    BadAnchor,
+    MintMustDisarm,
     UdtOverflow,
     BadUdtData,
 }
@@ -77,10 +82,9 @@ fn main() -> Result<(), Error> {
     let args: Bytes = script.args().unpack();
     let terms = LaunchTerms::parse(&args).map_err(|_| Error::BadTerms)?;
 
-    let before = only_miner_cell(Source::GroupInput)?;
-    let after = only_miner_cell(Source::GroupOutput)?;
-    let nonce = after.map(|cell| cell.nonce);
-    let (before, after) = (before.map(|cell| cell.state), after.map(|cell| cell.state));
+    let before_cell = only_miner_cell(Source::GroupInput)?;
+    let after_cell = only_miner_cell(Source::GroupOutput)?;
+    let (before, after) = (before_cell.map(|cell| cell.state), after_cell.map(|cell| cell.state));
     // Every miner cell that exists is bound to a Bitcoin UTXO. The RGB++ lock
     // checks this for its own outputs, but an opening transaction has no RGB++
     // input, so nothing else would.
@@ -99,20 +103,22 @@ fn main() -> Result<(), Error> {
         // Close or move, armed or not: owner mode is active, so this script is
         // what stops a balance from growing.
         (Some(_), None) | (Some(MinerState::Idle), Some(MinerState::Idle)) => no_increase(minted),
-        // Ticket: the Bitcoin transaction that moves the cell pays the promoter.
+        // Ticket: the Bitcoin transaction that moves the cell pays the promoter,
+        // and the armed cell records the height its reward will be priced at.
         (Some(MinerState::Idle), Some(MinerState::Armed)) => {
             let btc = verified_bitcoin_tx()?;
-            require_ticket(&btc.tx, &terms)?;
+            arm(&btc, &terms, after_cell.unwrap())?;
             no_increase(minted)
         }
-        // Mint, and re-arm when the same transaction buys the next ticket.
-        (Some(MinerState::Armed), Some(next)) => {
-            let btc = verified_bitcoin_tx()?;
-            if next == MinerState::Armed {
-                require_ticket(&btc.tx, &terms)?;
-            }
-            // `after` is set in this arm, so the nonce is the one it carries.
-            let expected = mint_amount(&terms, &btc, nonce.unwrap_or_default())?;
+        // Mint at the consumed ticket's anchor. Nothing here depends on the
+        // height this transaction confirms at, so once signed it cannot become
+        // invalid — which matters because it may carry the miner's balance.
+        // Buying the next ticket in the same transaction would bring the
+        // anchor check back into it, so the next ticket is its own transaction.
+        (Some(MinerState::Armed), Some(MinerState::Armed)) => Err(Error::MintMustDisarm),
+        (Some(MinerState::Armed), Some(MinerState::Idle)) => {
+            let (ticket, created) = (before_cell.unwrap(), after_cell.unwrap());
+            let expected = mint_amount(&terms, sealed_outpoint()?, created.nonce, ticket.anchor)?;
             if minted == i128::from(expected) {
                 Ok(())
             } else {
@@ -190,28 +196,40 @@ struct VerifiedBitcoin {
     tx: BTCTx,
     /// The height at which the SPV proof places the transaction.
     height: u32,
-    /// The Bitcoin outpoint the input miner cell was bound to: the challenge.
-    sealed: ([u8; 32], u32),
+}
+
+/// The input miner cell's RGB++ lock, refused unless it is the RGB++ lock:
+/// under any other lock nothing ties the cell to Bitcoin, and a witness could
+/// say whatever it liked.
+fn input_rgbpp_lock() -> Result<Script, Error> {
+    let lock = load_cell_lock(0, Source::GroupInput)?;
+    if is_rgbpp_lock(&lock) {
+        Ok(lock)
+    } else {
+        Err(Error::NotRgbppLock)
+    }
+}
+
+/// The Bitcoin outpoint the input miner cell is sealed to: its ticket, and the
+/// mining challenge. The RGB++ lock only lets the cell move in a transaction
+/// that spends this outpoint.
+fn sealed_outpoint() -> Result<([u8; 32], u32), Error> {
+    let lock = input_rgbpp_lock()?;
+    let seal = RGBPPLock::from_slice(&lock.args().raw_data()).map_err(|_| Error::BadRgbppWitness)?;
+    let txid: [u8; 32] = seal.btc_txid().as_slice().try_into().map_err(|_| Error::BadRgbppWitness)?;
+    Ok((txid, seal.out_index().unpack()))
 }
 
 /// The Bitcoin transaction behind the input miner cell, read from the witness
-/// its RGB++ lock verifies. Refused unless that lock is the RGB++ lock, because
-/// any other lock would let a witness say whatever it liked.
+/// its RGB++ lock verifies.
 fn verified_bitcoin_tx() -> Result<VerifiedBitcoin, Error> {
-    let lock = load_cell_lock(0, Source::GroupInput)?;
-    if !is_rgbpp_lock(&lock) {
-        return Err(Error::NotRgbppLock);
-    }
-    let seal = RGBPPLock::from_slice(&lock.args().raw_data()).map_err(|_| Error::BadRgbppWitness)?;
-    let txid: [u8; 32] = seal.btc_txid().as_slice().try_into().map_err(|_| Error::BadRgbppWitness)?;
-    let vout: u32 = seal.out_index().unpack();
-
+    let lock = input_rgbpp_lock()?;
     let unlock = rgbpp_unlock(&lock)?;
     let tx = parse_btc_tx(&unlock.btc_tx().raw_data()).map_err(|_| Error::BadBitcoinTx)?;
     let proof_bytes = unlock.btc_tx_proof().raw_data();
     let proof = TransactionProofReader::from_slice(&proof_bytes).map_err(|_| Error::BadSpvProof)?;
     let height: u32 = proof.height().unpack();
-    Ok(VerifiedBitcoin { tx, height, sealed: (txid, vout) })
+    Ok(VerifiedBitcoin { tx, height })
 }
 
 /// The RGB++ unlock the lock actually verified for the miner cell.
@@ -246,6 +264,17 @@ fn rgbpp_unlock(lock: &Script) -> Result<RGBPPUnlock, Error> {
     RGBPPUnlock::from_slice(&field).map_err(|_| Error::BadRgbppWitness)
 }
 
+/// A ticket bought by `btc`: paid, and anchored no later than it confirmed and
+/// at most a day before.
+fn arm(btc: &VerifiedBitcoin, terms: &LaunchTerms, armed: MinerCell) -> Result<(), Error> {
+    require_ticket(&btc.tx, terms)?;
+    if anchor_valid(armed.anchor, terms.h0, btc.height) {
+        Ok(())
+    } else {
+        Err(Error::BadAnchor)
+    }
+}
+
 /// The Bitcoin transaction pays the promoter one ticket for every miner cell
 /// it arms, across every launch of this script that names the same promoter.
 fn require_ticket(tx: &BTCTx, terms: &LaunchTerms) -> Result<(), Error> {
@@ -278,9 +307,10 @@ fn require_ticket(tx: &BTCTx, terms: &LaunchTerms) -> Result<(), Error> {
 
 /// What this mint may add: the standard reward for `nonce`, carried by the
 /// miner cell the mint creates, against the ticket the consumed cell was
-/// sealed to.
-fn mint_amount(terms: &LaunchTerms, btc: &VerifiedBitcoin, nonce: u64) -> Result<u64, Error> {
-    let (txid, vout) = btc.sealed;
+/// sealed to, priced at that ticket's anchor. It reads no witness and no
+/// height, so it is decided entirely by what the transaction's author signed.
+fn mint_amount(terms: &LaunchTerms, ticket: ([u8; 32], u32), nonce: u64, anchor: u32) -> Result<u64, Error> {
+    let (txid, vout) = ticket;
     let clz = work_clz(&ticket_challenge(&txid, vout), nonce);
-    reward(clz, terms.h0, btc.height).ok_or(Error::WorkTooWeak)
+    reward(clz, terms.h0, anchor).ok_or(Error::WorkTooWeak)
 }

@@ -2,7 +2,10 @@
 
 use crate::env::*;
 use ckb_testtool::ckb_types::packed::Script;
-use mint_core::{reward, ticket_challenge, work_clz, MinerCell, MinerState, HALVING_BLOCKS, MIN_CLZ, TICKET_SATS};
+use mint_core::{
+    reward, ticket_challenge, work_clz, MinerCell, MinerState, ANCHOR_GRACE_BLOCKS, HALVING_BLOCKS, MIN_CLZ,
+    TICKET_SATS,
+};
 
 // The script's error codes (`mint/src/main.rs`).
 const TOO_MANY_MINER_CELLS: i8 = 4;
@@ -12,12 +15,18 @@ const WORK_TOO_WEAK: i8 = 10;
 const WRONG_AMOUNT: i8 = 11;
 const BALANCE_INCREASED: i8 = 12;
 const ARMED_WITHOUT_TICKET: i8 = 13;
+const BAD_ANCHOR: i8 = 14;
+const MINT_MUST_DISARM: i8 = 15;
 
 const IDLE: MinerState = MinerState::Idle;
 const ARMED: MinerState = MinerState::Armed;
 
 fn cell(state: MinerState, nonce: u64) -> Vec<u8> {
-    MinerCell { state, nonce }.encode().to_vec()
+    anchored(state, nonce, H0)
+}
+
+fn anchored(state: MinerState, nonce: u64, anchor: u32) -> Vec<u8> {
+    MinerCell { state, nonce, anchor }.encode().to_vec()
 }
 const TICKET_TXID: [u8; 32] = [0x71; 32];
 const TICKET_VOUT: u32 = 1;
@@ -52,8 +61,13 @@ impl Launch {
     }
 
     fn miner_input(&mut self, state: MinerState) -> (ckb_testtool::ckb_types::packed::CellInput, Option<([u8; 32], u32)>) {
+        self.miner_input_at(state, H0)
+    }
+
+    /// A miner cell sealed to the test ticket, its anchor at `anchor`.
+    fn miner_input_at(&mut self, state: MinerState, anchor: u32) -> (ckb_testtool::ckb_types::packed::CellInput, Option<([u8; 32], u32)>) {
         let lock = self.env.rgbpp_lock(TICKET_TXID, TICKET_VOUT);
-        let input = self.env.live(lock, Some(self.mint.clone()), cell(state, 0));
+        let input = self.env.live(lock, Some(self.mint.clone()), anchored(state, 0, anchor));
         (input, Some((TICKET_TXID, TICKET_VOUT)))
     }
 
@@ -65,6 +79,10 @@ impl Launch {
         Out { seal: Some(1), lock: None, type_: Some(self.mint.clone()), data: cell(state, nonce) }
     }
 
+    fn miner_out_anchored(&self, state: MinerState, anchor: u32) -> Out {
+        Out { seal: Some(1), lock: None, type_: Some(self.mint.clone()), data: anchored(state, 0, anchor) }
+    }
+
     fn udt_out(&self, atoms: u128) -> Out {
         Out { seal: Some(1), lock: None, type_: Some(self.udt.clone()), data: amount(atoms) }
     }
@@ -73,11 +91,14 @@ impl Launch {
         (TICKET_SATS as i64, self.env.promoter.clone())
     }
 
-    /// A mint of the ticket with the given nonce at `height`, claiming `atoms`.
+    /// A mint of a ticket anchored at H0 with the given nonce, confirmed at
+    /// `height`, claiming `atoms`. A re-armed cell is anchored at `height`.
     fn mint_op(&mut self, nonce: u64, height: u32, atoms: u128, next: MinerState) -> Op {
         let mut op = Op::new();
         op.inputs.push(self.miner_input(ARMED));
-        op.outputs.push(self.miner_out_with(next, nonce));
+        let mut out = self.miner_out_with(next, nonce);
+        out.data = anchored(next, nonce, height);
+        op.outputs.push(out);
         op.outputs.push(self.udt_out(atoms));
         op.btc_outputs.push((546, p2wpkh(0x01)));
         op.height = height;
@@ -209,18 +230,52 @@ fn more_than_the_reward_is_refused_and_so_is_less() {
 }
 
 #[test]
-fn the_reward_halves_at_the_mints_height() {
+fn the_reward_is_priced_at_the_tickets_anchor_whenever_the_mint_confirms() {
     let (nonce, clz) = nonce_for(MIN_CLZ, false);
-    let later = H0 + 2 * HALVING_BLOCKS;
     let full = u128::from(reward(clz, H0, H0).unwrap());
+    let anchor = H0 + 2 * HALVING_BLOCKS;
+    let much_later = H0 + 10 * HALVING_BLOCKS;
 
+    // A ticket bought after two halvings mints a quarter, even if the mint
+    // itself confirms weeks later — the confirmation height is irrelevant.
     let mut l = Launch::new();
-    let (tx, _) = l.mint_op(nonce, later, full, IDLE).build(&l.env);
-    expect_code(l.env.verify(&tx), WRONG_AMOUNT);
-
-    let mut l = Launch::new();
-    let (tx, _) = l.mint_op(nonce, later, full / 4, IDLE).build(&l.env);
+    let mut op = l.mint_op(nonce, much_later, full / 4, IDLE);
+    op.inputs[0] = l.miner_input_at(ARMED, anchor);
+    let (tx, _) = op.build(&l.env);
     l.env.verify(&tx).unwrap();
+
+    let mut l = Launch::new();
+    let mut op = l.mint_op(nonce, much_later, full, IDLE);
+    op.inputs[0] = l.miner_input_at(ARMED, anchor);
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), WRONG_AMOUNT);
+}
+
+#[test]
+fn a_ticket_is_anchored_at_most_a_day_before_it_confirms() {
+    let confirmed = H0 + 500;
+    for (anchor, valid) in [
+        (confirmed, true),
+        (confirmed - ANCHOR_GRACE_BLOCKS, true),
+        (confirmed - ANCHOR_GRACE_BLOCKS - 1, false),
+        (confirmed + 1, false),
+        (H0 - 1, false),
+    ] {
+        let mut l = Launch::new();
+        let mut op = Op::new();
+        op.inputs.push(l.miner_input(IDLE));
+        op.outputs.push(l.miner_out_anchored(ARMED, anchor));
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        op.btc_outputs.push(l.ticket());
+        op.height = confirmed;
+        let (tx, _) = op.build(&l.env);
+        let result = l.env.verify(&tx);
+        if valid {
+            result.unwrap();
+        } else {
+            expect_code(result, BAD_ANCHOR);
+        }
+    }
 }
 
 #[test]
@@ -232,11 +287,14 @@ fn a_weak_hash_mints_nothing() {
 }
 
 #[test]
-fn nothing_is_minted_before_the_launch_opens() {
+fn nothing_is_minted_for_a_ticket_anchored_before_the_launch_opens() {
+    // Arming refuses such an anchor; this cell could only exist by other means.
     let mut l = Launch::new();
     let (nonce, clz) = nonce_for(MIN_CLZ, false);
     let atoms = reward(clz, H0, H0).unwrap();
-    let (tx, _) = l.mint_op(nonce, H0 - 1, atoms.into(), IDLE).build(&l.env);
+    let mut op = l.mint_op(nonce, H0, atoms.into(), IDLE);
+    op.inputs[0] = l.miner_input_at(ARMED, H0 - 1);
+    let (tx, _) = op.build(&l.env);
     expect_code(l.env.verify(&tx), WORK_TOO_WEAK);
 }
 
@@ -270,20 +328,16 @@ fn work_against_another_ticket_does_not_count() {
 }
 
 #[test]
-fn minting_and_buying_the_next_ticket_in_one_transaction() {
+fn a_mint_cannot_buy_the_next_ticket() {
+    // Even paid, re-arming in the mint would make a transaction that carries
+    // the balance depend on when it confirms. The next ticket is separate.
     let (nonce, clz) = nonce_for(MIN_CLZ, false);
     let atoms = reward(clz, H0, H0).unwrap();
-
     let mut l = Launch::new();
     let mut op = l.mint_op(nonce, H0, atoms.into(), ARMED);
     op.btc_outputs.push(l.ticket());
     let (tx, _) = op.build(&l.env);
-    l.env.verify(&tx).unwrap();
-
-    // Re-arming without paying is a free ticket.
-    let mut l = Launch::new();
-    let (tx, _) = l.mint_op(nonce, H0, atoms.into(), ARMED).build(&l.env);
-    expect_code(l.env.verify(&tx), TICKET_UNPAID);
+    expect_code(l.env.verify(&tx), MINT_MUST_DISARM);
 }
 
 #[test]
@@ -405,7 +459,8 @@ fn one_payment_buys_one_ticket_even_across_launches() {
     let second = l.env.rgbpp_lock([0x47; 32], 0);
     op.inputs.push((l.env.live(second, Some(other_mint.clone()), cell(IDLE, 0)), Some(([0x47; 32], 0))));
     op.outputs.push(l.miner_out(ARMED));
-    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint), data: cell(ARMED, 0) });
+    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint), data: anchored(ARMED, 0, H0 + 1) });
+    op.height = H0 + 1;
     op.btc_outputs.push((546, p2wpkh(0x01)));
     op.btc_outputs.push(l.ticket());
     let (tx, _) = op.build(&l.env);
@@ -420,7 +475,8 @@ fn one_payment_buys_one_ticket_even_across_launches() {
     let second = l.env.rgbpp_lock([0x47; 32], 0);
     op.inputs.push((l.env.live(second, Some(other_mint.clone()), cell(IDLE, 0)), Some(([0x47; 32], 0))));
     op.outputs.push(l.miner_out(ARMED));
-    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint), data: cell(ARMED, 0) });
+    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint), data: anchored(ARMED, 0, H0 + 1) });
+    op.height = H0 + 1;
     op.btc_outputs.push((546, p2wpkh(0x01)));
     op.btc_outputs.push(l.ticket());
     op.btc_outputs.push(l.ticket());

@@ -15,23 +15,27 @@ A mint is a single miner's result, settled when it happens. There is no epoch,
 no shared budget and no wait for other participants.
 
 ```text
-TICKET    pay the fixed ticket price → a Bitcoin UTXO that is the mining challenge
+TICKET    pay the fixed ticket price → a Bitcoin UTXO that is the mining challenge,
+          and the height that fixes the ticket's rate
 MINE      search locally for a nonce; the reward for the best hash is shown live
 MINT      spend the ticket UTXO; the tokens exist in that transaction's output
-REPEAT    the mint transaction may buy the next ticket in the same transaction
+REPEAT    buy the next ticket
 ```
 
 Reward for one ticket, in atoms (8 decimals):
 
 ```text
 reward = floor(10^8 × clz² / 2^k)      if clz ≥ 16, else not mintable
-k      = floor((h_mint − h0) / 1008)   halvings since the launch opened
+k      = floor((anchor − h0) / 1008)   halvings between the launch opening and the ticket
 ```
 
 `clz` is the number of leading zero bits of `sha256d(challenge ‖ nonce)`, where
 the challenge is the hash of the ticket's outpoint,
-`h_mint` is the Bitcoin height that confirms the mint transaction and `h0` is
-the launch's opening height. The canonical constants live in `PROTOCOL.md` §4.
+`anchor` is the ticket's height (declared by the wallet, checked against the
+SPV-proven confirmation of the ticket within a day) and `h0` is the launch's
+opening height. Pricing at the ticket means a mint's validity never depends on
+when it confirms — the property that keeps a balance from ever being stranded
+by an RGB++ transaction that could no longer be completed. The canonical constants live in `PROTOCOL.md` §4.
 
 # Why
 

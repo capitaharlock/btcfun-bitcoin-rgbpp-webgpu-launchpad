@@ -15,6 +15,7 @@ import {
   planTicket,
   planTransfer,
   tokenCellCapacity,
+  type MinerCell,
   type SealedCell,
   type TokenCell,
 } from "./operations";
@@ -34,6 +35,10 @@ const sealed = (vout: number, capacity: bigint): SealedCell => ({
   outPoint: { txHash: "0x" + "12".repeat(32), index: vout },
   capacity,
   seal: { txid: "34".repeat(32), vout },
+});
+const miner = (state: "idle" | "armed", capacity: bigint): MinerCell => ({
+  ...sealed(1, capacity),
+  data: { state, nonce: 0n, anchor: terms.h0 },
 });
 const sum = (xs: readonly ccc.CellOutputLike[]) => xs.reduce((n, o) => n + ccc.CellOutput.from(o).capacity, 0n);
 
@@ -56,10 +61,12 @@ describe("launch identity", () => {
 });
 
 describe("miner cell", () => {
-  it("is a state byte and a little-endian nonce, as in mint-core", () => {
-    expect(encodeMinerCell({ state: "armed", nonce: 0x0102030405060708n })).toBe("0x010807060504030201");
-    expect(decodeMinerCell("0x000000000000000000")).toEqual({ state: "idle", nonce: 0n });
-    expect(decodeMinerCell("0x02")).toBeNull();
+  it("is a state byte, a nonce and an anchor, little-endian, as in mint-core", () => {
+    const cell = { state: "armed", nonce: 0x0102030405060708n, anchor: 0x0a0b0c0d } as const;
+    expect(encodeMinerCell(cell)).toBe("0x0108070605040302010d0c0b0a");
+    expect(decodeMinerCell(encodeMinerCell(cell))).toEqual(cell);
+    expect(decodeMinerCell("0x" + "00".repeat(9))).toBeNull();
+    expect(decodeMinerCell("0x02" + "00".repeat(12))).toBeNull();
   });
 });
 
@@ -76,52 +83,53 @@ describe("plans", () => {
     expect(plan.btcOutputs.map((o) => o.kind)).toEqual(["seal", "paymaster"]);
   });
 
-  it("a ticket pays the promoter the standard price and spends only the fee", () => {
-    const plan = planTicket(TESTNET, terms, sealed(1, minerCap));
+  it("a ticket pays the promoter the standard price, anchors at the tip, and spends only the fee", () => {
+    const plan = planTicket(TESTNET, terms, miner("idle", minerCap), terms.h0 + 50);
     expect(plan.btcOutputs[1]).toMatchObject({ kind: "ticket", value: TICKET_SATS });
     expect(plan.sumInputsCapacity - sum(plan.virtualTx.outputs)).toBe(CKB_FEE);
-    expect(decodeMinerCell(plan.virtualTx.outputsData[0])?.state).toBe("armed");
+    expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toMatchObject({ state: "armed", anchor: terms.h0 + 50 });
+    expect(() => planTicket(TESTNET, terms, miner("armed", minerCap), terms.h0)).toThrow();
+    expect(() => planTicket(TESTNET, terms, miner("idle", minerCap), terms.h0 - 1)).toThrow();
   });
 
   it("a first mint borrows the token cell from the paymaster, within its cell", () => {
     const plan = planMint(TESTNET, terms, {
-      miner: sealed(1, minerCap),
+      miner: miner("armed", minerCap),
       held: null,
       nonce: 42n,
       reward: 25_600_000_000n,
-      rearm: false,
       paymaster,
     });
     expect(plan.needPaymasterCell).toBe(true);
     expect(plan.sumInputsCapacity + PAYMASTER_CELL > sum(plan.virtualTx.outputs) + MIN_CHANGE).toBe(true);
     // Miner and tokens on different outputs, the nonce in the miner cell.
-    const [miner, token] = plan.virtualTx.outputs.map((o) => sealFromArgs(ccc.CellOutput.from(o).lock.args).vout);
-    expect([miner, token]).toEqual([1, 2]);
-    expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toEqual({ state: "idle", nonce: 42n });
+    const [minerVout, tokenVout] = plan.virtualTx.outputs.map((o) => sealFromArgs(ccc.CellOutput.from(o).lock.args).vout);
+    expect([minerVout, tokenVout]).toEqual([1, 2]);
+    expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toEqual({ state: "idle", nonce: 42n, anchor: terms.h0 });
     expect(decodeAmount(plan.virtualTx.outputsData[1])).toBe(25_600_000_000n);
   });
 
   it("a later mint adds to the held balance and pays only the fee", () => {
     const held: TokenCell = { ...sealed(2, tokenCap), amount: 1_000n };
     const plan = planMint(TESTNET, terms, {
-      miner: sealed(1, minerCap),
+      miner: miner("armed", minerCap),
       held,
       nonce: 7n,
       reward: 500n,
-      rearm: true,
       paymaster: null,
     });
     expect(plan.needPaymasterCell).toBe(false);
     expect(plan.sumInputsCapacity - sum(plan.virtualTx.outputs)).toBe(CKB_FEE);
     expect(decodeAmount(plan.virtualTx.outputsData[1])).toBe(1_500n);
-    expect(plan.btcOutputs.map((o) => o.kind)).toEqual(["seal", "seal", "ticket"]);
+    expect(plan.btcOutputs.map((o) => o.kind)).toEqual(["seal", "seal"]);
     expect(plan.sealsSpent).toHaveLength(2);
   });
 
-  it("refuses a mint of nothing, and a first mint without the paymaster", () => {
-    const base = { miner: sealed(1, minerCap), held: null, nonce: 1n, rearm: false };
+  it("refuses a mint of nothing, a first mint without the paymaster, and an idle cell", () => {
+    const base = { miner: miner("armed", minerCap), held: null, nonce: 1n };
     expect(() => planMint(TESTNET, terms, { ...base, reward: 0n, paymaster })).toThrow();
     expect(() => planMint(TESTNET, terms, { ...base, reward: 1n, paymaster: null })).toThrow();
+    expect(() => planMint(TESTNET, terms, { ...base, miner: miner("idle", minerCap), reward: 1n, paymaster })).toThrow();
   });
 
   it("a transfer with change needs capacity for a second cell; a whole-cell transfer does not", () => {

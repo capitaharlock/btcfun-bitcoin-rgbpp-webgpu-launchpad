@@ -35,19 +35,29 @@ export const MINER_FEE_RESERVE = ccc.fixedPointFrom(10);
 
 export type MinerStateName = "idle" | "armed";
 
+/** A miner cell's data, as `contracts/mint-core` `MinerCell` lays it out. */
 export interface MinerCellData {
   state: MinerStateName;
+  /** The nonce of the last mint. */
   nonce: bigint;
+  /** The height the current ticket's reward is priced at. */
+  anchor: number;
 }
 
 export function encodeMinerCell(cell: MinerCellData): ccc.Hex {
-  return ccc.hexFrom(ccc.bytesConcat([cell.state === "armed" ? 1 : 0], ccc.numLeToBytes(cell.nonce, 8)));
+  return ccc.hexFrom(
+    ccc.bytesConcat([cell.state === "armed" ? 1 : 0], ccc.numLeToBytes(cell.nonce, 8), ccc.numLeToBytes(cell.anchor, 4)),
+  );
 }
 
 export function decodeMinerCell(data: ccc.HexLike): MinerCellData | null {
   const bytes = ccc.bytesFrom(data);
-  if (bytes.length !== 9 || bytes[0] > 1) return null;
-  return { state: bytes[0] === 1 ? "armed" : "idle", nonce: ccc.numLeFromBytes(bytes.slice(1)) };
+  if (bytes.length !== 13 || bytes[0] > 1) return null;
+  return {
+    state: bytes[0] === 1 ? "armed" : "idle",
+    nonce: ccc.numLeFromBytes(bytes.slice(1, 9)),
+    anchor: Number(ccc.numLeFromBytes(bytes.slice(9))),
+  };
 }
 
 export function encodeAmount(atoms: bigint): ccc.Hex {
@@ -67,6 +77,10 @@ export interface SealedCell {
 
 export interface TokenCell extends SealedCell {
   amount: bigint;
+}
+
+export interface MinerCell extends SealedCell {
+  data: MinerCellData;
 }
 
 /** A Bitcoin output the plan needs besides the commitment. */
@@ -101,7 +115,7 @@ function occupied(output: ccc.CellOutputLike, data: ccc.HexLike): bigint {
 /** Capacity a miner cell is opened with: what it occupies, plus its fee reserve. */
 export function minerCellCapacity(config: RgbppConfig, terms: LaunchTerms): bigint {
   const lock = pendingLock(config, 1);
-  const data = encodeMinerCell({ state: "idle", nonce: 0n });
+  const data = encodeMinerCell({ state: "idle", nonce: 0n, anchor: 0 });
   return occupied({ lock, type: mintScript(config, terms) }, data) + MINER_FEE_RESERVE;
 }
 
@@ -138,7 +152,7 @@ export function planOpen(config: RgbppConfig, terms: LaunchTerms, paymaster: Pay
           type: mintScript(config, terms),
         },
       ],
-      outputsData: [encodeMinerCell({ state: "idle", nonce: 0n })],
+      outputsData: [encodeMinerCell({ state: "idle", nonce: 0n, anchor: 0 })],
     },
     btcOutputs: [
       { kind: "seal", value: SEAL_SATS },
@@ -150,15 +164,23 @@ export function planOpen(config: RgbppConfig, terms: LaunchTerms, paymaster: Pay
   });
 }
 
-/** Ticket: pay the promoter, and the miner cell moves to output 1 armed. */
-export function planTicket(config: RgbppConfig, terms: LaunchTerms, miner: SealedCell): Plan {
+/**
+ * Ticket: pay the promoter, and the miner cell moves to output 1 armed,
+ * anchored at `tip` — the height its reward will be priced at. The script
+ * accepts an anchor up to a day behind the block that confirms the ticket, so
+ * the tip at signing time is right; if the ticket sat unconfirmed for longer,
+ * only this empty miner cell would be lost.
+ */
+export function planTicket(config: RgbppConfig, terms: LaunchTerms, miner: MinerCell, tip: number): Plan {
+  if (miner.data.state !== "idle") throw new Error("this miner cell already holds a ticket");
+  if (tip < terms.h0) throw new RangeError("the launch has not opened yet");
   return finish(config, {
     virtualTx: {
       inputs: [miner.outPoint],
       outputs: [
         { capacity: miner.capacity - CKB_FEE, lock: pendingLock(config, 1), type: mintScript(config, terms) },
       ],
-      outputsData: [encodeMinerCell({ state: "armed", nonce: 0n })],
+      outputsData: [encodeMinerCell({ state: "armed", nonce: miner.data.nonce, anchor: tip })],
     },
     btcOutputs: [
       { kind: "seal", value: SEAL_SATS },
@@ -171,24 +193,25 @@ export function planTicket(config: RgbppConfig, terms: LaunchTerms, miner: Seale
 }
 
 export interface MintRequest {
-  miner: SealedCell;
+  miner: MinerCell;
   /** The miner's existing balance of this token, if any, merged into the new cell. */
   held: TokenCell | null;
   nonce: bigint;
-  /** The standard reward for this nonce at the height the mint is expected to confirm. */
+  /** The standard reward for this nonce at the ticket's anchor (`reward()` in `standard.ts`). */
   reward: bigint;
-  /** Buy the next ticket in the same transaction. */
-  rearm: boolean;
   /** Needed only when there is no token cell yet to carry the balance. */
   paymaster: Paymaster | null;
 }
 
 /**
- * Mint: the miner cell returns to idle (or re-arms) at output 1 carrying the
- * nonce, and the balance grows by the reward in a token cell at output 2.
+ * Mint: the miner cell returns to idle at output 1 carrying the nonce, and the
+ * balance grows by the reward in a token cell at output 2. The next ticket is
+ * a separate transaction: the script refuses a mint that re-arms, so that a
+ * transaction carrying a balance never depends on when it confirms.
  */
 export function planMint(config: RgbppConfig, terms: LaunchTerms, request: MintRequest): Plan {
-  const { miner, held, nonce, reward, rearm, paymaster } = request;
+  const { miner, held, nonce, reward, paymaster } = request;
+  if (miner.data.state !== "armed") throw new Error("a mint needs an armed miner cell");
   if (reward <= 0n) throw new RangeError("a mint must mint something");
   const mint = mintScript(config, terms);
   const token = tokenScript(config, mint);
@@ -203,7 +226,6 @@ export function planMint(config: RgbppConfig, terms: LaunchTerms, request: MintR
     { kind: "seal", value: SEAL_SATS },
     { kind: "seal", value: SEAL_SATS },
   ];
-  if (rearm) btcOutputs.push({ kind: "ticket", script: terms.promoterScript, value: TICKET_SATS });
   if (needPaymasterCell) {
     btcOutputs.push({ kind: "paymaster", address: paymaster!.address, value: paymaster!.feeSats });
   }
@@ -220,7 +242,7 @@ export function planMint(config: RgbppConfig, terms: LaunchTerms, request: MintR
         },
       ],
       outputsData: [
-        encodeMinerCell({ state: rearm ? "armed" : "idle", nonce }),
+        encodeMinerCell({ state: "idle", nonce, anchor: miner.data.anchor }),
         encodeAmount((held?.amount ?? 0n) + reward),
       ],
     },

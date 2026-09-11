@@ -17,9 +17,11 @@ pub const HALVING_BLOCKS: u32 = 1008;
 pub const MIN_CLZ: u32 = 16;
 /// Price of one ticket, in satoshis, paid to the promoter.
 pub const TICKET_SATS: u64 = 5_000;
+/// How far behind its confirming block a ticket's declared anchor may be.
+pub const ANCHOR_GRACE_BLOCKS: u32 = 144;
 
-/// Atoms one ticket mints for a hash with `clz` leading zero bits, confirmed at
-/// Bitcoin height `height`, for a launch that opened at `h0`.
+/// Atoms one ticket mints for a hash with `clz` leading zero bits, for a ticket
+/// anchored at Bitcoin height `height`, in a launch that opened at `h0`.
 ///
 /// `None` when the mint is not valid at all — before the launch opens, or below
 /// the minimum — which callers must reject rather than treat as a zero mint.
@@ -125,23 +127,33 @@ pub enum MinerState {
     Armed,
 }
 
-/// A miner cell's data: its state, then the nonce of the last mint.
+/// A miner cell's data: its state, the nonce of the last mint, and the height
+/// its ticket is anchored at.
 ///
 /// ```text
-/// state u8 (0 idle, 1 armed) | nonce u64 LE
+/// state u8 (0 idle, 1 armed) | nonce u64 LE | anchor u32 LE
 /// ```
 ///
 /// The nonce lives in the cell a mint creates rather than in a witness. The
 /// RGB++ commitment covers output data, so the nonce is anchored in the Bitcoin
 /// transaction itself, and the queue service that completes RGB++ transactions
 /// rewrites the witnesses of RGB++ inputs, which would lose it.
+///
+/// The anchor is why a mint can never be invalidated by when it confirms. Once
+/// a Bitcoin transaction spends sealed UTXOs, the CKB transaction it commits to
+/// is the only way those cells ever move again; if it could fail, the cells —
+/// including any balance the mint carries — would be stranded for good. So the
+/// reward is priced at the ticket's anchor, a value fixed before the mint is
+/// signed, and the only height-dependent check happens when a ticket is bought,
+/// where the most a delay can cost is the empty miner cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MinerCell {
     pub state: MinerState,
     pub nonce: u64,
+    pub anchor: u32,
 }
 
-pub const MINER_CELL_BYTES: usize = 9;
+pub const MINER_CELL_BYTES: usize = 13;
 
 impl MinerCell {
     pub fn parse(data: &[u8]) -> Option<Self> {
@@ -151,7 +163,11 @@ impl MinerCell {
             1 => MinerState::Armed,
             _ => return None,
         };
-        Some(MinerCell { state, nonce: u64::from_le_bytes(data[1..].try_into().unwrap()) })
+        Some(MinerCell {
+            state,
+            nonce: u64::from_le_bytes(data[1..9].try_into().unwrap()),
+            anchor: u32::from_le_bytes(data[9..].try_into().unwrap()),
+        })
     }
 
     pub fn encode(self) -> [u8; MINER_CELL_BYTES] {
@@ -160,9 +176,20 @@ impl MinerCell {
             MinerState::Idle => 0,
             MinerState::Armed => 1,
         };
-        out[1..].copy_from_slice(&self.nonce.to_le_bytes());
+        out[1..9].copy_from_slice(&self.nonce.to_le_bytes());
+        out[9..].copy_from_slice(&self.anchor.to_le_bytes());
         out
     }
+}
+
+/// Whether a ticket confirmed at `confirmed` may declare `anchor`: not before
+/// the launch opens, not after it confirmed, and at most a day behind.
+///
+/// The client declares the tip it sees when it signs; the grace absorbs the
+/// blocks until confirmation. It also bounds the one advantage a declared
+/// anchor offers — claiming the rate of a block that has passed — to a day.
+pub fn anchor_valid(anchor: u32, h0: u32, confirmed: u32) -> bool {
+    anchor >= h0 && anchor <= confirmed && confirmed - anchor <= ANCHOR_GRACE_BLOCKS
 }
 
 /// True when the outputs pay `promoter` at least `tickets` full tickets.

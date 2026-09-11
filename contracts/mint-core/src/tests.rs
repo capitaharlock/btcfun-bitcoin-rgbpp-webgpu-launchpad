@@ -98,13 +98,24 @@ fn a_ticket_must_pay_the_promoter_in_full() {
 }
 
 #[test]
-fn a_miner_cell_is_a_state_and_a_nonce_and_nothing_else() {
-    let armed = MinerCell { state: MinerState::Armed, nonce: 0x0102_0304_0506_0708 };
+fn a_miner_cell_is_a_state_a_nonce_and_an_anchor() {
+    let armed = MinerCell { state: MinerState::Armed, nonce: 0x0102_0304_0506_0708, anchor: 0x0a0b_0c0d };
     assert_eq!(MinerCell::parse(&armed.encode()), Some(armed));
-    assert_eq!(armed.encode(), [1, 8, 7, 6, 5, 4, 3, 2, 1]);
-    assert_eq!(MinerCell::parse(&[0; 9]).map(|c| c.state), Some(MinerState::Idle));
+    assert_eq!(armed.encode(), [1, 8, 7, 6, 5, 4, 3, 2, 1, 0x0d, 0x0c, 0x0b, 0x0a]);
+    assert_eq!(MinerCell::parse(&[0; 13]).map(|c| c.state), Some(MinerState::Idle));
     assert_eq!(MinerCell::parse(&[]), None);
-    assert_eq!(MinerCell::parse(&[0; 8]), None);
-    assert_eq!(MinerCell::parse(&[0; 10]), None);
-    assert_eq!(MinerCell::parse(&[2, 0, 0, 0, 0, 0, 0, 0, 0]), None);
+    assert_eq!(MinerCell::parse(&[0; 12]), None);
+    assert_eq!(MinerCell::parse(&[0; 14]), None);
+    let mut bad = [0u8; 13];
+    bad[0] = 2;
+    assert_eq!(MinerCell::parse(&bad), None);
+}
+
+#[test]
+fn an_anchor_is_at_or_shortly_before_the_confirming_block() {
+    assert!(anchor_valid(1000, 1000, 1000));
+    assert!(anchor_valid(1000, 1000, 1000 + ANCHOR_GRACE_BLOCKS));
+    assert!(!anchor_valid(1000, 1000, 1001 + ANCHOR_GRACE_BLOCKS));
+    assert!(!anchor_valid(1001, 1000, 1000), "an anchor after confirmation");
+    assert!(!anchor_valid(999, 1000, 1005), "an anchor before the launch opens");
 }

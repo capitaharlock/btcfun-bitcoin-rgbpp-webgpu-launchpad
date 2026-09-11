@@ -9,7 +9,7 @@
  *   node scripts/ckb/deploy-mint.mjs [--dry-run]
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ccc } from "@ckb-ccc/core";
 import { client, committed, signer } from "./signer.mjs";
@@ -36,6 +36,13 @@ const txHash = await deployer.sendTransaction(tx);
 console.log(`sent ${txHash}; waiting for commitment`);
 await committed(txHash);
 
+// A deployment is permanent, so an earlier one is kept in the record rather
+// than overwritten: launches created against it still name its code hash.
+const previous = existsSync(RECORD) ? JSON.parse(readFileSync(RECORD, "utf8")) : null;
+const superseded = previous
+  ? [...(previous.superseded ?? []), { codeHash: previous.codeHash, cellDep: previous.cellDep, deployedAt: previous.deployedAt }]
+  : [];
+
 const record = {
   network: "ckb-testnet",
   script: "btcfun-mint",
@@ -45,6 +52,8 @@ const record = {
   bytes: code.length,
   lock: "secp256k1-blake160 with zero args: unspendable",
   deployedAt: new Date().toISOString(),
+  build: previous?.build,
+  superseded,
 };
 writeFileSync(RECORD, JSON.stringify(record, null, 2) + "\n");
 console.log(`committed; recorded in contracts/deployments/testnet.json`);

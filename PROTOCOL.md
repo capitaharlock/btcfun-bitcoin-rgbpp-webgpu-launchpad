@@ -73,23 +73,36 @@ into the mint script; a launch cannot override them.
 | `HALVING_BLOCKS` | 1008 | Bitcoin blocks between halvings (about one week) |
 | `MIN_CLZ` | 16 | smallest mintable result |
 | `TICKET_SATS` | 5,000 | price of one ticket, paid in the ticket's Bitcoin transaction |
+| `ANCHOR_GRACE_BLOCKS` | 144 | how far behind its confirming block a ticket's anchor may be |
 
 ### 4.1 Reward
 
 ```text
 challenge = sha256(ticket_txid ‖ ticket_vout)
 clz       = leading zero bits of sha256d(challenge ‖ nonce)
-k         = floor((h_mint − h0) / HALVING_BLOCKS)
-reward    = floor(UNIT × clz² / 2^k)      atoms, if clz ≥ MIN_CLZ and h_mint ≥ h0
+k         = floor((anchor − h0) / HALVING_BLOCKS)
+reward    = floor(UNIT × clz² / 2^k)      atoms, if clz ≥ MIN_CLZ
 ```
 
 The ticket outpoint is the armed miner cell's Bitcoin UTXO (§4.2): the txid in
 internal byte order followed by the output index as little-endian `u32`. Hashing
 it to 32 bytes keeps the preimage at 40 bytes, one SHA-256 block, which is what
-the GPU kernel grinds. `nonce` is 8 bytes, little-endian. `h_mint` is the
-height of the block that confirms the mint transaction, as proven to the RGB++
-lock by the Bitcoin SPV client; the client never supplies it. `h0` is fixed when
+the GPU kernel grinds. `nonce` is 8 bytes, little-endian. `h0` is fixed when
 the launch is created.
+
+`anchor` is the ticket's height: the ticket fixes the rate its mint is paid at.
+The wallet declares the tip it sees when it buys the ticket, and the mint
+script accepts that declaration only if it is no earlier than `h0`, no later
+than the block that confirms the ticket — proven to the RGB++ lock by the
+Bitcoin SPV client — and at most `ANCHOR_GRACE_BLOCKS` before it.
+
+Pricing at the ticket rather than at the mint is a safety property, not a
+convenience. Once a Bitcoin transaction spends sealed UTXOs, the CKB
+transaction it commits to is the only way those cells move again. If a mint's
+validity depended on the height it confirms at, a mint that confirmed after a
+halving would be invalid forever and the balance it carried would be stranded.
+With the rate fixed by the ticket, every condition a mint is checked against is
+known before it is signed.
 
 All arithmetic is exact integer arithmetic. `UNIT × clz²` is at most
 `10^8 × 256² < 2^43`, so it fits a `u64`, and the division is a right shift. The
@@ -116,14 +129,16 @@ mint script. It is `idle` or `armed`.
   challenge: it does not exist before the ticket is paid, so work cannot be
   precomputed, and it can be spent once, so work cannot be reused.
 - **Mint.** A Bitcoin transaction spends the armed cell's UTXO. Its CKB side
-  carries the nonce, returns the miner cell to idle — or re-arms it, when the same
-  transaction pays the next ticket — and increases the miner's xUDT balance by
-  exactly `reward`. One transaction mints and buys the next ticket.
+  returns the miner cell to idle carrying the nonce, and increases the miner's
+  xUDT balance by exactly `reward`. The next ticket is its own transaction: a
+  mint that re-armed would bring the anchor check — the one condition that
+  depends on confirmation time — into a transaction that carries the balance.
 - **Close.** Consuming a miner cell without recreating it returns its capacity.
 
-A ticket has no expiry. Minting later only yields less, because `k` is read at
-the mint's height, not the ticket's; the interface shows the blocks left before
-the next halving while a person mines.
+A ticket has no expiry: its rate is fixed when it is bought, so a person may
+mine against it for a minute or for ten days. The interface shows the blocks
+left before the next halving when a ticket is bought, since that is the moment
+the rate is set.
 
 ### 4.3 Supply
 
@@ -132,7 +147,7 @@ which a shared cap would forbid. Supply is bounded by the halving instead:
 
 - The reward reaches exactly zero once `2^k > UNIT × clz²`. For every possible
   hash that is `k = 43`, about 43 weeks after `h0`; for realistic browser hashes
-  (clz ≤ 40) it is `k = 38`.
+  (clz ≤ 40) it is `k = 38`. A ticket anchored after that mints nothing.
 - The ticket price is fixed while the reward halves weekly, so the cost of
   producing one token doubles every week. Mining continues only while people
   value the result above that cost.
@@ -179,9 +194,10 @@ listings.
 
 ### 6.1 Bitcoin clock and finality
 
-The halving clock is the height of the mint transaction as proven by the
-Bitcoin SPV client that RGB++ already depends on. CKB header references are not
-Bitcoin proofs, and no operator-supplied height is accepted.
+The halving clock is a ticket's anchor, bounded by the ticket's confirming
+height as proven by the Bitcoin SPV client that RGB++ already depends on (§4.1).
+CKB header references are not Bitcoin proofs, and no operator-supplied height is
+accepted.
 
 Specify confirmation thresholds, what the interface shows while a mint waits for
 them, and what happens when CKB has accepted a transition referring to a Bitcoin
@@ -194,7 +210,7 @@ RGB++ binds each CKB cell to a Bitcoin UTXO: the Bitcoin transaction that spends
 the UTXO commits, in an `OP_RETURN`, to the CKB transaction that consumes the
 cell, and the RGB++ lock accepts the CKB transaction only with an SPV proof of
 that Bitcoin transaction. The mint script relies on that check rather than
-repeating it, and reads the same proof for `h_mint` and the ticket output.
+repeating it, and reads the same proof for the ticket payment and its confirming height.
 
 Tooling: the current RGB++ SDK (`rgbpp`, built on CCC) with CCC for CKB. The
 public RGB++ testnet services verify Bitcoin testnet3; the Signet service was
@@ -210,10 +226,12 @@ carry the launch terms: format version, `h0`, the promoter's Bitcoin
 transaction:
 
 - open: one idle miner cell created, no xUDT balance change;
-- ticket: idle in, armed out, the Bitcoin transaction pays `TICKET_SATS` to the
-  promoter, no xUDT balance change;
-- mint: armed in, idle or armed out (armed requires another ticket payment), the
-  xUDT balance under this launch increases by exactly `reward`;
+- ticket: idle in, armed out, the Bitcoin transaction pays the promoter one
+  `TICKET_SATS` for every miner cell it arms, the armed cell's anchor is valid,
+  no xUDT balance change;
+- mint: armed in, idle out carrying the nonce, the xUDT balance under this
+  launch increases by exactly `reward` at the consumed ticket's anchor; a mint
+  that re-arms is refused;
 - close: miner cell consumed, xUDT balance does not increase.
 
 The launch's xUDT uses owner mode by input type (`flags & 0x80000000`) with the
