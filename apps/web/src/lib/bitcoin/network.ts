@@ -6,13 +6,16 @@
  * and explorer URLs. Call sites take a `NetworkConfig`; none of them branch on
  * the network name.
  *
- * Testnet4 is the demo network. Nothing here may be pointed at mainnet before
- * the real-fund review gate.
+ * Testnet3 is the demo network because it is the one the public RGB++
+ * services verify: the Bitcoin SPV client on CKB testnet follows testnet3, and
+ * no RGB++ deployment follows testnet4. Testnet4 remains selectable for the
+ * earlier ticket experiments. Nothing here may be pointed at mainnet before the
+ * real-fund review gate.
  */
 
 import { NETWORK, TEST_NETWORK, type BTC_NETWORK } from "@scure/btc-signer/utils";
 
-export type NetworkId = "testnet4" | "mainnet";
+export type NetworkId = "testnet3" | "testnet4" | "mainnet";
 
 export interface NetworkConfig {
   id: NetworkId;
@@ -31,6 +34,20 @@ export interface NetworkConfig {
   /** Where a visitor gets coins. Empty on mainnet, obviously. */
   faucets: ReadonlyArray<{ name: string; url: string }>;
 }
+
+export const TESTNET3: NetworkConfig = {
+  id: "testnet3",
+  label: "testnet3",
+  params: TEST_NETWORK,
+  bip84Path: "m/84'/1'/0'/0/0",
+  addressPrefix: "tb1",
+  api: import.meta.env.VITE_MEMPOOL_API ?? "https://mempool.space/testnet/api",
+  explorer: "https://mempool.space/testnet",
+  faucets: [
+    { name: "coinfaucet.eu", url: "https://coinfaucet.eu/en/btc-testnet/" },
+    { name: "bitcoinfaucet.uo1.net", url: "https://bitcoinfaucet.uo1.net/" },
+  ],
+};
 
 export const TESTNET4: NetworkConfig = {
   id: "testnet4",
@@ -65,7 +82,11 @@ export const MAINNET: NetworkConfig = {
  * Changing network is a build decision.
  */
 export const ACTIVE: NetworkConfig =
-  import.meta.env.VITE_BITCOIN_NETWORK === "mainnet" ? MAINNET : TESTNET4;
+  import.meta.env.VITE_BITCOIN_NETWORK === "mainnet"
+    ? MAINNET
+    : import.meta.env.VITE_BITCOIN_NETWORK === "testnet4"
+      ? TESTNET4
+      : TESTNET3;
 
 export function txUrl(txid: string, network: NetworkConfig = ACTIVE): string {
   return `${network.explorer}/tx/${txid}`;
