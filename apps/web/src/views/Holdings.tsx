@@ -1,499 +1,238 @@
-/* Holdings: what this wallet actually holds, and what it can do with it.
+/* What you hold, and moving it.
  *
- * Every figure here is replayed from signed records rather than stored, so a
- * balance is a conclusion the page reaches, not a number it was handed. The
- * transfer form produces another signed record; the export produces a file
- * someone else can verify with the same rules.
+ * Balances are the xUDT cells sealed to this wallet's Bitcoin outputs, read
+ * from the chain through the RGB++ service on every poll. A token this app
+ * has no announcement for is still listed, under its type hash: it is yours
+ * whether or not btc.fun knows its name.
  *
- * The redemption panel below is a simulation and labelled as one. Redemption is
- * not implemented — it needs the CKB-side reserve from task `V3` — and
- * PROTOCOL.md §2 withdrew the claim that the payout is a price floor.
+ * A transfer is one Bitcoin transaction that pays the recipient a small output
+ * and seals their tokens to it. The recipient needs no action and no account:
+ * the tokens appear in any RGB++-aware wallet for that address.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Address } from "@scure/btc-signer";
 
-import { navigate } from "../App";
 import type { Launch } from "../data/launches";
-import { useLaunches, useLaunchRules } from "../hooks/useLaunches";
-import { useHoldings } from "../hooks/useHoldings";
-import { useLedger, type UseLedger } from "../hooks/useLedger";
-import { LedgerError, LocalLedger, launchOfExport, recordId, signTransfer } from "../lib/ledger";
-import { rulesFor } from "../data/launches";
-import { NETWORK } from "../state/WalletProvider";
-import { useAnnounce } from "../hooks/useAnnounce";
-import { formatRatio, ratioScaled, redeem } from "../lib/reserve";
+import { useLaunchByToken } from "../hooks/useLaunches";
+import { ACTIVE, matchesNetwork, txUrl } from "../lib/bitcoin/network";
+import { atoms, group, parseAmount, shortHash } from "../lib/format";
+import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
+import { planTransfer, type TokenCell } from "../lib/rgbpp/operations";
+import { DECIMALS } from "../lib/standard";
+import { useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
-import { atoms, group, parseAmount } from "../lib/format";
-import { Chip, KV, Notice, Panel, Stat } from "../ui/primitives";
-import { Copyable } from "../ui/Copyable";
+import { Chip, Field, Notice, Panel, Stat } from "../ui/primitives";
+import { Sigil } from "../ui/Sigil";
 
 export function Holdings() {
-  const launches = useLaunches();
   const wallet = useWallet();
+  const tokens = useTokens();
+  const launchOf = useLaunchByToken();
 
-  // Only launches this wallet has a position or a history in. A card per
-  // launch made the page a wall of zeros, which is the noise a portfolio
-  // exists to remove.
-  // Bumped when a received chain is stored, so positions re-read storage and
-  // an already-open card remounts onto the chain it now holds.
-  const [revision, setRevision] = useState(0);
-  const positions = useHoldings(launches, wallet.vault?.identity, revision);
+  if (!wallet.vault) {
+    return (
+      <Panel eyebrow="holdings" title="Connect a wallet">
+        <p>Tokens are sealed to Bitcoin outputs, so they belong to an address. <a href="#/wallet">Open the wallet</a>.</p>
+      </Panel>
+    );
+  }
+
+  const held = [...(tokens.holdings?.tokens ?? new Map<string, TokenCell[]>()).entries()];
 
   return (
     <div className="stack-lg">
       <div className="row wrapped">
         <div>
-          <div className="eyebrow">portfolio</div>
-          <h1 style={{ fontSize: 28 }}>Holdings</h1>
+          <div className="eyebrow">holdings</div>
+          <h1 style={{ fontSize: 30 }}>Your tokens</h1>
         </div>
         <span className="spacer" />
-        {wallet.vault ? (
-          <Chip tone="cyan" title={wallet.vault.address}>
-            {wallet.vault.identity.slice(0, 12)}…
-          </Chip>
-        ) : (
-          <a className="btn" href="#/wallet">Connect a wallet</a>
-        )}
+        <Chip tone="cyan">{shortHash(wallet.vault.address, 10, 6)}</Chip>
       </div>
 
-      {positions.length === 0 ? (
+      {tokens.error && <Notice tone="warn">Could not read your cells: {tokens.error}</Notice>}
+      {tokens.holdings === null ? (
+        <Panel><p className="faint" style={{ margin: 0 }}>Reading the cells sealed to your address…</p></Panel>
+      ) : held.length === 0 ? (
         <Panel>
-          <h2 style={{ marginBottom: 6 }}>
-            {wallet.vault ? "Nothing here yet" : "Connect a wallet to see your holdings"}
-          </h2>
-          <p style={{ margin: 0, maxWidth: "52ch" }}>
-            {wallet.vault
-              ? "Mine a claim on a live launch, or buy one on the market. Whatever you end up holding shows here alongside the records that produced it."
-              : "Balances are held against your wallet's public key and replayed from signed records, so there is nothing to show until one is connected."}
+          <p style={{ margin: 0 }}>
+            No tokens yet. <a href="#/">Pick a launch</a>, buy a ticket and mint — or ask someone to send you some.
           </p>
-          <div className="rule" />
-          <div className="row wrapped" style={{ gap: 10 }}>
-            {!wallet.vault && (
-              <a className="btn primary" href="#/wallet">Connect a wallet</a>
-            )}
-            <button className={wallet.vault ? "btn primary" : "btn"} onClick={() => navigate("/")}>
-              Find a launch
-            </button>
-            <button className="btn neon" onClick={() => navigate("/market")}>
-              Browse the market
-            </button>
-          </div>
         </Panel>
       ) : (
-        <div className="grid g2">
-          {positions.map(({ launch }) => (
-            <LaunchPosition key={`${launch.id}:${revision}`} launch={launch} />
-          ))}
-        </div>
+        held.map(([tokenId, cells]) => (
+          <Position key={tokenId} tokenId={tokenId} cells={cells} launch={launchOf(tokenId)} />
+        ))
       )}
 
-      {wallet.vault && (
-        <Receive launches={launches} onReceived={() => setRevision((r) => r + 1)} />
-      )}
-
-      {positions.length > 0 && (
-      <Notice>
-        <b>Redemption is not implemented.</b> The panel inside each position is a
-        simulation of <span className="mono">floor(q × R / S)</span> against this
-        chain's own reserve. It is not a price floor, promises no recovery of a
-        ticket's cost, and runs under an allocation rule that has not been
-        adopted (PROTOCOL.md §2, §4.4).
-      </Notice>
-      )}
+      <History operations={tokens.operations} launchOf={launchOf} />
     </div>
   );
 }
 
-
-/**
- * Receiving tokens someone sent you.
- *
- * Until settlement exists, a transfer reaches its recipient as the sender's
- * exported chain. This is the one place a newcomer can paste it: before their
- * first token they have no position card, and so no other import box. The
- * launch is read from the chain itself, and the chain is accepted only if it
- * extends whatever this browser already holds for that launch.
- */
-function Receive({
-  launches,
-  onReceived,
-}: {
-  launches: readonly Launch[];
-  onReceived: () => void;
-}) {
-  const [json, setJson] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [received, setReceived] = useState<string | null>(null);
-
-  const receive = () => {
-    setError(null);
-    setReceived(null);
-    try {
-      const id = launchOfExport(json);
-      const launch = launches.find((l) => l.id === id);
-      if (!launch) {
-        throw new LedgerError(
-          `That chain is for a launch this browser has not seen ("${id}"). Open the launch first, then paste it again.`,
-        );
-      }
-      new LocalLedger(rulesFor(launch, NETWORK.id)).import(json, "extend");
-      setReceived(launch.symbol);
-      setJson("");
-      onReceived();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
+function Position({ tokenId, cells, launch }: { tokenId: string; cells: TokenCell[]; launch: Launch | undefined }) {
+  const total = cells.reduce((n, c) => n + c.amount, 0n);
+  const symbol = launch?.symbol ?? "tokens";
   return (
-    <Panel eyebrow="receive" title="Receive tokens">
-      <p style={{ marginTop: 0, maxWidth: "62ch" }}>
-        Someone who sent you tokens can export their chain and hand it to you.
-        Paste it here: every record is replayed and every signature checked
-        before anything is kept, and nothing you already hold can be overwritten.
-      </p>
-      <div className="field">
-        <label htmlFor="receive-chain">chain you were sent</label>
-        <textarea
-          id="receive-chain"
-          className="input mono"
-          placeholder="paste an exported chain"
-          value={json}
-          onChange={(e) => setJson(e.target.value)}
-        />
-      </div>
-      <button className="btn primary" disabled={!json.trim()} onClick={receive}>
-        Verify and receive
-      </button>
-      {received && (
-        <Notice tone="cyan">
-          Verified. Your {received} position is below.
-        </Notice>
-      )}
-      {error && <Notice tone="warn">{error}</Notice>}
-    </Panel>
-  );
-}
-
-function LaunchPosition({ launch }: { launch: Launch }) {
-  const rules = useLaunchRules(launch);
-  const ledger = useLedger(rules);
-  const wallet = useWallet();
-  const [tab, setTab] = useState<"send" | "records" | "backup">("send");
-
-  const identity = wallet.vault?.identity ?? null;
-  const held = ledger.balanceOf(identity);
-  const state = ledger.state;
-
-  return (
-    <Panel>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <span
-          style={{
-            width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center",
-            background: `color-mix(in oklab, ${launch.accent} 20%, var(--surface-3))`,
-            boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${launch.accent} 40%, transparent)`,
-            fontFamily: "var(--mono)", fontSize: 11, color: launch.accent,
-          }}
-        >
-          {launch.symbol.slice(0, 2)}
+    <Panel
+      eyebrow={launch ? launch.name : "unknown to this app"}
+      title={
+        <span className="row" style={{ gap: 10 }}>
+          {launch && <Sigil symbol={launch.symbol} accent={launch.accent} size="sm" />}
+          {launch ? launch.symbol : shortHash(tokenId, 10, 6)}
         </span>
-        <b>{launch.symbol}</b>
-        <span className="faint tiny">{launch.name}</span>
-        <span className="spacer" />
-        <button className="btn ghost" onClick={() => navigate(`/launch/${launch.id}`)}>
-          Mine →
-        </button>
+      }
+      aside={launch && <a className="btn ghost" href={`#/launch/${launch.id}`}>Open launch</a>}
+    >
+      <div className="split" style={{ alignItems: "start" }}>
+        <div className="stack-md">
+          <div className="statrow">
+            <Stat k="balance" v={atoms(total, DECIMALS, 2)} unit={symbol} tone="amber" />
+            <Stat k="cells" v={group(cells.length)} small />
+          </div>
+          <p className="tiny faint" style={{ margin: 0 }}>
+            Token id <span className="mono">{shortHash(tokenId, 12, 8)}</span>. Each cell is sealed to one of your
+            Bitcoin outputs; spending that output without moving the cell would lose it, which is why this app
+            never uses those outputs to pay fees.
+          </p>
+        </div>
+        {launch ? (
+          <TransferForm launch={launch} cells={cells} total={total} />
+        ) : (
+          <Notice>
+            This app has no announcement for this token, so it will not build a transfer for it. It is still
+            yours, and any RGB++ wallet can move it.
+          </Notice>
+        )}
       </div>
-
-      <div className="statrow">
-        <Stat
-          k="you hold"
-          v={atoms(held, launch.schedule.decimals, 4)}
-          unit={launch.symbol}
-          tone={held > 0n ? "amber" : undefined}
-        />
-        <Stat k="chain supply" v={atoms(state?.supply ?? 0n, launch.schedule.decimals, 2)} small />
-        <Stat k="reserve" v={group(state?.reserveSats ?? 0)} unit="sats" small />
-        <Stat k="records" v={state?.length ?? 0} small />
-      </div>
-
-      {ledger.error && <Notice tone="warn">{ledger.error}</Notice>}
-
-      <div className="rule" />
-
-      <div className="segmented" role="group" aria-label={`${launch.symbol} actions`}>
-        {(["send", "records", "backup"] as const).map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={tab === id ? "on" : ""}
-            aria-pressed={tab === id}
-            onClick={() => setTab(id)}
-          >
-            {id === "send" ? "Send" : id === "records" ? "Records" : "Backup"}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ marginTop: 12 }}>
-        {tab === "send" && <SendForm launch={launch} ledger={ledger} held={held} />}
-        {tab === "records" && <Records ledger={ledger} launch={launch} />}
-        {tab === "backup" && <Backup ledger={ledger} launch={launch} />}
-      </div>
-
-      {held > 0n && state && state.supply > 0n && (
-        <RedemptionPreview launch={launch} held={held} reserveSats={state.reserveSats} supply={state.supply} />
-      )}
     </Panel>
   );
 }
 
-function SendForm({ launch, ledger, held }: { launch: Launch; ledger: UseLedger; held: bigint }) {
-  const wallet = useWallet();
-  const announce = useAnnounce();
-  const rules = useLaunchRules(launch);
+function TransferForm({ launch, cells, total }: { launch: Launch; cells: TokenCell[]; total: bigint }) {
+  const tokens = useTokens();
   const [to, setTo] = useState("");
-  const [amount, setAmount] = useState("");
-  const [memo, setMemo] = useState("");
-  const [sending, setSending] = useState(false);
+  const [amountText, setAmountText] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<Operation | null>(null);
 
-  const scale = 10n ** BigInt(launch.schedule.decimals);
-  const parsed = parseAmount(amount, launch.schedule.decimals);
-  const valid = parsed !== null && parsed > 0n && parsed <= held && /^0[23][0-9a-f]{64}$/.test(to.trim());
+  const amount = useMemo(() => parseAmount(amountText, DECIMALS), [amountText]);
+  const toFault = to && !validAddress(to) ? `A ${ACTIVE.label} address, starting with ${ACTIVE.addressPrefix}.` : null;
+  const amountFault =
+    amountText && (amount === null || amount <= 0n)
+      ? "A positive amount, up to 8 decimals."
+      : amount !== null && amount > total
+        ? "More than you hold."
+        : null;
+  const ready = validAddress(to) && amount !== null && amount > 0n && amount <= total;
 
   const send = async () => {
-    if (!wallet.vault || parsed === null) return;
-    setSending(true);
+    if (!ready || amount === null) return;
+    setBusy(true);
     setError(null);
-    setSent(false);
     try {
-      const record = await signTransfer(wallet.vault, ledger.ledger, rules, {
-        to: to.trim(),
-        amount: parsed,
-        memo: memo.trim() || undefined,
+      const plan = planTransfer(ACTIVE_RGBPP, launch.terms, {
+        from: cells,
+        amount,
+        to,
+        paymaster: await tokens.service.paymaster(),
       });
-      if (ledger.append(record)) {
-        setSent(true);
-        void announce({
+      setSent(
+        await tokens.submit(plan, {
           kind: "transfer",
-          launch: launch.id,
-          amount: parsed,
-          ref: recordId(record.body),
-        });
-        setTo("");
-        setAmount("");
-        setMemo("");
-      }
+          launchId: launch.id,
+          tokenId: launch.tokenId,
+          atoms: amount.toString(),
+        }),
+      );
+      setAmountText("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setSending(false);
+      setBusy(false);
     }
   };
 
-  if (!wallet.vault) return <p className="tiny faint">Connect a wallet to send.</p>;
-  if (held === 0n) {
-    return (
-      <p className="tiny faint">
-        Nothing to send yet. Mine a claim on the <a href={`#/launch/${launch.id}`}>launch page</a>.
-      </p>
-    );
-  }
-
   return (
     <div className="stack-sm">
-      <div className="field">
-        <label htmlFor={`to-${launch.id}`}>recipient public key</label>
-        <input
-          id={`to-${launch.id}`}
-          className="input"
-          placeholder="02… or 03… (66 hex characters)"
-          spellCheck={false}
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-        />
-      </div>
-      <div className="row" style={{ gap: 10 }}>
-        <div className="field" style={{ flex: 1 }}>
-          <label htmlFor={`amt-${launch.id}`}>amount</label>
-          <input
-            id={`amt-${launch.id}`}
-            className="input"
-            inputMode="decimal"
-            placeholder="0.0000"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
-        <button
-          className="btn"
-          style={{ alignSelf: "end" }}
-          onClick={() => setAmount((Number(held) / Number(scale)).toString())}
-        >
-          Max
-        </button>
-      </div>
-      <div className="field">
-        <label htmlFor={`memo-${launch.id}`}>memo (optional)</label>
-        <input
-          id={`memo-${launch.id}`}
-          className="input"
-          maxLength={120}
-          value={memo}
-          onChange={(e) => setMemo(e.target.value)}
-        />
-      </div>
-
-      <button className="btn primary block" disabled={!valid || sending} onClick={() => void send()}>
-        {sending ? "Signing…" : `Send ${launch.symbol}`}
+      <Field label="Send to" hint={toFault ?? "Any Bitcoin address. The tokens are sealed to a small output that pays it."}>
+        <input className="input mono" spellCheck={false} placeholder={`${ACTIVE.addressPrefix}…`} value={to} onChange={(e) => setTo(e.target.value.trim())} />
+      </Field>
+      <Field label={`Amount (${launch.symbol})`} hint={amountFault ?? `You hold ${atoms(total, DECIMALS, 8)}.`}>
+        <input className="input" inputMode="decimal" placeholder="0.0" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
+      </Field>
+      <button className="btn primary" disabled={!ready || busy} onClick={() => void send()}>
+        {busy ? "Signing…" : "Send"}
       </button>
-
+      <p className="tiny faint" style={{ margin: 0 }}>
+        A transfer that leaves you change needs a second cell, whose capacity the RGB++ paymaster provides for a
+        fee in the same transaction.
+      </p>
+      {error && <Notice tone="danger">{error}</Notice>}
       {sent && (
         <Notice tone="cyan">
-          Signed and appended. Hand the recipient your exported chain from the
-          Backup tab — without shared settlement, a transfer only reaches them
-          if the records do.
+          Sent — <a href={txUrl(sent.btcTxid)} target="_blank" rel="noreferrer">view the Bitcoin transaction</a>. It
+          settles on CKB after it confirms.
         </Notice>
       )}
-      {error && <Notice tone="warn">{error}</Notice>}
     </div>
   );
 }
 
-function Records({ ledger, launch }: { ledger: UseLedger; launch: Launch }) {
-  if (ledger.records.length === 0) {
-    return <p className="tiny faint">No records on this chain yet.</p>;
+function validAddress(address: string): boolean {
+  if (!matchesNetwork(address, ACTIVE)) return false;
+  try {
+    Address(ACTIVE.params).decode(address);
+    return true;
+  } catch {
+    return false;
   }
-
-  return (
-    <div className="hashlog" style={{ maxHeight: 210 }}>
-      {[...ledger.records].reverse().map((record) => {
-        const body = record.body;
-        return (
-          <div className="entry" key={`${body.seq}`}>
-            <span className="clz">{body.seq}</span>
-            <span>{body.kind}</span>
-            <span className="spacer" />
-            <span>
-              {body.kind === "claim"
-                ? `+${atoms(BigInt(body.amount), launch.schedule.decimals, 4)} · ${body.clz} bits`
-                : `−${atoms(BigInt(body.amount), launch.schedule.decimals, 4)} → ${body.to.slice(0, 10)}…`}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
-function Backup({ ledger, launch }: { ledger: UseLedger; launch: Launch }) {
-  const [json, setJson] = useState("");
-  const [shown, setShown] = useState(false);
-  // Resetting deletes the only copy of these records this browser has, so it
-  // takes two deliberate clicks and says exactly what will be lost.
-  const [confirming, setConfirming] = useState(false);
-  const importId = `import-${launch.id}`;
-
+function History({ operations, launchOf }: { operations: Operation[]; launchOf: (tokenId: string) => Launch | undefined }) {
+  if (operations.length === 0) return null;
+  const tone = { sent: "cyan", queued: "cyan", settled: "ok", failed: "danger" } as const;
   return (
-    <div className="stack-sm">
-      <div className="row" style={{ gap: 8 }}>
-        <button className="btn" onClick={() => setShown((s) => !s)}>
-          {shown ? "Hide export" : "Export this chain"}
-        </button>
-        {!confirming && (
-          <button className="btn ghost" onClick={() => setConfirming(true)}>
-            Reset chain
-          </button>
-        )}
+    <Panel eyebrow="this wallet" title="Operations">
+      <div style={{ overflowX: "auto" }}>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>what</th>
+              <th>token</th>
+              <th>amount</th>
+              <th>stage</th>
+              <th>bitcoin</th>
+              <th>ckb</th>
+            </tr>
+          </thead>
+          <tbody>
+            {operations.map((op) => {
+              const launch = launchOf(op.tokenId);
+              return (
+                <tr key={op.btcTxid}>
+                  <td>{op.kind}</td>
+                  <td>{launch?.symbol ?? shortHash(op.tokenId, 8, 4)}</td>
+                  <td className="mono">
+                    {op.atoms ? atoms(BigInt(op.atoms), DECIMALS, 2) : op.sats ? `${group(op.sats)} sats` : "—"}
+                  </td>
+                  <td><Chip tone={tone[op.stage]} live={op.stage === "sent" || op.stage === "queued"}>{op.stage}</Chip></td>
+                  <td><a href={txUrl(op.btcTxid)} target="_blank" rel="noreferrer" className="mono">{op.btcTxid.slice(0, 10)}…</a></td>
+                  <td>
+                    {op.ckbTxHash ? (
+                      <a href={`${ACTIVE_RGBPP.ckbExplorer}${op.ckbTxHash}`} target="_blank" rel="noreferrer" className="mono">
+                        {op.ckbTxHash.slice(0, 12)}…
+                      </a>
+                    ) : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      {confirming && (
-        <Notice tone="warn">
-          This deletes {ledger.records.length} record{ledger.records.length === 1 ? "" : "s"} from
-          this browser, and with them the balance they prove. Export the chain first
-          if you might want it back.
-          <div className="row" style={{ gap: 8, marginTop: 10 }}>
-            <button
-              className="btn"
-              onClick={() => {
-                ledger.clear();
-                setConfirming(false);
-              }}
-            >
-              Delete {ledger.records.length} record{ledger.records.length === 1 ? "" : "s"}
-            </button>
-            <button className="btn ghost" onClick={() => setConfirming(false)}>
-              Keep them
-            </button>
-          </div>
-        </Notice>
-      )}
-      {shown && <Copyable value={ledger.exportChain()} label="ledger chain" />}
-
-      <div className="field">
-        <label htmlFor={importId}>import a chain</label>
-        <textarea
-          id={importId}
-          className="input mono"
-          placeholder="paste an exported chain"
-          value={json}
-          onChange={(e) => setJson(e.target.value)}
-        />
-      </div>
-      <button className="btn" disabled={!json.trim()} onClick={() => ledger.importChain(json)}>
-        Verify and replace
-      </button>
-      <Notice>
-        Importing replaces this chain rather than merging. Merging two signed
-        histories needs a rule for which one wins, and that rule is consensus —
-        the thing this layer does not have.
-      </Notice>
-    </div>
+    </Panel>
   );
 }
-
-function RedemptionPreview({
-  launch,
-  held,
-  reserveSats,
-  supply,
-}: {
-  launch: Launch;
-  held: bigint;
-  reserveSats: number;
-  supply: bigint;
-}) {
-  const [share, setShare] = useState(25);
-  const q = (held * BigInt(share)) / 100n;
-  const R = BigInt(reserveSats);
-  const { payout, R2, S2 } = redeem(q, R, supply);
-
-  return (
-    <>
-      <div className="rule" />
-      <div className="eyebrow" style={{ marginBottom: 8 }}>redemption simulation — not implemented</div>
-      <label className="tiny faint" htmlFor={`redeem-${launch.id}`}>
-        redeem {share}% of your position
-      </label>
-      <input
-        id={`redeem-${launch.id}`}
-        type="range"
-        min={1}
-        max={100}
-        value={share}
-        onChange={(e) => setShare(Number(e.target.value))}
-      />
-      <KV
-        rows={[
-          ["Redeeming", atoms(q, launch.schedule.decimals, 4)],
-          ["Would pay", `${group(payout)} sats`],
-          ["Ratio before", formatRatio(ratioScaled(R, supply))],
-          ["Ratio after", formatRatio(ratioScaled(R2, S2))],
-        ]}
-      />
-    </>
-  );
-}
-
