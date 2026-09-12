@@ -1,331 +1,139 @@
-/* Proof Explorer.
+/* Verify a mint: paste a Bitcoin txid, get every rule re-checked.
  *
- * PROTOCOL.md §3 requires that invalid, incomplete and stale evidence stay
- * distinguishable from a valid proof. So this page never shows a single green
- * badge: each claim is paired with what it actually establishes and what it
- * rests on, and the checks that are not implemented say so in the same table as
- * the ones that are.
- *
- * The recomputations are real. The candidate verifier calls the same
- * `recompute` the miner and the ledger use — not a second implementation that
- * could agree with the UI while disagreeing with the rules — and the chain
- * verifier replays every signed record from genesis.
+ * The page fetches the Bitcoin transaction from the Bitcoin provider, asks the
+ * RGB++ service which CKB transaction it settled as, fetches that and the cells
+ * it consumed from a CKB node, and hands the raw data to `verifyMint`. The
+ * service is only used to find the CKB hash; everything checked comes from the
+ * two chains. A reader who trusts neither provider can run the same function
+ * against their own nodes.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { ccc } from "@ckb-ccc/core";
 
 import { navigate } from "../App";
-import { PROTOCOL_VERSION, type Launch } from "../data/launches";
-import { useEpochBlockHash, useLaunch, useLaunchRules } from "../hooks/useLaunches";
-import { useLedger } from "../hooks/useLedger";
-import { challengeDigest, type ChallengeFields } from "../lib/challenge";
-import { recompute } from "../lib/mining";
-import { recordId, type LaunchRules } from "../lib/ledger";
-import { bytesToHex } from "../lib/bytes";
-import { NETWORK, useWallet } from "../state/WalletProvider";
-import { txUrl } from "../lib/bitcoin";
-import { atoms, shortHash, splitLeadingZeros } from "../lib/format";
-import { Chip, KV, Notice, Panel } from "../ui/primitives";
+import { getTx } from "../lib/bitcoin";
+import { txUrl } from "../lib/bitcoin/network";
+import { atoms } from "../lib/format";
+import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
+import { verifyMint, type MintVerdict } from "../lib/rgbpp/verify";
+import { DECIMALS } from "../lib/standard";
+import { useTokens } from "../state/TokensProvider";
+import { Chip, Field, Notice, Panel } from "../ui/primitives";
 
-/** What a check actually establishes, and what it rests on. */
-type Strength = "local" | "inclusion" | "assumption" | "missing";
-
-const STRENGTH: Record<Strength, { label: string; tone?: "ok" | "cyan" | "warn" | "danger" }> = {
-  local: { label: "locally verified", tone: "ok" },
-  inclusion: { label: "needs inclusion proof", tone: "warn" },
-  assumption: { label: "trust assumption", tone: "warn" },
-  missing: { label: "not implemented", tone: "danger" },
-};
-
-interface Check {
-  claim: string;
-  establishes: string;
-  rests_on: string;
-  strength: Strength;
+let client: ccc.Client | null = null;
+function ckb(): ccc.Client {
+  client ??= new ccc.ClientPublicTestnet();
+  return client;
 }
 
-const PENDING_BLOCK = "0".repeat(64);
+type State =
+  | { kind: "idle" }
+  | { kind: "reading" }
+  | { kind: "pending"; detail: string }
+  | { kind: "done"; verdict: MintVerdict; ckbTxHash: string }
+  | { kind: "error"; message: string };
 
-export function ProofView({ id }: { id: string }) {
-  const launch = useLaunch(id);
-  if (!launch) {
-    return (
-      <Panel title="Launch not found">
-        <button className="btn" onClick={() => navigate("/")}>Back</button>
-      </Panel>
+export function ProofView({ txid }: { txid?: string }) {
+  const tokens = useTokens();
+  const [input, setInput] = useState(txid ?? "");
+  const [state, setState] = useState<State>({ kind: "idle" });
+
+  useEffect(() => {
+    if (!txid) return;
+    let live = true;
+    setState({ kind: "reading" });
+    (async () => {
+      const btc = await getTx(txid);
+      const status = await tokens.service.status(txid);
+      if (!status.ckbTxHash) {
+        return { kind: "pending", detail: `The RGB++ queue has not settled it on CKB yet (${status.state}).` } as State;
+      }
+      const response = await ckb().getTransaction(status.ckbTxHash);
+      if (!response) return { kind: "error", message: "The CKB node does not know that transaction." } as State;
+      const tx = response.transaction;
+      const inputs = await Promise.all(
+        tx.inputs.map(async (i) => {
+          const cell = await ckb().getCell(i.previousOutput);
+          if (!cell) throw new Error("A consumed cell could not be fetched from the CKB node.");
+          return { output: cell.cellOutput, data: cell.outputData };
+        }),
+      );
+      const verdict = verifyMint(ACTIVE_RGBPP, {
+        btcTxid: txid,
+        btcOutputs: btc.outputs.map((o) => o.script),
+        ckbTx: tx,
+        inputs,
+      });
+      return { kind: "done", verdict, ckbTxHash: status.ckbTxHash } as State;
+    })().then(
+      (next) => live && setState(next),
+      (err: unknown) => live && setState({ kind: "error", message: err instanceof Error ? err.message : String(err) }),
     );
-  }
-  return <ProofBody launch={launch} />;
-}
-
-function ProofBody({ launch }: { launch: Launch }) {
-  const rules = useLaunchRules(launch);
-  const wallet = useWallet();
-  const epochBlockHash = useEpochBlockHash(launch);
-  const [nonce, setNonce] = useState(0n);
-
-  const fields = useMemo<ChallengeFields>(() => {
-    return {
-      version: PROTOCOL_VERSION,
-      network: NETWORK.id,
-      launch: launch.id,
-      epoch: launch.epoch,
-      btcBlockHash: epochBlockHash ?? PENDING_BLOCK,
-      ticket: "example-ticket",
-      owner: wallet.vault?.identity ?? "unconnected",
+    return () => {
+      live = false;
     };
-  }, [launch, epochBlockHash, wallet.vault?.identity]);
+  }, [txid, tokens.service]);
 
-  const verified = useMemo(() => {
-    const challenge = challengeDigest(fields);
-    return { challenge, candidate: recompute(challenge, nonce) };
-  }, [fields, nonce]);
-
-  const checks: Check[] = [
-    {
-      claim: "Challenge encoding is canonical",
-      establishes: "The field set below serialises to exactly this digest, unambiguously.",
-      rests_on: "Length-prefixed encoding in challenge.ts. Recomputed in your browser.",
-      strength: "local",
-    },
-    {
-      claim: "Candidate hash matches the submitted nonce",
-      establishes: "sha256d(challenge ‖ nonce) equals the digest shown, and its clz is as stated.",
-      rests_on: "The dependency-free SHA-256 in this page, which also re-checks every GPU result.",
-      strength: "local",
-    },
-    {
-      claim: "Records are signed by the identities they name",
-      establishes: "Each record's ECDSA signature verifies against its stated author over its digest.",
-      rests_on: "secp256k1 verification, replayed here from genesis.",
-      strength: "local",
-    },
-    {
-      claim: "No record mints more than the rule allows",
-      establishes: "Each claim's amount equals what the §4.3 backing-limited candidate computes.",
-      rests_on: "Replay of the whole chain. The rule itself is a candidate, not adopted.",
-      strength: "local",
-    },
-    {
-      claim: "The ticket was actually paid",
-      establishes: "A transaction with that id exists on the network and carries the launch commitment.",
-      rests_on:
-        "mempool.space's word, looked up by this page. Replay does not check it — a stored " +
-        "chain takes the txid and the satoshis from the record itself. Not an inclusion proof.",
-      strength: "inclusion",
-    },
-    {
-      claim: "The epoch used the stated Bitcoin block",
-      establishes: "The hash came from the provider for the epoch's opening height.",
-      rests_on: "That provider being honest. No SPV proof or accepted-clock policy. Task V8.",
-      strength: "assumption",
-    },
-    {
-      claim: "The epoch had opened when it was claimed",
-      establishes:
-        "Nothing. Replay validates epochs by index and never learns the opening height, so a " +
-        "record can name an epoch the launch had not reached.",
-      rests_on: "An accepted Bitcoin clock and a canonical admission cursor. Tasks V8, V9.",
-      strength: "missing",
-    },
-    {
-      claim: "This block is on the canonical chain",
-      establishes: "Not established. Fetching from an endpoint is not canonicality.",
-      rests_on: "Chain selection, confirmations and data availability. Task V8.",
-      strength: "assumption",
-    },
-    {
-      claim: "Ownership is bound to a Bitcoin UTXO",
-      establishes: "Nothing yet. Records are signed, but nothing anchors them to a UTXO.",
-      rests_on: "RGB++ binding and an authorization proof. Tasks V3, WA6.",
-      strength: "missing",
-    },
-    {
-      claim: "This chain is the only chain",
-      establishes: "Nothing. Two conflicting signed histories are equally valid to a verifier.",
-      rests_on: "Settlement and consensus. The whole point of tasks V1–V3.",
-      strength: "missing",
-    },
-    {
-      claim: "The admitted set for this epoch is complete",
-      establishes: "Nothing yet. A reproducible queue can still be an incomplete queue.",
-      rests_on: "Admission completeness mechanism. Task V9.",
-      strength: "missing",
-    },
-    {
-      claim: "Redemption pays what the reserve implies",
-      establishes: "Nothing — redemption is simulated, and the reserve is burned satoshis.",
-      rests_on: "A CKB-side reserve asset with script enforcement. Task V3.",
-      strength: "missing",
-    },
-  ];
-
-  const { zeros, rest } = splitLeadingZeros(verified.candidate.hash);
-  const counts = {
-    local: checks.filter((c) => c.strength === "local").length,
-    missing: checks.filter((c) => c.strength === "missing").length,
-  };
+  const valid = /^[0-9a-f]{64}$/.test(input.trim());
 
   return (
     <div className="stack-lg">
-      <div className="row wrapped">
-        <button className="btn ghost" onClick={() => navigate(`/launch/${launch.id}`)}>
-          ← {launch.symbol}
-        </button>
-        <span className="spacer" />
-        <Chip tone="ok">{counts.local} locally verifiable</Chip>
-        <Chip tone="danger">{counts.missing} not implemented</Chip>
-      </div>
-
       <div>
-        <div className="eyebrow">proof explorer</div>
-        <h1 style={{ fontSize: 28 }}>{launch.symbol} evidence</h1>
+        <div className="eyebrow">proof</div>
+        <h1 style={{ fontSize: 30 }}>
+          Verify a <span className="grad-text">mint</span>
+        </h1>
       </div>
 
-      <Notice tone="danger">
-        <span>
-          <b>Most of this proof does not exist yet.</b> Signatures, work and the
-          minting rule are checked here in full. Settlement is not: nothing
-          anchors these records to Bitcoin or CKB, so this page tells you exactly
-          which of the two you are looking at rather than showing one badge.
-        </span>
-      </Notice>
-
-      <section className="split">
-        <Panel eyebrow="recompute in your browser" title="Candidate verification">
-          <div className="row wrapped" style={{ gap: 14, marginBottom: 12 }}>
-            <label className="tiny faint" htmlFor="nonce">nonce</label>
-            <input
-              id="nonce"
-              className="input"
-              style={{ width: 180 }}
-              type="number"
-              min={0}
-              value={Number(nonce)}
-              onChange={(e) => setNonce(BigInt(Math.max(0, Math.floor(Number(e.target.value) || 0))))}
-            />
-            <button className="btn" onClick={() => setNonce((n) => n + 1n)}>step</button>
-            <span className="spacer" />
-            <Chip tone="cyan">clz {verified.candidate.clz}</Chip>
+      <Panel eyebrow="input" title="The mint's Bitcoin transaction">
+        <div className="row wrapped" style={{ alignItems: "flex-end" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Field label="Bitcoin txid" hint={input && !valid ? "64 lowercase hexadecimal characters." : "From the operations list, or any explorer."}>
+              <input className="input mono" spellCheck={false} value={input} onChange={(e) => setInput(e.target.value.trim().toLowerCase())} />
+            </Field>
           </div>
-
-          <div className="eyebrow" style={{ marginBottom: 6 }}>challenge digest</div>
-          <div className="hash" style={{ marginBottom: 14 }}>{bytesToHex(verified.challenge)}</div>
-
-          <div className="eyebrow" style={{ marginBottom: 6 }}>sha256d(challenge ‖ nonce)</div>
-          <div className="hash">
-            <span className="z">{zeros}</span>
-            {rest}
-          </div>
-
-          <div className="rule" />
-          <KV
-            rows={[
-              ["version", fields.version],
-              ["network", fields.network],
-              ["launch", fields.launch],
-              ["epoch", String(fields.epoch)],
-              ["btc block", epochBlockHash ? shortHash(epochBlockHash, 14, 8) : "waiting…"],
-              ["ticket", fields.ticket],
-              ["owner", shortHash(fields.owner, 12, 6)],
-            ]}
-          />
-        </Panel>
-
-        <ChainVerification
-          launchId={launch.id}
-          rules={rules}
-          decimals={launch.schedule.decimals}
-        />
-      </section>
-
-      <Panel flush eyebrow="§3" title="What each check establishes">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Claim</th>
-              <th>Establishes</th>
-              <th>Rests on</th>
-              <th className="right">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {checks.map((c) => (
-              <tr key={c.claim}>
-                <td style={{ color: "var(--ink)" }}>{c.claim}</td>
-                <td className="tiny">{c.establishes}</td>
-                <td className="tiny faint">{c.rests_on}</td>
-                <td className="right">
-                  <Chip tone={STRENGTH[c.strength].tone}>{STRENGTH[c.strength].label}</Chip>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
-    </div>
-  );
-}
-
-/** Replays this wallet's chain and shows the verdict per record. */
-function ChainVerification({
-  launchId,
-  rules,
-  decimals,
-}: {
-  launchId: string;
-  rules: LaunchRules;
-  decimals: number;
-}) {
-  const ledger = useLedger(rules);
-
-  return (
-    <Panel
-      eyebrow="replay from genesis"
-      title="This chain"
-      aside={
-        ledger.state ? (
-          <Chip tone="ok">{ledger.state.length} records replayed</Chip>
-        ) : (
-          <Chip tone="danger">invalid</Chip>
-        )
-      }
-    >
-      {ledger.records.length === 0 ? (
-        <p className="tiny faint">
-          No records yet. Mine a claim on the{" "}
-          <a href={`#/launch/${launchId}`}>launch page</a> and it will appear here
-          with everything that was checked about it.
-        </p>
-      ) : (
-        <div className="hashlog" style={{ maxHeight: 280 }}>
-          {[...ledger.records].reverse().map((record) => (
-            <div className="entry" key={record.body.seq}>
-              <span className="clz">{record.body.seq}</span>
-              <span>{record.body.kind}</span>
-              <span className="spacer" />
-              {record.body.kind === "claim" && (
-                <a href={txUrl(record.body.ticket)} target="_blank" rel="noreferrer">
-                  ticket ↗
-                </a>
-              )}
-              <span>{atoms(BigInt(record.body.amount), decimals, 4)}</span>
-              <span className="faint">{recordId(record.body).slice(0, 10)}…</span>
-            </div>
-          ))}
+          <button className="btn primary" disabled={!valid} onClick={() => navigate(`/proof/${input.trim()}`)}>Verify</button>
         </div>
+      </Panel>
+
+      {state.kind === "reading" && <Panel><p className="faint" style={{ margin: 0 }}>Reading both chains…</p></Panel>}
+      {state.kind === "pending" && <Notice tone="cyan">{state.detail}</Notice>}
+      {state.kind === "error" && <Notice tone="danger">{state.message}</Notice>}
+      {state.kind === "done" && txid && (
+        <Panel
+          eyebrow="verdict"
+          title={state.verdict.valid ? "Every rule holds" : "This is not a valid mint"}
+          aside={<Chip tone={state.verdict.valid ? "cyan" : "danger"}>{state.verdict.valid ? "valid" : "invalid"}</Chip>}
+        >
+          <div className="stack-sm">
+            {state.verdict.checks.map((check) => (
+              <div key={check.label} className="row" style={{ alignItems: "flex-start", gap: 10 }}>
+                <Chip tone={check.ok ? "cyan" : "danger"}>{check.ok ? "✓" : "✗"} {check.label}</Chip>
+                <span className="tiny" style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{check.detail}</span>
+              </div>
+            ))}
+          </div>
+          {state.verdict.minted !== null && state.verdict.valid && (
+            <p style={{ marginBottom: 0 }}>Minted <b>{atoms(state.verdict.minted, DECIMALS, 2)}</b> tokens.</p>
+          )}
+          <div className="rule" />
+          <div className="tiny faint" style={{ overflowWrap: "anywhere" }}>
+            Bitcoin <a href={txUrl(txid)} target="_blank" rel="noreferrer">{txid}</a>
+            <br />
+            CKB <a href={`${ACTIVE_RGBPP.ckbExplorer}${state.ckbTxHash}`} target="_blank" rel="noreferrer">{state.ckbTxHash}</a>
+          </div>
+        </Panel>
       )}
 
-      {ledger.error && <Notice tone="danger">{ledger.error}</Notice>}
-
-      <div className="rule" />
-      <p className="tiny faint" style={{ margin: 0 }}>
-        Replay checks every signature, every chain link, every nonce against the
-        work it claims, every ticket for reuse, and every amount against the
-        allocation rule. A single fault rejects the chain rather than returning
-        a valid prefix — a balance derived from a partly-valid history is not a
-        balance.
-      </p>
-    </Panel>
+      <Panel eyebrow="what this checks" title="And what it relies on">
+        <p className="tiny">
+          The commitment, the ticket, the proof of work and the amount are recomputed here from raw chain data with
+          the same functions the mint script's vectors pin. What is relied on: that the Bitcoin provider and the CKB
+          node report the chains honestly, and that the Bitcoin transaction is confirmed — the RGB++ lock checked
+          that with an SPV proof when CKB accepted it.
+        </p>
+      </Panel>
+    </div>
   );
 }
