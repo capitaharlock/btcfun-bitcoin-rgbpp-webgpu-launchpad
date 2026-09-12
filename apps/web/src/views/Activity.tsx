@@ -105,7 +105,7 @@ export function Activity() {
                   mine={entry.signed.body.actor === wallet.vault?.identity}
                   symbol={bySymbol.get(entry.signed.body.launch)?.symbol ?? entry.signed.body.launch}
                   accent={bySymbol.get(entry.signed.body.launch)?.accent ?? "var(--ink-faint)"}
-                  decimals={bySymbol.get(entry.signed.body.launch)?.schedule.decimals ?? 8}
+                  decimals={8}
                   onOpen={() => navigate(`/launch/${entry.signed.body.launch}`)}
                 />
               ))}

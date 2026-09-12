@@ -1,312 +1,164 @@
-import { useMemo, useState } from "react";
-import {
-  CANDIDATE,
-  cumulative,
-  epochRows,
-  maxAtoms,
-  MILESTONES,
-  terminalOffset,
-  type Schedule,
-} from "../lib/emission";
-import { firstDilution, formatRatio, simulate, type EpochInput } from "../lib/reserve";
-import { Bars, EmissionChart } from "../ui/EmissionChart";
-import { Chip, Field, KV, Notice, Panel, Stat } from "../ui/primitives";
-import { atoms, blocksAsTime, group, pct } from "../lib/format";
+/* The standard, explained with its own arithmetic.
+ *
+ * Every launch follows the same rules (`PROTOCOL.md` §4), so this page is the
+ * one place to see what they imply. The simulator is deliberately simple — a
+ * number of tickets per week and how long each miner grinds — because the
+ * questions people actually have are simple: how much gets issued, what does
+ * the promoter earn, and what does a token cost to produce as weeks pass.
+ *
+ * Every figure comes from `reward()`, the function the mint script's vectors
+ * pin. Hash strength is expected, not guaranteed: grinding for N attempts
+ * gives a best hash of about log2(N) leading zero bits.
+ */
 
-/** Turnout shapes used to probe the allocation rules. */
-const SHAPES: Record<string, { label: string; note: string; at: (i: number) => number }> = {
-  collapse: {
-    label: "Launch then collapse",
-    note: "Busy first epochs, then one persistent miner. The case E1 has to reproduce.",
-    at: (i) => (i < 6 ? 40 - i * 4 : 1),
-  },
-  steady: {
-    label: "Steady turnout",
-    note: "Constant participation across the window.",
-    at: () => 12,
-  },
-  sparse: {
-    label: "Sparse and lumpy",
-    note: "Long empty stretches punctuated by bursts.",
-    at: (i) => (i % 5 === 0 ? 18 : i % 3 === 0 ? 2 : 0),
-  },
-  dead: {
-    label: "Never gets traction",
-    note: "Almost every epoch expires unmined.",
-    at: (i) => (i === 0 ? 3 : i % 9 === 0 ? 1 : 0),
-  },
-};
+import { useMemo, useState } from "react";
+
+import { atoms, group } from "../lib/format";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, reward, terminalHalving, TICKET_SATS } from "../lib/standard";
+import { RewardChart } from "../ui/RewardChart";
+import { Field, KV, Notice, Panel, Stat } from "../ui/primitives";
+
+const DEVICES = [
+  { id: "phone", label: "Phone CPU", rate: 1e6 },
+  { id: "laptop", label: "Laptop CPU", rate: 5e6 },
+  { id: "gpu", label: "Browser GPU", rate: 3e8 },
+] as const;
+
+const WEEKS = 8;
 
 export function Lab() {
-  const [halfLife, setHalfLife] = useState(1008);
-  const [decimals, setDecimals] = useState(8);
-  const [epochBlocks, setEpochBlocks] = useState(6);
-  const [shape, setShape] = useState<keyof typeof SHAPES>("collapse");
-  const [epochCount, setEpochCount] = useState(48);
+  const [tickets, setTickets] = useState(200);
+  const [decay, setDecay] = useState(30);
+  const [device, setDevice] = useState<(typeof DEVICES)[number]["id"]>("laptop");
+  const [minutes, setMinutes] = useState(5);
 
-  const schedule: Schedule = useMemo(
-    () => ({ ...CANDIDATE, halfLife: BigInt(halfLife), decimals }),
-    [halfLife, decimals],
-  );
+  const rate = DEVICES.find((d) => d.id === device)!.rate;
+  const clz = Math.max(0, Math.floor(Math.log2(rate * minutes * 60)));
+  const mintable = clz >= MIN_CLZ;
 
-  const terminal = useMemo(() => terminalOffset(schedule), [schedule]);
-  const M = maxAtoms(schedule);
-
-  const rows = useMemo(
-    () => epochRows(schedule, BigInt(epochBlocks), epochCount),
-    [schedule, epochBlocks, epochCount],
-  );
-
-  const epochs: EpochInput[] = useMemo(
+  const weeks = useMemo(
     () =>
-      rows.map((r, i) => ({
-        budget: r.budget,
-        tickets: SHAPES[shape].at(i),
-        ticketBacking: 20_000_000n,
-      })),
-    [rows, shape],
+      Array.from({ length: WEEKS }, (_, k) => {
+        const sold = Math.round(tickets * (1 - decay / 100) ** k);
+        const perTicket = mintable ? reward(clz, 0, k * HALVING_BLOCKS) : 0n;
+        return { week: k + 1, sold, perTicket, minted: perTicket * BigInt(sold), revenue: sold * TICKET_SATS };
+      }),
+    [tickets, decay, clz, mintable],
   );
-
-  // Seed with a prior epoch's worth of backing so a ratio exists to dilute.
-  const seed = useMemo(() => {
-    const first = rows[0]?.budget ?? 0n;
-    return { reserve: 400_000_000n, liabilities: first > 0n ? first : 1n };
-  }, [rows]);
-
-  const uncapped = useMemo(() => simulate(epochs, "uncapped", seed), [epochs, seed]);
-  const capped = useMemo(() => simulate(epochs, "backing-limited", seed), [epochs, seed]);
-
-  const dilutionU = firstDilution(uncapped);
-  const dilutionC = firstDilution(capped);
-
-  const lastU = uncapped[uncapped.length - 1];
-  const lastC = capped[capped.length - 1];
-
-  const expiredU = uncapped.reduce((a, r) => a + r.expired, 0n);
-  const expiredC = capped.reduce((a, r) => a + r.expired, 0n);
+  const supply = weeks.reduce((n, w) => n + w.minted, 0n);
+  const revenue = weeks.reduce((n, w) => n + w.revenue, 0);
 
   return (
     <div className="stack-lg">
-      <div className="row wrapped">
-        <div>
-          <div className="eyebrow">tasks E1 · E2 · E4</div>
-          <h1 style={{ fontSize: 28 }}>Emission lab</h1>
-        </div>
-        <span className="spacer" />
-        <Chip tone="warn">no rule adopted</Chip>
+      <div>
+        <div className="eyebrow">the standard</div>
+        <h1 style={{ fontSize: 30 }}>
+          One set of rules, <span className="grad-text">every token</span>
+        </h1>
       </div>
 
-      <Notice>
-        <b>This is evidence tooling, not a product screen.</b> It runs the integer
-        schedule from PROTOCOL.md §4.1 and reproduces the reserve failure that
-        task&nbsp;E1 requires, alongside the §4.3 candidate cap. A green result
-        here is not an adoption decision — E5 is.
-      </Notice>
-
-      {/* ---------------- schedule ---------------- */}
       <section className="split">
-        <Panel eyebrow="§4.1" title="Discrete issuance ceiling">
-          <EmissionChart
-            schedule={schedule}
-            spanBlocks={BigInt(halfLife) * 12n}
-            markers={MILESTONES.map((m) => ({ at: m.blocks, label: m.label }))}
-            height={200}
+        <Panel eyebrow="rules" title="What every launch shares">
+          <KV
+            rows={[
+              ["Ticket", `${group(TICKET_SATS)} sats, paid to the launch's promoter`],
+              ["Challenge", "the ticket's own Bitcoin output"],
+              ["Reward", "1 token × clz² for a hash with clz leading zero bits"],
+              ["Minimum", `${MIN_CLZ} bits`],
+              ["Halving", `every ${group(HALVING_BLOCKS)} Bitcoin blocks from opening; the ticket fixes the rate`],
+              ["Supply", `no cap; nothing mints after halving ${terminalHalving(256)}`],
+              ["Decimals", String(DECIMALS)],
+            ]}
           />
           <div className="rule" />
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Milestone</th>
-                <th className="right">Blocks</th>
-                <th className="right">Scheduled</th>
-                <th className="right">Share</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MILESTONES.map((m) => {
-                const c = cumulative(schedule, m.blocks);
-                return (
-                  <tr key={m.label}>
-                    <td>{m.label}</td>
-                    <td className="n">{group(m.blocks)}</td>
-                    <td className="n">{atoms(c, decimals, 0)}</td>
-                    <td className="n">{pct(Number((c * 10000n) / M) / 10000, 2)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <Notice>
+            The creator picks a name and an income address — nothing economic. So the supply of any token is simply
+            what its tickets minted, and two tokens' numbers mean the same thing.
+          </Notice>
         </Panel>
-
-        <div className="stack-md">
-          <Panel eyebrow="parameters" title="Schedule">
-            <div className="stack-sm">
-              <Field label="Half-life" hint={`${halfLife} blocks · ${blocksAsTime(halfLife)}`}>
-                <input
-                  type="range" min={168} max={4032} step={168}
-                  value={halfLife}
-                  onChange={(e) => setHalfLife(Number(e.target.value))}
-                />
-              </Field>
-              <Field label="Decimals" hint="frozen before implementation (§2)">
-                <input
-                  className="input" type="number" min={0} max={18}
-                  value={decimals}
-                  onChange={(e) => setDecimals(Math.max(0, Math.min(18, Number(e.target.value))))}
-                />
-              </Field>
-              <Field label="Epoch length" hint={`${epochBlocks} blocks · V4 decides this`}>
-                <input
-                  type="range" min={1} max={36} step={1}
-                  value={epochBlocks}
-                  onChange={(e) => setEpochBlocks(Number(e.target.value))}
-                />
-              </Field>
-            </div>
-          </Panel>
-
-          <Panel eyebrow="§2 · withdrawn claim" title="Terminal block">
-            <Stat
-              k="schedule stops issuing at offset"
-              v={group(terminal)}
-              unit="blk"
-              tone="danger"
-            />
-            <p className="tiny" style={{ marginTop: 10 }}>
-              With finite integer arithmetic, <span className="mono">floor(M × 2⁻ⁿ/ᴴ)</span>{" "}
-              underflows to zero and the tail terminates — about{" "}
-              {blocksAsTime(terminal)} after h₀ at these parameters. "Perpetual
-              nonzero emission" was withdrawn for exactly this reason; the
-              terminal point is a parameter choice, not an accident to hide.
-            </p>
-          </Panel>
-        </div>
+        <Panel eyebrow="why these rules" title="What they are for">
+          <p className="tiny">
+            <b>Immediacy.</b> A miner sees what the best hash is worth while mining and mints exactly that; nobody else's
+            turnout changes it.
+          </p>
+          <p className="tiny">
+            <b>Bounded without a cap.</b> The ticket costs the same while its reward halves weekly, so the cost of making
+            one token doubles every week. Mining stops paying long before the arithmetic stops minting.
+          </p>
+          <p className="tiny">
+            <b>Hardware matters, but slowly.</b> 1,000× the hash rate buys about 10 more leading zero bits: roughly
+            twice the tokens, not a thousand times.
+          </p>
+          <p className="tiny" style={{ marginBottom: 0 }}>
+            <b>Enforced on chain.</b> A CKB script checks the ticket payment, the hash and the amount. The client only
+            shows the same arithmetic.
+          </p>
+        </Panel>
       </section>
 
-      {/* ---------------- dilution ---------------- */}
-      <Panel
-        eyebrow="task E1"
-        title="Reserve dilution under falling turnout"
-        aside={
-          <div className="row">
-            <select
-              className="input"
-              style={{ width: 200 }}
-              value={shape}
-              onChange={(e) => setShape(e.target.value as keyof typeof SHAPES)}
-            >
-              {Object.entries(SHAPES).map(([k, v]) => (
-                <option key={k} value={k}>{v.label}</option>
-              ))}
-            </select>
-            <select
-              className="input"
-              style={{ width: 110 }}
-              value={epochCount}
-              onChange={(e) => setEpochCount(Number(e.target.value))}
-            >
-              {[24, 48, 96, 168].map((n) => (
-                <option key={n} value={n}>{n} epochs</option>
-              ))}
-            </select>
+      <Panel eyebrow="simulate" title="Tickets, effort and what gets issued">
+        <div className="split" style={{ alignItems: "start" }}>
+          <div className="stack-sm">
+            <Field label={`Tickets in week 1 — ${group(tickets)}`}>
+              <input type="range" min={10} max={5000} step={10} value={tickets} onChange={(e) => setTickets(Number(e.target.value))} />
+            </Field>
+            <Field label={`Fewer tickets each week — ${decay}%`}>
+              <input type="range" min={0} max={90} step={5} value={decay} onChange={(e) => setDecay(Number(e.target.value))} />
+            </Field>
+            <Field label="Each miner grinds on">
+              <div className="segmented" role="group" aria-label="Device">
+                {DEVICES.map((d) => (
+                  <button key={d.id} type="button" className={device === d.id ? "on" : ""} aria-pressed={device === d.id} onClick={() => setDevice(d.id)}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label={`For — ${minutes} min per ticket`} hint={`Expected best hash: ${clz} bits${mintable ? "" : ` — below ${MIN_CLZ}, mints nothing`}.`}>
+              <input type="range" min={1} max={600} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} />
+            </Field>
           </div>
-        }
-      >
-        <p className="tiny">{SHAPES[shape].note}</p>
-
-        <div className="grid g2" style={{ marginTop: 14 }}>
           <div className="stack-md">
-            <div className="row">
-              <h3>Uncapped allocation</h3>
-              <span className="spacer" />
-              {dilutionU
-                ? <Chip tone="danger">dilutes at epoch {dilutionU.index}</Chip>
-                : <Chip tone="ok">no dilution</Chip>}
+            <div className="statrow">
+              <Stat k={`issued in ${WEEKS} weeks`} v={atoms(supply, DECIMALS, 0)} tone="amber" />
+              <Stat k="promoter income" v={group(revenue)} unit="sats" tone="cyan" />
             </div>
-            <KV
-              rows={[
-                ["Final backing ratio", formatRatio(lastU?.ratioScaled ?? 0n)],
-                ["Minted", atoms(lastU?.liabilities ?? 0n, decimals, 0)],
-                ["Expired", atoms(expiredU, decimals, 0)],
-              ]}
-            />
-            <Bars values={uncapped.map((r) => Number(r.ratioScaled / 1_000_000n))} tone="danger" />
-            <div className="tiny faint">backing per token atom, per epoch</div>
-          </div>
-
-          <div className="stack-md">
-            <div className="row">
-              <h3>Backing-limited candidate</h3>
-              <span className="spacer" />
-              {dilutionC
-                ? <Chip tone="danger">dilutes at epoch {dilutionC.index}</Chip>
-                : <Chip tone="ok">ratio non-decreasing</Chip>}
+            <div style={{ overflowX: "auto" }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>week</th>
+                    <th>tickets</th>
+                    <th>per ticket</th>
+                    <th>issued</th>
+                    <th>sats per token</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weeks.map((w) => (
+                    <tr key={w.week}>
+                      <td>{w.week}</td>
+                      <td className="mono">{group(w.sold)}</td>
+                      <td className="mono">{atoms(w.perTicket, DECIMALS, 0)}</td>
+                      <td className="mono">{atoms(w.minted, DECIMALS, 0)}</td>
+                      <td className="mono">
+                        {w.perTicket > 0n ? (TICKET_SATS / (Number(w.perTicket) / 10 ** DECIMALS)).toFixed(2) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <KV
-              rows={[
-                ["Final backing ratio", formatRatio(lastC?.ratioScaled ?? 0n)],
-                ["Minted", atoms(lastC?.liabilities ?? 0n, decimals, 0)],
-                ["Expired", atoms(expiredC, decimals, 0)],
-              ]}
-            />
-            <Bars values={capped.map((r) => Number(r.ratioScaled / 1_000_000n))} tone="cyan" />
-            <div className="tiny faint">
-              m ≤ min(B, floor(ΔR × S / R)) — PROTOCOL.md §4.3
-            </div>
+            <p className="tiny faint" style={{ margin: 0 }}>
+              "Sats per token" is what the ticket costs divided by what it mints: the production cost, which doubles
+              every halving. It is not a price — a token is worth what someone pays for it.
+            </p>
           </div>
         </div>
-
-        {dilutionU && (
-          <>
-            <div className="rule" />
-            <Notice tone="danger">
-              <span>
-                <b>Reproduced.</b> Under the uncapped rule, epoch {dilutionU.index}{" "}
-                mints {atoms(dilutionU.minted, decimals, 0)} tokens against{" "}
-                {atoms(dilutionU.newBacking, 8, 2)} of new backing, moving the ratio
-                from {formatRatio(uncapped[dilutionU.index - 1].ratioScaled)} to{" "}
-                {formatRatio(dilutionU.ratioScaled)}. Existing holders' backing per
-                token falls so a late, cheap entrant can take the scheduled
-                allowance. This is the defect that blocks implementation.
-              </span>
-            </Notice>
-          </>
-        )}
       </Panel>
 
-      {/* ---------------- per-epoch table ---------------- */}
-      <Panel flush eyebrow="§4.1" title="Per-epoch budgets">
-        <div style={{ padding: "0 16px 8px" }}>
-          <Bars values={rows.map((r) => Number(r.budget / 10n ** BigInt(decimals)))} />
-        </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Epoch</th>
-              <th className="right">Offsets</th>
-              <th className="right">Budget</th>
-              <th className="right">Tickets</th>
-              <th className="right">Minted (capped)</th>
-              <th className="right">Expired</th>
-              <th className="right">Ratio</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 14).map((r, i) => (
-              <tr key={r.index}>
-                <td className="mono">{r.index}</td>
-                <td className="n faint">{group(r.startOffset)}–{group(r.endOffset)}</td>
-                <td className="n">{atoms(r.budget, decimals, 2)}</td>
-                <td className="n">{epochs[i]?.tickets ?? 0}</td>
-                <td className="n">{atoms(capped[i]?.minted ?? 0n, decimals, 2)}</td>
-                <td className="n" style={{ color: (capped[i]?.expired ?? 0n) > 0n ? "var(--danger)" : undefined }}>
-                  {atoms(capped[i]?.expired ?? 0n, decimals, 2)}
-                </td>
-                <td className="n">{formatRatio(capped[i]?.ratioScaled ?? 0n)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel eyebrow="schedule" title="What one ticket mints, week by week">
+        <RewardChart h0={0} tip={null} symbol="tokens" />
       </Panel>
     </div>
   );

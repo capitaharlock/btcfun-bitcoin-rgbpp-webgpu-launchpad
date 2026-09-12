@@ -1,90 +1,121 @@
 /* Creating a launch.
  *
- * A launch is a public commitment, so it is a signed object rather than a row
- * somebody inserted: the creator's key authorises the symbol, the schedule, the
- * ticket price and the opening height, and anyone can check that the launch
- * they are mining is the one that was announced.
+ * A launch is the token's identity and nothing else: a symbol, a name, one
+ * sentence, an accent colour, the Bitcoin address its tickets pay, and the
+ * height it opens at. The economics are the standard (`PROTOCOL.md` §4) and are
+ * not the creator's to choose.
  *
- * Created launches live alongside the fixtures. They come back from the index
- * as `launch` activity events, and a local copy keeps the creator's own launch
- * visible when the index is unreachable — the same first-local-then-publish
- * ordering the rest of the app uses.
+ * The launch id is the token's own identity. Its terms — opening height,
+ * metadata hash and promoter script — are the mint script's args, and the
+ * token is the xUDT that script owns, so `tokenId` is fixed by the terms and
+ * the id carries its first 64 bits. Two creators cannot share an id without
+ * sharing every term, and nobody can announce a launch whose id belongs to a
+ * different token.
+ *
+ * Creating a launch costs nothing on chain: the mint script is already
+ * deployed and permissionless, and the token comes into existence with its
+ * first mint. What is published is a signed announcement to the index, so
+ * others can find it, and a local copy so the creator sees it immediately.
  */
 
-import { canonicalDigest, canonicalId, type Field } from "../canonical";
+import { canonicalId, type Field } from "../canonical";
 import { record, signActivity } from "../activity";
 import type { Vault } from "../bitcoin";
-import { CANDIDATE } from "../emission";
-import type { LaunchSpec } from "../../data/launches";
+import { ACTIVE, matchesNetwork, type NetworkConfig } from "../bitcoin/network";
+import { ACTIVE_RGBPP } from "../rgbpp/config";
+import { metadataHash, promoterScriptFor, tokenId, type LaunchTerms, type TokenMetadata } from "../rgbpp/launch";
+import { Address } from "@scure/btc-signer";
 
-const LOCAL_KEY = "btcfun:created-launches:v1";
+const LOCAL_KEY = "btcfun:created-launches:v2";
 
-/** Symbols the seeded fixtures already use, so a creation cannot confuse one. */
-const RESERVED_SYMBOLS = new Set([
-  "MESH",
-  "OBSV",
-  "FORGE",
-  "QUILL",
-  "TIDE",
-  "LUMEN",
-  "CAIRN",
-  "RELIC",
-]);
+/** Hex characters of the token id carried in a launch id: 64 bits. */
+const ID_TOKEN_CHARS = 16;
 
-/**
- * Hex characters of the genesis digest carried in a launch id.
- *
- * 64 bits. The id has to stay short enough to live in a URL and long enough
- * that nobody grinds a second commitment onto an existing launch's namespace —
- * where the ledger, the reserve address and the ticket memos all live.
- */
-const ID_DIGEST_CHARS = 16;
+export const ACCENTS = [
+  "var(--amber)",
+  "var(--cyan)",
+  "var(--magenta)",
+  "var(--violet)",
+  "var(--mint)",
+  "var(--warn)",
+] as const;
 
-/** The signed part of a launch. Mirrors `LaunchSpec` minus derived display. */
+/** The signed announcement of a launch. */
 export interface LaunchCommitment {
-  v: "btcfun/launch/1";
+  v: "btcfun/launch/2";
   id: string;
   symbol: string;
   name: string;
   blurb: string;
-  /** Bitcoin height at which mining opens. Committed in advance (§5). */
-  h0: number;
-  epochBlocks: number;
-  halfLife: number;
-  decimals: number;
-  ticketSats: number;
-  minClz: number;
   accent: string;
+  /** SHA-256 of the token image, hex; empty when there is none. */
+  imageHash: string;
+  /** Bitcoin height at which minting opens. */
+  h0: number;
+  /** The Bitcoin address every ticket pays. */
+  promoter: string;
+  /** The xUDT type hash the terms produce. */
+  tokenId: string;
+  /** Identity of the announcer. */
   creator: string;
   at: string;
 }
 
+export function metadataOf(c: Pick<LaunchCommitment, "name" | "symbol" | "blurb" | "imageHash">): TokenMetadata {
+  return { name: c.name, symbol: c.symbol, description: c.blurb, imageHash: c.imageHash };
+}
+
+export function termsOf(
+  c: Pick<LaunchCommitment, "name" | "symbol" | "blurb" | "imageHash" | "h0" | "promoter">,
+  network: NetworkConfig = ACTIVE,
+): LaunchTerms {
+  return {
+    h0: c.h0,
+    metadataHash: metadataHash(metadataOf(c)),
+    promoterScript: promoterScriptFor(c.promoter, network),
+  };
+}
+
+/** The readable half of a launch id. Not unique on its own. */
+export function slugFor(symbol: string): string {
+  return symbol.trim().toLowerCase();
+}
+
+export function launchIdFor(symbol: string, token: string): string {
+  return `${slugFor(symbol)}-${token.replace(/^0x/, "").slice(0, ID_TOKEN_CHARS)}`;
+}
+
+export const LAUNCH_ID_PATTERN = new RegExp(`^[a-z][a-z0-9]{1,7}-[0-9a-f]{${ID_TOKEN_CHARS}}$`);
+
 /**
- * Everything a launch *is*, excluding its id.
- *
- * The id is derived from these, so including it would be circular — and would
- * also let a commitment name an id its own terms do not produce.
+ * True when an announcement's id and token id are the ones its own terms
+ * produce. False for anything malformed, rather than throwing: announcements
+ * arrive from an index, which is untrusted input.
  */
+export function idMatches(c: LaunchCommitment, network: NetworkConfig = ACTIVE): boolean {
+  try {
+    const token = tokenId(ACTIVE_RGBPP, termsOf(c, network));
+    return c.tokenId === token && c.id === launchIdFor(c.symbol, token);
+  } catch {
+    return false;
+  }
+}
+
 function fieldsOf(c: LaunchCommitment): Field[] {
   return [
     ["v", c.v],
+    ["id", c.id],
     ["symbol", c.symbol],
     ["name", c.name],
     ["blurb", c.blurb],
-    ["h0", String(c.h0)],
-    ["epochBlocks", String(c.epochBlocks)],
-    ["halfLife", String(c.halfLife)],
-    ["decimals", String(c.decimals)],
-    ["ticketSats", String(c.ticketSats)],
-    ["minClz", String(c.minClz)],
     ["accent", c.accent],
+    ["imageHash", c.imageHash],
+    ["h0", String(c.h0)],
+    ["promoter", c.promoter],
+    ["tokenId", c.tokenId],
     ["creator", c.creator],
     ["at", c.at],
   ];
-}
-
-export function commitmentDigest(c: LaunchCommitment): Uint8Array {
-  return canonicalDigest(fieldsOf(c));
 }
 
 export function commitmentId(c: LaunchCommitment): string {
@@ -95,132 +126,87 @@ export interface LaunchDraft {
   symbol: string;
   name: string;
   blurb: string;
-  /** Blocks from now until mining opens. Never zero: §5 wants a future h0. */
-  opensInBlocks: number;
-  epochBlocks: number;
-  halfLife: number;
-  decimals: number;
-  ticketSats: number;
-  minClz: number;
   accent: string;
+  /** Where ticket income goes. Defaults to the creator's own address. */
+  promoter: string;
+  /** Blocks from now until minting opens. At least one: a launch is announced before it opens. */
+  opensInBlocks: number;
 }
 
 /** Field-level problems, keyed by field, so a form can show them in place. */
 export type DraftFaults = Partial<Record<keyof LaunchDraft, string>>;
 
-export function validate(draft: LaunchDraft): DraftFaults {
+export function validate(draft: LaunchDraft, network: NetworkConfig = ACTIVE): DraftFaults {
   const faults: DraftFaults = {};
 
   const symbol = draft.symbol.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9]{1,7}$/.test(symbol)) {
     faults.symbol = "2–8 characters, letters and digits, starting with a letter.";
-  } else if (RESERVED_SYMBOLS.has(symbol)) {
-    faults.symbol = "A seeded launch already uses that symbol.";
   }
-
   if (draft.name.trim().length < 2 || draft.name.trim().length > 40) {
     faults.name = "Between 2 and 40 characters.";
   }
   if (draft.blurb.trim().length < 10 || draft.blurb.trim().length > 160) {
     faults.blurb = "Between 10 and 160 characters — one sentence people will read.";
   }
-  // A launch that opens in the past cannot commit to a future block, which is
-  // what stops a creator mining their own launch before announcing it (§5).
-  if (!Number.isInteger(draft.opensInBlocks) || draft.opensInBlocks < 1) {
-    faults.opensInBlocks = "Must open at a future block.";
+  if (!validAddress(draft.promoter.trim(), network)) {
+    faults.promoter = `A ${network.label} address, starting with ${network.addressPrefix}.`;
   }
-  if (!Number.isInteger(draft.epochBlocks) || draft.epochBlocks < 1 || draft.epochBlocks > 144) {
-    faults.epochBlocks = "Between 1 and 144 blocks.";
+  // Opening at a future block is what stops a creator mining their own launch
+  // before anyone else can see it.
+  if (!Number.isInteger(draft.opensInBlocks) || draft.opensInBlocks < 1 || draft.opensInBlocks > 1008) {
+    faults.opensInBlocks = "Between 1 and 1,008 blocks from now.";
   }
-  if (!Number.isInteger(draft.halfLife) || draft.halfLife < 36 || draft.halfLife > 20_160) {
-    faults.halfLife = "Between 36 and 20,160 blocks.";
-  }
-  if (!Number.isInteger(draft.decimals) || draft.decimals < 0 || draft.decimals > 12) {
-    faults.decimals = "Between 0 and 12.";
-  }
-  if (!Number.isInteger(draft.ticketSats) || draft.ticketSats < 546) {
-    faults.ticketSats = "At least 546 sats, the relay dust limit.";
-  }
-  if (!Number.isInteger(draft.minClz) || draft.minClz < 8 || draft.minClz > 32) {
-    faults.minClz = "Between 8 and 32 bits. Above 28 takes minutes on a CPU.";
-  }
-
   return faults;
 }
 
-export function isReady(draft: LaunchDraft): boolean {
-  return Object.keys(validate(draft)).length === 0;
+function validAddress(address: string, network: NetworkConfig): boolean {
+  if (!matchesNetwork(address, network)) return false;
+  try {
+    Address(network.params).decode(address);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** The readable half of a launch id. Not unique on its own. */
-export function slugFor(symbol: string): string {
-  return symbol.trim().toLowerCase();
+export function isReady(draft: LaunchDraft, network: NetworkConfig = ACTIVE): boolean {
+  return Object.keys(validate(draft, network)).length === 0;
 }
 
-/**
- * A launch's identity: its symbol, then the digest of its genesis commitment.
- *
- * The id used to be the lowercase symbol, which meant two creators could
- * commit to entirely different terms — different emission, different ticket
- * price, different creator — and land on the same id. That id is the
- * namespace for the ledger, the reserve address, ticket memos and discovery, so
- * the second launch would not merely be confusing: it would inherit the first
- * one's chain. Deriving it from the commitment makes the identity immutable and
- * unforgeable — changing any term changes the id — while keeping the symbol
- * visible at the front of every URL.
- *
- * `pattern` below is the shape every consumer checks before trusting an id.
- */
-export function launchId(c: LaunchCommitment): string {
-  return `${slugFor(c.symbol)}-${canonicalId(fieldsOf(c)).slice(0, ID_DIGEST_CHARS)}`;
-}
-
-/** Ids this scheme produces. Fixture ids are plain slugs and never match. */
-export const LAUNCH_ID_PATTERN = new RegExp(`^[a-z][a-z0-9]{1,7}-[0-9a-f]{${ID_DIGEST_CHARS}}$`);
-
-/** True when a commitment's stated id is the one its own terms produce. */
-export function idMatches(c: LaunchCommitment): boolean {
-  return typeof c.id === "string" && c.id === launchId(c);
-}
-
-/** Build the commitment a draft implies, given the height it is signed at. */
+/** The announcement a draft implies, given the height it is signed at. */
 export function commitmentFor(
   draft: LaunchDraft,
   creator: string,
   tipHeight: number,
+  network: NetworkConfig = ACTIVE,
 ): LaunchCommitment {
-  const symbol = draft.symbol.trim().toUpperCase();
-  const terms: LaunchCommitment = {
-    v: "btcfun/launch/1",
-    // Filled in below, once the terms that determine it are all present.
-    id: "",
-    symbol,
+  const base = {
+    symbol: draft.symbol.trim().toUpperCase(),
     name: draft.name.trim(),
     blurb: draft.blurb.trim(),
+    imageHash: "",
     h0: tipHeight + draft.opensInBlocks,
-    epochBlocks: draft.epochBlocks,
-    halfLife: draft.halfLife,
-    decimals: draft.decimals,
-    ticketSats: draft.ticketSats,
-    minClz: draft.minClz,
+    promoter: draft.promoter.trim(),
+  };
+  const token = tokenId(ACTIVE_RGBPP, termsOf(base, network));
+  return {
+    v: "btcfun/launch/2",
+    id: launchIdFor(base.symbol, token),
+    ...base,
     accent: draft.accent,
+    tokenId: token,
     creator,
     at: new Date().toISOString(),
   };
-  return { ...terms, id: launchId(terms) };
 }
 
-/** Sign the commitment, keep it locally and publish it to the index. */
-export async function createLaunch(
-  vault: Vault,
-  draft: LaunchDraft,
-  tipHeight: number,
-): Promise<LaunchCommitment> {
+/** Sign the announcement, keep it locally and publish it to the index. */
+export async function createLaunch(vault: Vault, draft: LaunchDraft, tipHeight: number): Promise<LaunchCommitment> {
   const faults = validate(draft);
   if (Object.keys(faults).length > 0) {
     throw new Error(Object.values(faults)[0] ?? "That launch is not valid.");
   }
-
   const commitment = commitmentFor(draft, vault.identity, tipHeight);
   const signed = await signActivity(vault, {
     kind: "launch",
@@ -228,7 +214,6 @@ export async function createLaunch(
     ref: commitmentId(commitment),
     meta: JSON.stringify(commitment),
   });
-
   remember(commitment);
   await record(signed);
   return commitment;
@@ -238,9 +223,7 @@ export async function createLaunch(
 
 function readLocal(): LaunchCommitment[] {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(localStorage.getItem(LOCAL_KEY) ?? "[]");
     return Array.isArray(parsed) ? (parsed as LaunchCommitment[]) : [];
   } catch {
     return [];
@@ -248,42 +231,14 @@ function readLocal(): LaunchCommitment[] {
 }
 
 function remember(commitment: LaunchCommitment): void {
-  const existing = readLocal().filter((c) => c.id !== commitment.id);
-  localStorage.setItem(LOCAL_KEY, JSON.stringify([commitment, ...existing].slice(0, 50)));
+  try {
+    const existing = readLocal().filter((c) => c.id !== commitment.id);
+    localStorage.setItem(LOCAL_KEY, JSON.stringify([commitment, ...existing].slice(0, 50)));
+  } catch {
+    // Storage full or blocked: the index copy still exists, and the page shows it.
+  }
 }
 
 export function createdLocally(): LaunchCommitment[] {
   return readLocal();
-}
-
-export function forgetCreated(id: string): void {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(readLocal().filter((c) => c.id !== id)));
-}
-
-/** Turn a commitment into a spec the rest of the app can render.
- *
- *  `blocksSinceOpen` is derived from the committed `h0` rather than stored, so
- *  a created launch ages against the chain exactly like a fixture does. */
-export function specFor(commitment: LaunchCommitment, tipHeight: number): LaunchSpec {
-  const age = tipHeight - commitment.h0;
-  return {
-    id: commitment.id,
-    symbol: commitment.symbol,
-    name: commitment.name,
-    blurb: commitment.blurb,
-    state: age >= 0 ? "mining" : "committed",
-    blocksSinceOpen: age,
-    epochBlocks: commitment.epochBlocks,
-    ticketSats: commitment.ticketSats,
-    minClz: commitment.minClz,
-    reserve: 0n,
-    addresses: 0,
-    schedule: {
-      ...CANDIDATE,
-      halfLife: BigInt(commitment.halfLife),
-      decimals: commitment.decimals,
-    },
-    accent: commitment.accent,
-    createdBy: commitment.creator,
-  };
 }

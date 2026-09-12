@@ -1,83 +1,64 @@
 /* Create your token.
  *
- * A wizard because the decisions are genuinely sequential — you cannot choose a
- * difficulty sensibly before you know how long an epoch is — and because the
- * old emission lab put every knob on one screen and read as an instrument
- * panel for someone who already understood the model.
+ * Three decisions, all about identity: what it is called and looks like, where
+ * its ticket income goes, and when it opens. There is no economics step — every
+ * token follows the same standard (`PROTOCOL.md` §4), so a creator cannot make
+ * a token look scarce by picking a small number, and tokens stay comparable.
  *
- * The lab did not go away. It is step three, with the same integer arithmetic
- * and the same charts, now answering a question the person actually has ("what
- * will my token's issuance look like") instead of a question only the protocol
- * has. The evidence role it plays for tasks E1 and E4 is unchanged.
- *
- * The last step signs a commitment. That is the honest place for the
- * irreversible bit: a launch opens at a *future* Bitcoin height, so the creator
- * cannot mine their own launch before anyone else has heard of it (§5).
+ * The last step signs an announcement. It costs nothing: the mint script is
+ * already on chain and permissionless, and the token comes into existence with
+ * its first mint. A launch opens at a future height so that its creator cannot
+ * mine it before anyone else has heard of it.
  */
 
 import { useEffect, useMemo, useState } from "react";
 
 import { navigate } from "../App";
 import { useTip } from "../hooks/useLaunches";
+import { ACCENTS, commitmentFor, createLaunch, slugFor, validate, type DraftFaults, type LaunchDraft } from "../lib/launches/create";
+import { ACTIVE } from "../lib/bitcoin/network";
+import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, reward, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
 import { useWallet } from "../state/WalletProvider";
-import {
-  createLaunch,
-  commitmentFor,
-  slugFor,
-  validate,
-  type DraftFaults,
-  type LaunchDraft,
-} from "../lib/launches/create";
-import { CANDIDATE, cumulative, maxAtoms, MILESTONES, terminalOffset } from "../lib/emission";
-import { atoms, blocksAsTime, group, pct } from "../lib/format";
-import { EmissionChart } from "../ui/EmissionChart";
 import { Chip, Field, KV, Notice, Panel, Stat } from "../ui/primitives";
 import { Sigil } from "../ui/Sigil";
 
-const ACCENTS = [
-  { id: "var(--amber)", label: "Amber" },
-  { id: "var(--cyan)", label: "Cyan" },
-  { id: "var(--violet)", label: "Violet" },
-  { id: "var(--magenta)", label: "Magenta" },
-  { id: "var(--mint)", label: "Mint" },
-  { id: "var(--warn)", label: "Gold" },
-];
+const ACCENT_LABELS: Record<(typeof ACCENTS)[number], string> = {
+  "var(--amber)": "Amber",
+  "var(--cyan)": "Cyan",
+  "var(--magenta)": "Magenta",
+  "var(--violet)": "Violet",
+  "var(--mint)": "Mint",
+  "var(--warn)": "Gold",
+};
 
-const STEPS = ["Identity", "Access", "Emission", "Commit"] as const;
-type StepIndex = 0 | 1 | 2 | 3;
+const STEPS = ["Identity", "Opening", "Announce"] as const;
+type StepIndex = 0 | 1 | 2;
 
 const INITIAL: LaunchDraft = {
   symbol: "",
   name: "",
   blurb: "",
-  opensInBlocks: 6,
-  epochBlocks: 6,
-  halfLife: 1008,
-  decimals: 8,
-  ticketSats: 2000,
-  minClz: 24,
   accent: "var(--amber)",
+  promoter: "",
+  opensInBlocks: 6,
 };
 
-/** Which draft fields each step is responsible for. Drives the "done" ticks
- *  and stops someone reaching Commit with an invalid symbol behind them. */
+/** Which draft fields each step is responsible for. */
 const OWNED: Record<StepIndex, Array<keyof LaunchDraft>> = {
-  0: ["symbol", "name", "blurb"],
-  1: ["opensInBlocks", "epochBlocks", "ticketSats", "minClz"],
-  2: ["halfLife", "decimals"],
-  3: [],
+  0: ["symbol", "name", "blurb", "accent"],
+  1: ["promoter", "opensInBlocks"],
+  2: [],
 };
 
 /**
- * Where an unfinished draft waits.
- *
- * Step four sends a walletless visitor to the wallet page, and a wizard that
- * forgets everything they typed the moment they follow its own advice is a
- * wizard nobody finishes. Session storage rather than local: a draft belongs
- * to this tab's attempt, not to the browser forever.
+ * Where an unfinished draft waits. The last step sends a walletless visitor to
+ * the wallet page, and a wizard that forgets everything they typed the moment
+ * they follow its own advice is one nobody finishes. Session storage: a draft
+ * belongs to this tab's attempt, not to the browser forever.
  */
-const DRAFT_KEY = "btcfun:create-draft:v1";
+const DRAFT_KEY = "btcfun:create-draft:v2";
 
 interface SavedDraft {
   step: StepIndex;
@@ -86,13 +67,10 @@ interface SavedDraft {
 
 function loadDraft(): SavedDraft {
   try {
-    const raw = sessionStorage.getItem(DRAFT_KEY);
-    if (!raw) return { step: 0, draft: INITIAL };
-    const saved = JSON.parse(raw) as Partial<SavedDraft>;
+    const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null") as Partial<SavedDraft> | null;
+    if (!saved) return { step: 0, draft: INITIAL };
     return {
-      step: ([0, 1, 2, 3] as const).includes(saved.step as StepIndex) ? (saved.step as StepIndex) : 0,
-      // Spread over the defaults so a draft saved by an older build that
-      // lacks a field still yields a complete one.
+      step: ([0, 1, 2] as const).includes(saved.step as StepIndex) ? (saved.step as StepIndex) : 0,
       draft: { ...INITIAL, ...(saved.draft ?? {}) },
     };
   } catch {
@@ -100,7 +78,7 @@ function loadDraft(): SavedDraft {
   }
 }
 
-export function forgetDraft(): void {
+function forgetDraft(): void {
   try {
     sessionStorage.removeItem(DRAFT_KEY);
   } catch {
@@ -109,10 +87,17 @@ export function forgetDraft(): void {
 }
 
 export function Create() {
+  const wallet = useWallet();
   const [initial] = useState(loadDraft);
   const [step, setStep] = useState<StepIndex>(initial.step);
   const [draft, setDraft] = useState<LaunchDraft>(initial.draft);
   const faults = useMemo(() => validate(draft), [draft]);
+
+  // The promoter defaults to the creator's own address once a wallet exists,
+  // without overwriting an address the creator typed.
+  useEffect(() => {
+    if (wallet.vault && !draft.promoter) setDraft((d) => ({ ...d, promoter: wallet.vault!.address }));
+  }, [wallet.vault, draft.promoter]);
 
   useEffect(() => {
     try {
@@ -122,12 +107,9 @@ export function Create() {
     }
   }, [step, draft]);
 
-  const set = <K extends keyof LaunchDraft>(key: K, value: LaunchDraft[K]) =>
-    setDraft((d) => ({ ...d, [key]: value }));
-
+  const set = <K extends keyof LaunchDraft>(key: K, value: LaunchDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const clean = (index: StepIndex) => OWNED[index].every((field) => !faults[field]);
-  const reachable = (index: StepIndex) =>
-    index === 0 || ([0, 1, 2] as StepIndex[]).slice(0, index).every(clean);
+  const reachable = (index: StepIndex) => ([0, 1] as StepIndex[]).slice(0, index).every(clean);
 
   return (
     <div className="stack-lg">
@@ -139,7 +121,7 @@ export function Create() {
           </h1>
         </div>
         <span className="spacer" />
-        <Chip tone="cyan">testnet4</Chip>
+        <Chip tone="cyan">{ACTIVE.label}</Chip>
       </div>
 
       <div className="wizard">
@@ -163,11 +145,10 @@ export function Create() {
 
         <div className="stack-lg">
           {step === 0 && <Identity draft={draft} faults={faults} set={set} />}
-          {step === 1 && <Access draft={draft} faults={faults} set={set} />}
-          {step === 2 && <Emission draft={draft} faults={faults} set={set} />}
-          {step === 3 && <Commit draft={draft} />}
+          {step === 1 && <Opening draft={draft} faults={faults} set={set} />}
+          {step === 2 && <Announce draft={draft} />}
 
-          {step < 3 && (
+          {step < 2 && (
             <div className="row">
               {step > 0 && (
                 <button className="btn ghost" onClick={() => setStep((s) => (s - 1) as StepIndex)}>
@@ -175,11 +156,7 @@ export function Create() {
                 </button>
               )}
               <span className="spacer" />
-              <button
-                className="btn primary lg"
-                disabled={!clean(step)}
-                onClick={() => setStep((s) => (s + 1) as StepIndex)}
-              >
+              <button className="btn primary lg" disabled={!clean(step)} onClick={() => setStep((s) => (s + 1) as StepIndex)}>
                 Continue →
               </button>
             </div>
@@ -211,13 +188,7 @@ function Identity({ draft, faults, set }: StepProps) {
             />
           </Field>
           <Field label="Name" hint={faults.name}>
-            <input
-              className="input"
-              placeholder="Meshwork"
-              maxLength={40}
-              value={draft.name}
-              onChange={(e) => set("name", e.target.value)}
-            />
+            <input className="input" placeholder="Meshwork" maxLength={40} value={draft.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
           <Field label="One sentence" hint={faults.blurb ?? `${draft.blurb.length}/160`}>
             <textarea
@@ -228,24 +199,22 @@ function Identity({ draft, faults, set }: StepProps) {
               onChange={(e) => set("blurb", e.target.value)}
             />
           </Field>
-
           <Field label="Colour">
             <div className="row wrapped" style={{ gap: 8 }}>
-              {ACCENTS.map((a) => (
+              {ACCENTS.map((accent) => (
                 <button
-                  key={a.id}
+                  key={accent}
                   type="button"
-                  aria-label={a.label}
-                  aria-pressed={draft.accent === a.id}
-                  onClick={() => set("accent", a.id)}
+                  aria-label={ACCENT_LABELS[accent]}
+                  aria-pressed={draft.accent === accent}
+                  onClick={() => set("accent", accent)}
                   style={{
                     width: 30,
                     height: 30,
                     borderRadius: 9,
                     cursor: "pointer",
-                    background: a.id,
-                    border:
-                      draft.accent === a.id ? "2px solid var(--ink)" : "1px solid var(--line-strong)",
+                    background: accent,
+                    border: draft.accent === accent ? "2px solid var(--ink)" : "1px solid var(--line-strong)",
                   }}
                 />
               ))}
@@ -262,15 +231,13 @@ function Identity({ draft, faults, set }: StepProps) {
             </div>
           </div>
           <div className="rule" />
-          <p className="tiny" style={{ margin: 0 }}>
-            {draft.blurb || "One sentence that tells someone what this is for."}
-          </p>
+          <p className="tiny" style={{ margin: 0 }}>{draft.blurb || "One sentence that tells someone what this is for."}</p>
           <div className="rule" />
           <div className="tiny faint">
             URL: <span className="mono">/launch/{slugFor(draft.symbol) || "symbol"}-…</span>
             <br />
-            The suffix is the digest of everything you commit to, so no two
-            launches can share an identity even under the same symbol.
+            The suffix is the start of the token's own id on CKB, which is fixed by what you choose here
+            and on the next step. No two launches can share it.
           </div>
         </Panel>
       </div>
@@ -278,71 +245,48 @@ function Identity({ draft, faults, set }: StepProps) {
   );
 }
 
-function Access({ draft, faults, set }: StepProps) {
-  const seconds = draft.minClz >= 0 ? 2 ** draft.minClz / 5_000_000 : 0;
-
+function Opening({ draft, faults, set }: StepProps) {
+  const tip = useTip();
   return (
-    <Panel eyebrow="step 2" title="Who can mine it, and how hard?">
+    <Panel eyebrow="step 2" title="Where the income goes, and when it opens">
       <div className="split" style={{ alignItems: "start" }}>
         <div className="stack-sm">
-          <Field
-            label="Opens in (blocks)"
-            hint={faults.opensInBlocks ?? "A launch must open at a future height, so you cannot mine it before announcing it."}
-          >
+          <Field label="Ticket income to" hint={faults.promoter ?? "Every ticket pays this Bitcoin address. It is part of the token's identity and cannot change."}>
+            <input
+              className="input mono"
+              placeholder={`${ACTIVE.addressPrefix}…`}
+              spellCheck={false}
+              value={draft.promoter}
+              onChange={(e) => set("promoter", e.target.value.trim())}
+            />
+          </Field>
+          <Field label="Opens in (blocks)" hint={faults.opensInBlocks ?? `About ${blocksAsTime(draft.opensInBlocks)}. It must open at a future block, so nobody can mine it before it is announced.`}>
             <input
               className="input"
               type="number"
               min={1}
+              max={1008}
               value={draft.opensInBlocks}
               onChange={(e) => set("opensInBlocks", Math.max(1, Number(e.target.value) | 0))}
             />
           </Field>
-          <Field label="Epoch length (blocks)" hint={faults.epochBlocks ?? blocksAsTime(draft.epochBlocks)}>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              max={144}
-              value={draft.epochBlocks}
-              onChange={(e) => set("epochBlocks", Math.max(1, Number(e.target.value) | 0))}
-            />
-          </Field>
-          <Field label="Ticket price (sats)" hint={faults.ticketSats ?? "Paid per attempt, and burned — there is no refund."}>
-            <input
-              className="input"
-              type="number"
-              min={546}
-              step={100}
-              value={draft.ticketSats}
-              onChange={(e) => set("ticketSats", Math.max(0, Number(e.target.value) | 0))}
-            />
-          </Field>
-          <Field label={`Difficulty — ${draft.minClz} leading zero bits`} hint={faults.minClz}>
-            <input
-              type="range"
-              min={8}
-              max={32}
-              value={draft.minClz}
-              onChange={(e) => set("minClz", Number(e.target.value))}
-            />
-          </Field>
         </div>
 
-        <Panel tight eyebrow="what that means" title="For someone mining">
+        <Panel tight eyebrow="the standard" title="What you do not choose">
           <KV
             rows={[
-              ["Expected attempts", group(2 ** draft.minClz)],
-              ["On a CPU (~5 MH/s)", seconds < 1 ? "under a second" : humanSeconds(seconds)],
-              ["On a GPU (~300 MH/s)", humanSeconds(Math.max(0.01, seconds / 60))],
-              ["Cost per attempt", `${group(draft.ticketSats)} sats`],
-              ["Epoch closes every", blocksAsTime(draft.epochBlocks)],
+              ["Ticket", `${group(TICKET_SATS)} sats, paid to your address`],
+              ["Reward", `1 token × clz² ÷ 2^halvings, from ${MIN_CLZ} bits`],
+              ["First week, 24-bit hash", `${atoms(reward(24, 0, 0), DECIMALS, 0)} tokens`],
+              ["Halving", `every ${group(HALVING_BLOCKS)} blocks (about a week)`],
+              ["Supply", "no cap; the halvings end it"],
+              ["Opens at", tip ? `block ${group(tip + draft.opensInBlocks)}` : "—"],
             ]}
           />
           <div className="rule" />
-          <Notice tone={draft.minClz > 28 ? "warn" : "cyan"}>
-            {draft.minClz > 28
-              ? "Above 28 bits, a laptop CPU takes minutes per claim. That is a real barrier — pick it deliberately."
-              : "Difficulty sets how long a claim takes, not how much it pays. The amount comes from the schedule."}
+          <Notice tone="cyan">
+            A small launch sells few tickets and issues little; a popular one sells more and issues more.
+            The rules are the same for everyone, so the numbers are comparable.
           </Notice>
         </Panel>
       </div>
@@ -350,81 +294,7 @@ function Access({ draft, faults, set }: StepProps) {
   );
 }
 
-function Emission({ draft, faults, set }: StepProps) {
-  const schedule = useMemo(
-    () => ({ ...CANDIDATE, halfLife: BigInt(draft.halfLife), decimals: draft.decimals }),
-    [draft.halfLife, draft.decimals],
-  );
-  const terminal = useMemo(() => terminalOffset(schedule), [schedule]);
-  const max = maxAtoms(schedule);
-
-  const at = (blocks: bigint) => Number((cumulative(schedule, blocks) * 10000n) / max) / 10000;
-
-  return (
-    <Panel eyebrow="step 3" title="How fast does it all get issued?">
-      <div className="split" style={{ alignItems: "start" }}>
-        <div className="stack-md">
-          <Field
-            label={`Half-life — ${group(draft.halfLife)} blocks (${blocksAsTime(draft.halfLife)})`}
-            hint={faults.halfLife ?? "Half of everything is offered in this many blocks. Then half of what is left, and so on."}
-          >
-            <input
-              type="range"
-              min={36}
-              max={4032}
-              step={36}
-              value={draft.halfLife}
-              onChange={(e) => set("halfLife", Number(e.target.value))}
-            />
-          </Field>
-          <Field label={`Decimals — ${draft.decimals}`} hint={faults.decimals}>
-            <input
-              type="range"
-              min={0}
-              max={12}
-              value={draft.decimals}
-              onChange={(e) => set("decimals", Number(e.target.value))}
-            />
-          </Field>
-
-          <EmissionChart
-            schedule={schedule}
-            spanBlocks={BigInt(Math.max(3024, draft.halfLife * 6))}
-            markers={MILESTONES.slice(0, 4).map((m) => ({ at: m.blocks, label: m.label }))}
-            height={180}
-          />
-        </div>
-
-        <Panel tight eyebrow="the consequence" title="Issuance milestones">
-          <KV
-            rows={[
-              ["After 1 half-life", pct(at(BigInt(draft.halfLife)))],
-              ["After 2", pct(at(BigInt(draft.halfLife * 2)))],
-              ["After 3", pct(at(BigInt(draft.halfLife * 3)))],
-              ["In 21 days (3,024 blk)", pct(at(3024n))],
-              ["Max supply", `${atoms(max, draft.decimals, 0)}`],
-              ["Issuance ends at", `${group(terminal)} blk · ${blocksAsTime(Number(terminal))}`],
-            ]}
-          />
-          <div className="rule" />
-          <Notice>
-            Every figure is computed in exact integer arithmetic — no floating
-            point anywhere in the schedule. The terminal block is where integer
-            underflow ends issuance for good; there is no perpetual tail.
-          </Notice>
-          <div className="rule" />
-          <p className="tiny faint" style={{ margin: 0 }}>
-            Want to stress-test the reserve rule against turnout shapes? The{" "}
-            <a href="#/lab">emission lab</a> runs the same maths with the
-            dilution counterexample attached.
-          </p>
-        </Panel>
-      </div>
-    </Panel>
-  );
-}
-
-function Commit({ draft }: { draft: LaunchDraft }) {
+function Announce({ draft }: { draft: LaunchDraft }) {
   const wallet = useWallet();
   const registry = useLaunchRegistry();
   const tip = useTip();
@@ -432,12 +302,15 @@ function Commit({ draft }: { draft: LaunchDraft }) {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
 
-  const preview = useMemo(
-    () => commitmentFor(draft, wallet.vault?.identity ?? "", tip),
-    [draft, wallet.vault?.identity, tip],
-  );
+  const preview = useMemo(() => {
+    try {
+      return commitmentFor(draft, wallet.vault?.identity ?? "", tip);
+    } catch {
+      return null;
+    }
+  }, [draft, wallet.vault?.identity, tip]);
 
-  const commit = async () => {
+  const announce = async () => {
     if (!wallet.vault) return;
     setBusy(true);
     setError(null);
@@ -453,59 +326,47 @@ function Commit({ draft }: { draft: LaunchDraft }) {
     }
   };
 
-  if (created) {
+  if (created && preview) {
     return (
-      <Panel eyebrow="done" title={`${draft.symbol} is committed`}>
+      <Panel eyebrow="done" title={`${draft.symbol} is announced`}>
         <div className="row" style={{ gap: 14 }}>
           <Sigil symbol={draft.symbol} accent={draft.accent} size="lg" />
-          <div>
-            <p style={{ margin: 0 }}>
-              Signed and published. It opens at height{" "}
-              <span className="mono">{group(preview.h0)}</span> — in{" "}
-              {blocksAsTime(draft.opensInBlocks)} — and appears in the launches
-              grid now, marked as opening soon.
-            </p>
-          </div>
+          <p style={{ margin: 0 }}>
+            Signed and published. It opens at block <span className="mono">{group(preview.h0)}</span> — in about{" "}
+            {blocksAsTime(draft.opensInBlocks)} — and its token id is{" "}
+            <span className="mono">{shortHash(preview.tokenId, 10, 6)}</span>.
+          </p>
         </div>
         <div className="rule" />
         <div className="row">
-          <button className="btn primary" onClick={() => navigate(`/launch/${created}`)}>
-            Open {draft.symbol}
-          </button>
-          <button className="btn ghost" onClick={() => navigate("/")}>
-            Back to launches
-          </button>
+          <button className="btn primary" onClick={() => navigate(`/launch/${created}`)}>Open {draft.symbol}</button>
+          <button className="btn ghost" onClick={() => navigate("/")}>Back to launches</button>
         </div>
       </Panel>
     );
   }
 
   return (
-    <Panel eyebrow="step 4" title="Check it, then sign it">
+    <Panel eyebrow="step 3" title="Check it, then sign it">
       <div className="split" style={{ alignItems: "start" }}>
         <div className="stack-sm">
           <KV
             rows={[
               ["Symbol", draft.symbol],
               ["Name", draft.name],
-              ["Opens at height", group(preview.h0)],
-              ["Epoch length", `${draft.epochBlocks} blk · ${blocksAsTime(draft.epochBlocks)}`],
-              ["Half-life", `${group(draft.halfLife)} blk`],
-              ["Decimals", String(draft.decimals)],
-              ["Ticket", `${group(draft.ticketSats)} sats`],
-              ["Difficulty", `${draft.minClz} zero bits`],
+              ["Ticket income to", shortHash(draft.promoter, 12, 8)],
+              ["Opens at block", preview ? group(preview.h0) : "—"],
+              ["Token id", preview ? <span className="mono">{shortHash(preview.tokenId, 10, 6)}</span> : "—"],
             ]}
           />
           {!wallet.vault ? (
             <>
-              <Notice tone="cyan">
-                A launch is a signed commitment, so it needs a wallet key.
-              </Notice>
+              <Notice tone="cyan">An announcement is signed, so it needs a wallet key.</Notice>
               <a className="btn primary block" href="#/wallet">Connect a wallet</a>
             </>
           ) : (
-            <button className="btn primary block lg" disabled={busy} onClick={() => void commit()}>
-              {busy ? "Signing…" : `Commit ${draft.symbol}`}
+            <button className="btn primary block lg" disabled={busy || !preview} onClick={() => void announce()}>
+              {busy ? "Signing…" : `Announce ${draft.symbol}`}
             </button>
           )}
           {error && <Notice tone="warn">{error}</Notice>}
@@ -513,32 +374,21 @@ function Commit({ draft }: { draft: LaunchDraft }) {
 
         <Panel tight eyebrow="what signing does" title="And what it does not">
           <p className="tiny">
-            Your key signs the symbol, the schedule, the ticket price and the
-            opening height together. Anyone can then check that the launch they
-            are mining is the one that was announced, and the index cannot alter
-            a field without breaking the signature.
+            Your key signs the name, the income address and the opening height together, and the token id
+            is derived from them. Anyone can check that the token they mine is the one announced; the
+            index cannot change a field without breaking the signature and the id.
           </p>
-          <Notice tone="warn">
-            It does not put anything on Bitcoin. The commitment is published to
-            the activity index and kept in your browser; a launch that is never
-            published still exists for you, and one the index drops is not
-            destroyed. On-chain launch registration is task{" "}
-            <span className="mono">TC1</span>.
+          <Notice>
+            Nothing is written to Bitcoin or CKB now. The mint script is already deployed; the token
+            appears on chain with its first mint.
           </Notice>
           <div className="rule" />
           <div className="statrow">
-            <Stat k="costs" v="0" unit="sats" small hint="Creating is free; mining it is not" />
+            <Stat k="costs" v="0" unit="sats" small hint="Announcing is free; tickets are paid by miners" />
             <Stat k="reversible" v="no" small tone="danger" />
           </div>
         </Panel>
       </div>
     </Panel>
   );
-}
-
-function humanSeconds(seconds: number): string {
-  if (seconds < 1) return "under a second";
-  if (seconds < 90) return `${seconds.toFixed(0)}s`;
-  if (seconds < 5400) return `${(seconds / 60).toFixed(1)} min`;
-  return `${(seconds / 3600).toFixed(1)} h`;
 }
