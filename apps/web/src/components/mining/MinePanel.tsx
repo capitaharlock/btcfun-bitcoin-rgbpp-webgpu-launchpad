@@ -1,17 +1,17 @@
-/* The mining surface: device choice, live feed, measured throughput.
+/* The mining surface: device choice, live feed, and what the best hash is worth.
  *
- * Deliberately reports what the machine actually did — attempts, rate, best
- * leading zeros, which device served the run — rather than a progress bar
- * toward a reward. PROTOCOL.md §4.2 leaves admission and allocation unresolved,
- * so a candidate found here entitles the miner to nothing, and the panel says
- * so instead of implying otherwise with a filling meter.
+ * The number that matters is "mintable now": the standard reward for the best
+ * hash found so far, at the rate this ticket locked in. It is the same function
+ * the mint script evaluates (`lib/standard.ts`, checked against the script's
+ * vectors), so what this panel shows is exactly what a mint will claim — and
+ * the mint script will refuse any other amount.
  */
 
 import type { UseMiningSession } from "../../hooks/useMiningSession";
-import { expectedClz, weightOf, type BackendChoice } from "../../lib/mining";
-import type { ChallengeFields } from "../../lib/challenge";
+import type { BackendChoice } from "../../lib/mining";
 import { bytesToHex } from "../../lib/bytes";
-import { duration, group, rate, shortHash } from "../../lib/format";
+import { atoms, duration, group, rate, shortHash } from "../../lib/format";
+import { DECIMALS, MIN_CLZ, reward } from "../../lib/standard";
 import { HashFeed, HashLog } from "../../ui/HashFeed";
 import { Chip, KV, Notice, Panel, Stat } from "../../ui/primitives";
 
@@ -21,21 +21,33 @@ const CHOICES: Array<{ id: BackendChoice; label: string }> = [
   { id: "cpu", label: "CPU" },
 ];
 
-export interface MinePanelProps {
-  /** The session that owns the backends. Held by the parent so the claim
-   *  action can read the same best candidate this panel displays. */
-  mining: UseMiningSession;
-  /** 32-byte challenge digest, or null while a prerequisite is missing. */
-  challenge: Uint8Array | null;
-  /** The fields that digest commits to, shown so the binding is inspectable. */
-  fields: ChallengeFields | null;
-  /** Why mining cannot start yet, shown in place of the controls. */
-  blocked?: string | null;
+export interface TicketView {
+  txid: string;
+  vout: number;
+  /** Height the ticket's rate is fixed at. */
+  anchor: number;
+  /** True once the armed cell exists on CKB, which a mint needs. */
+  settled: boolean;
 }
 
-export function MinePanel({ mining, challenge, fields, blocked }: MinePanelProps) {
+export interface MinePanelProps {
+  mining: UseMiningSession;
+  /** 32-byte challenge, or null when there is no ticket to mine against. */
+  challenge: Uint8Array | null;
+  ticket: TicketView | null;
+  h0: number;
+  symbol: string;
+  /** Why mining cannot start yet, shown in place of the controls. */
+  blocked?: string | null;
+  /** The mint action, rendered under the figures once a hash qualifies. */
+  action?: React.ReactNode;
+}
+
+export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, action }: MinePanelProps) {
   const { sample, running } = mining;
   const gpu = mining.backends.find((b) => b.kind === "gpu");
+  const best = sample.best;
+  const mintable = best && ticket ? reward(best.clz, h0, ticket.anchor) : 0n;
 
   return (
     <Panel
@@ -56,18 +68,19 @@ export function MinePanel({ mining, challenge, fields, blocked }: MinePanelProps
     >
       <div className="split" style={{ alignItems: "start" }}>
         <div className="stack-md">
-          <HashFeed current={sample.current} best={sample.best} running={running} />
+          <HashFeed current={sample.current} best={best} running={running} />
 
           <div className="statrow">
-            <Stat k="hash rate" v={rate(sample.hashRate)} tone="amber" />
-            <Stat k="attempts" v={group(sample.hashes)} small />
-            <Stat k="elapsed" v={duration(sample.elapsedMs)} small />
             <Stat
-              k="best clz"
-              v={sample.best ? sample.best.clz : "—"}
-              unit={sample.best ? "bits" : undefined}
-              tone="cyan"
+              k="mintable now"
+              v={mintable > 0n ? atoms(mintable, DECIMALS, 2) : "—"}
+              unit={mintable > 0n ? symbol : undefined}
+              tone="amber"
+              hint={`The reward for the best hash so far, at this ticket's rate. Below ${MIN_CLZ} leading zero bits a ticket mints nothing.`}
             />
+            <Stat k="best" v={best ? best.clz : "—"} unit={best ? "zero bits" : undefined} tone="cyan" />
+            <Stat k="hash rate" v={rate(sample.hashRate)} small />
+            <Stat k="elapsed" v={duration(sample.elapsedMs)} small />
           </div>
 
           <div className="row wrapped">
@@ -75,10 +88,9 @@ export function MinePanel({ mining, challenge, fields, blocked }: MinePanelProps
               <button className="btn lg" onClick={mining.stop}>Stop</button>
             ) : (
               <button className="btn primary lg" onClick={mining.start} disabled={!challenge}>
-                Mine
+                {best ? "Keep mining" : "Mine"}
               </button>
             )}
-
             <div className="segmented" role="group" aria-label="Mining device">
               {CHOICES.map((c) => (
                 <button
@@ -93,33 +105,18 @@ export function MinePanel({ mining, challenge, fields, blocked }: MinePanelProps
                 </button>
               ))}
             </div>
-
           </div>
 
           {blocked && <Notice tone="warn">{blocked}</Notice>}
           {mining.notice && <Notice tone="warn">{mining.notice}</Notice>}
-
-          {sample.best && (
-            <div className="row tiny faint" style={{ gap: 16 }}>
-              <span>
-                weight clz² = <span className="mono">{weightOf(sample.best.clz)}</span>
-              </span>
-              <span>
-                expected at {group(sample.hashes)} attempts ={" "}
-                <span className="mono">{expectedClz(sample.hashes).toFixed(1)}</span>
-              </span>
-              <span>
-                nonce <span className="mono">{group(Number(sample.best.nonce & 0xffffffffn))}</span>
-              </span>
-            </div>
-          )}
+          {action}
 
           <Notice>
-            Every candidate is re-hashed on the CPU before it is shown, so a GPU
-            result is never trusted on the driver's word alone. Admission,
-            challenge disclosure timing and replay prevention remain unresolved
-            (PROTOCOL.md §4.2) — a candidate found here proves work, not
-            entitlement.
+            Each extra leading zero bit takes twice the work and adds a little
+            to the reward: {MIN_CLZ} bits mint {group(MIN_CLZ * MIN_CLZ)} tokens
+            before halvings, 32 bits mint {group(32 * 32)}. Every candidate is
+            re-hashed on the CPU before it is shown, so a GPU result is never
+            taken on the driver's word.
           </Notice>
         </div>
 
@@ -128,25 +125,22 @@ export function MinePanel({ mining, challenge, fields, blocked }: MinePanelProps
             <div className="eyebrow" style={{ marginBottom: 6 }}>improvement log</div>
             <HashLog entries={mining.log} />
           </div>
-
           <div>
-            <div className="eyebrow" style={{ marginBottom: 6 }}>canonical challenge</div>
-            {fields ? (
+            <div className="eyebrow" style={{ marginBottom: 6 }}>challenge</div>
+            {ticket && challenge ? (
               <KV
                 rows={[
-                  ["version", fields.version],
-                  ["network", fields.network],
-                  ["epoch", String(fields.epoch)],
-                  ["btc block", shortHash(fields.btcBlockHash, 10, 6)],
-                  ["ticket", shortHash(fields.ticket, 10, 6)],
-                  ["owner", shortHash(fields.owner, 8, 6)],
-                  ["digest", challenge ? shortHash(bytesToHex(challenge), 10, 6) : "—"],
+                  ["ticket", `${shortHash(ticket.txid, 10, 6)}:${ticket.vout}`],
+                  ["rate fixed at", `block ${group(ticket.anchor)}`],
+                  ["challenge", shortHash(bytesToHex(challenge), 10, 6)],
+                  ["preimage", "challenge ‖ nonce (8 bytes LE)"],
                 ]}
               />
             ) : (
               <p className="tiny faint">
-                No challenge yet. It is derived from the launch, epoch, block
-                hash, ticket and your identity — all five have to exist first.
+                The challenge is the hash of your ticket's Bitcoin output. It does
+                not exist until the ticket is paid, so no work can be done in
+                advance, and it can be spent once, so no work is reused.
               </p>
             )}
           </div>

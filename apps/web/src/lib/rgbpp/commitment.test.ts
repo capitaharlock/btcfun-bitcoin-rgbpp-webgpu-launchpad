@@ -21,7 +21,13 @@ describe("seals", () => {
 
 describe("commitment", () => {
   it("matches the RGB++ SDK for a mint-shaped transaction", () => {
-    const mintType = ccc.Script.from({ ...TESTNET.mint, args: "0x01" + "00".repeat(40) });
+    // A fixed type script, not the live deployment, so the vector below does
+    // not change when the mint script is redeployed.
+    const mintType = ccc.Script.from({
+      codeHash: "0x73ea88fed086c1959c0ae66a95cb125d132a8edc19e46369b14c90927ea20616",
+      hashType: "data1",
+      args: "0x01" + "00".repeat(40),
+    });
     const tx = {
       inputs: [
         { txHash: "0x" + "ab".repeat(32), index: 0 },

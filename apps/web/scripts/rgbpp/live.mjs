@@ -202,10 +202,7 @@ const steps = {
     const { tokens } = await cellsOf(alice.address, terms);
     if (tokens.length === 0) throw new Error("Alice holds none of this token yet");
     const amount = BigInt(process.env.AMOUNT ?? tokens[0].amount / 4n);
-    // The recipient's seal is Alice's output 1; the plan pays it to Bob by
-    // sealing to a payment output instead of a seal output.
-    const plan = ops.planTransfer(cfg, terms, { from: tokens, amount, paymaster: await rgbpp.paymaster() });
-    plan.btcOutputs[0] = { kind: "payment", address: bob.address, value: ops.SEAL_SATS };
+    const plan = ops.planTransfer(cfg, terms, { from: tokens, amount, to: bob.address, paymaster: await rgbpp.paymaster() });
     await submit("transfer", plan, alice);
   },
 

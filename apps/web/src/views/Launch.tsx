@@ -1,116 +1,61 @@
-/* One launch: what the schedule allows, what the chain says, and the loop.
+/* One launch: its identity, what the chain says about it, and the mining loop.
  *
- * The loop is ticket, work, claim — in that order, and the order is load-
- * bearing. The challenge a miner grinds commits to the ticket's txid, so work
- * done before buying one is worth nothing against any claim. That is
- * PROTOCOL.md §4.2's anti-pre-grinding requirement expressed as a dependency
- * rather than as a rule someone has to remember.
- *
- * All three steps are checkable. The ticket is a transaction on the active
- * network. The work is re-hashed by the CPU before it is shown and again when
- * the record is replayed. The claim's amount is decided by the allocation rule.
- *
- * Fixture figures and ledger figures are shown side by side and never mixed:
- * the headline reserve is a fixture, while "your chain" is the state of records
- * this wallet actually signed. PROTOCOL.md §3 requires that distinction to be
- * visible rather than explained in a footnote.
+ * Every figure on this page is either a protocol constant, a function of the
+ * Bitcoin tip, or read from CKB. Supply, cells and your balance come from the
+ * chain and can be recomputed by anyone with a CKB node; nothing here is a
+ * fixture.
  */
 
-import { useMemo } from "react";
-
 import { navigate } from "../App";
-import { PROTOCOL_VERSION, stateTone, type Launch } from "../data/launches";
-import { useChainSynced, useEpochBlockHash, useLaunch, useLaunchRules, useTip } from "../hooks/useLaunches";
-import { useLedger } from "../hooks/useLedger";
-import { useMiningSession } from "../hooks/useMiningSession";
-import { useTicket } from "../hooks/useTicket";
-import { budget, cumulative, maxAtoms, MILESTONES } from "../lib/emission";
-import { challengeDigest, type ChallengeFields } from "../lib/challenge";
-import { NETWORK, useWallet } from "../state/WalletProvider";
-import { MinePanel } from "../components/mining/MinePanel";
-import { ClaimPanel } from "../components/mining/ClaimPanel";
-import { EmissionChart } from "../ui/EmissionChart";
-import { Chip, KV, Meter, Notice, Panel, Stat } from "../ui/primitives";
-import { atoms, blocksAsTime, group, pct } from "../lib/format";
+import { phaseTone, type Launch } from "../data/launches";
+import { useChainSynced, useLaunch, useTip } from "../hooks/useLaunches";
+import { useLaunchStats } from "../hooks/useLaunchStats";
+import { addressUrl } from "../lib/bitcoin/network";
+import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, reward, TICKET_SATS } from "../lib/standard";
+import { MinerSteps } from "../components/mining/MinerSteps";
+import { useTokens } from "../state/TokensProvider";
+import { RewardChart } from "../ui/RewardChart";
+import { Chip, KV, Notice, Panel, Stat } from "../ui/primitives";
+import { Sigil } from "../ui/Sigil";
 
 export function LaunchView({ id }: { id: string }) {
   const launch = useLaunch(id);
-
   if (!launch) {
     return (
       <Panel title="Launch not found">
+        <p>No announcement with this id has reached this browser, or its terms do not match its id.</p>
         <button className="btn" onClick={() => navigate("/")}>Back to launches</button>
       </Panel>
     );
   }
-
-  // Remount on epoch change: a new epoch is a new challenge, a new ticket and a
-  // fresh mining run, and carrying any of that across would be a bug.
-  return <LaunchBody key={`${launch.id}:${launch.epoch}`} launch={launch} />;
+  return <LaunchBody launch={launch} />;
 }
 
 function LaunchBody({ launch }: { launch: Launch }) {
-  const rules = useLaunchRules(launch);
   const tip = useTip();
   const synced = useChainSynced();
-  const wallet = useWallet();
-  const ledger = useLedger(rules);
-  const epochBlockHash = useEpochBlockHash(launch);
-  const ticketing = useTicket(launch.id, launch.epoch, launch.ticketSats);
-
-  const identity = wallet.vault?.identity ?? null;
-  const ticket = ticketing.ticket;
-
-  /**
-   * The challenge, or null when a prerequisite is missing.
-   *
-   * Null is what disables mining. Deriving a placeholder challenge instead
-   * would let someone grind millions of hashes against bytes no claim will ever
-   * be validated against.
-   */
-  const fields = useMemo<ChallengeFields | null>(() => {
-    if (!identity || !ticket || !epochBlockHash) return null;
-    return {
-      version: PROTOCOL_VERSION,
-      network: NETWORK.id,
-      launch: launch.id,
-      epoch: launch.epoch,
-      btcBlockHash: epochBlockHash,
-      ticket: ticket.txid,
-      owner: identity,
-    };
-  }, [identity, ticket, epochBlockHash, launch.id, launch.epoch]);
-
-  const challenge = useMemo(() => (fields ? challengeDigest(fields) : null), [fields]);
-  const mining = useMiningSession(challenge);
-
-  const max = maxAtoms(launch.schedule);
-  const scheduled = cumulative(launch.schedule, BigInt(launch.elapsed));
-  const epochAllowance = budget(
-    launch.schedule,
-    BigInt(launch.epoch * launch.epochBlocks),
-    BigInt((launch.epoch + 1) * launch.epochBlocks),
-  );
-  const blocksLeft = launch.epochBlocks - (launch.elapsed % launch.epochBlocks);
-  const schedFrac = Number((scheduled * 10000n) / max) / 10000;
-  const mintedFrac = Number((launch.liabilities * 10000n) / max) / 10000;
-  const expiredFrac = Math.max(0, schedFrac - mintedFrac);
-  const held = ledger.balanceOf(identity);
+  const { stats, error } = useLaunchStats(launch);
+  const tokens = useTokens();
+  const mine = (tokens.holdings?.tokens.get(launch.tokenId) ?? []).reduce((n, c) => n + c.amount, 0n);
+  const perTicket24 = launch.open ? reward(24, launch.h0, tip) : reward(24, launch.h0, launch.h0);
 
   return (
     <div className="stack-lg">
       <div className="row wrapped">
         <button className="btn ghost" onClick={() => navigate("/")}>← Launches</button>
         <span className="spacer" />
-        <Chip tone={stateTone(launch.state)} live={launch.state === "mining"}>{launch.state}</Chip>
+        <Chip tone={phaseTone(launch.phase)} live={launch.phase === "minting"}>{launch.phase}</Chip>
         {synced ? (
-          <>
-            <Chip>epoch {launch.epoch}</Chip>
-            <Chip tone="cyan">{blocksLeft} blk · {blocksAsTime(blocksLeft)} to close</Chip>
-          </>
+          launch.open ? (
+            <>
+              <Chip>halving {launch.halvings}</Chip>
+              <Chip tone="cyan">{group(launch.blocksToHalving)} blk · {blocksAsTime(launch.blocksToHalving)} to the next</Chip>
+            </>
+          ) : (
+            <Chip tone="cyan">opens in {group(launch.blocksToHalving)} blk</Chip>
+          )
         ) : (
-          // Until the provider answers, every figure below is computed against a
-          // stand-in height. Say so, and dim them, rather than show them as fact.
           <Chip live>reading the chain…</Chip>
         )}
       </div>
@@ -118,16 +63,7 @@ function LaunchBody({ launch }: { launch: Launch }) {
       <section className={synced ? "split" : "split syncing"} aria-busy={!synced}>
         <Panel>
           <div className="row" style={{ alignItems: "flex-start", gap: 14 }}>
-            <span
-              style={{
-                width: 44, height: 44, borderRadius: 12, display: "grid", placeItems: "center",
-                background: `color-mix(in oklab, ${launch.accent} 20%, var(--surface-3))`,
-                boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${launch.accent} 40%, transparent)`,
-                fontFamily: "var(--mono)", color: launch.accent, fontSize: 15,
-              }}
-            >
-              {launch.symbol.slice(0, 2)}
-            </span>
+            <Sigil symbol={launch.symbol} accent={launch.accent} size="lg" />
             <div>
               <h1 style={{ fontSize: 30 }}>{launch.symbol}</h1>
               <p style={{ margin: "2px 0 0" }}>{launch.name} — {launch.blurb}</p>
@@ -137,82 +73,44 @@ function LaunchBody({ launch }: { launch: Launch }) {
           <div className="rule" />
 
           <div className="statrow">
-            <Stat k="scheduled" v={pct(schedFrac)} tone="amber" hint="Share of max supply the schedule has offered" />
-            <Stat k="minted" v={pct(mintedFrac)} hint="Fixture figure, not this chain" />
-            <Stat k="expired" v={pct(expiredFrac)} tone="danger" hint="Allowance that closed unmined — permanent" />
-            <Stat k="addresses" v={group(launch.addresses)} hint="Fixture. Addresses, not people (§2)" />
+            <Stat
+              k="minted"
+              v={stats ? atoms(stats.supply, DECIMALS, 0) : "—"}
+              unit={launch.symbol}
+              tone="amber"
+              hint="Sum of every live cell of this token on CKB"
+            />
+            <Stat k="token cells" v={stats ? group(stats.tokenCells) : "—"} hint="Cells, not people" />
+            <Stat k="miner cells" v={stats ? group(stats.minerCells) : "—"} hint="Cells, not people" />
+            <Stat k="you hold" v={atoms(mine, DECIMALS, 2)} unit={launch.symbol} tone="cyan" />
           </div>
-
-          <div style={{ marginTop: 16 }}>
-            <Meter value={schedFrac} />
-            <div className="row tiny faint" style={{ marginTop: 6 }}>
-              <span>block offset {group(launch.elapsed)}</span>
-              <span className="spacer" />
-              <span>h₀ {group(launch.h0)} · tip {group(tip)}</span>
-            </div>
-          </div>
+          {stats?.truncated && <p className="tiny faint">Counts stop at 2,000 cells; figures are lower bounds.</p>}
+          {error && <Notice tone="warn">Could not read CKB: {error}</Notice>}
         </Panel>
 
-        <Panel eyebrow="your chain" title="Signed records">
+        <Panel eyebrow="the standard" title="Same rules as every launch">
           <KV
             rows={[
-              ["You hold", `${atoms(held, launch.schedule.decimals, 4)} ${launch.symbol}`],
-              ["Chain supply", atoms(ledger.state?.supply ?? 0n, launch.schedule.decimals, 4)],
-              ["Reserve paid", `${group(ledger.state?.reserveSats ?? 0)} sats`],
-              ["Records", String(ledger.state?.length ?? 0)],
-              ["Epoch allowance", atoms(epochAllowance, launch.schedule.decimals, 4)],
+              ["Ticket", `${group(TICKET_SATS)} sats, to the promoter`],
+              ["Reward", `1 token × clz² ÷ 2^halvings (min ${MIN_CLZ} bits)`],
+              ["Now, for a 24-bit hash", `${atoms(perTicket24, DECIMALS, 0)} ${launch.symbol}`],
+              ["Halving", `every ${group(HALVING_BLOCKS)} blocks from block ${group(launch.h0)}`],
+              ["Promoter", <a href={addressUrl(launch.promoter)} target="_blank" rel="noreferrer">{shortHash(launch.promoter, 10, 6)}</a>],
+              ["Token id", <span className="mono" title={launch.tokenId}>{shortHash(launch.tokenId, 10, 6)}</span>],
             ]}
           />
-          <div className="rule" />
-          <Notice tone="cyan">
-            These figures come from replaying every record this wallet signed and
-            checking each one. They are <b>not settled on Bitcoin or CKB</b> —
-            the <a href={`#/launch/${launch.id}/proof`}>Proof Explorer</a> states
-            what each claim does and does not establish.
-          </Notice>
-          {ledger.error && <Notice tone="warn">{ledger.error}</Notice>}
+          <p className="tiny faint" style={{ marginTop: 10 }}>
+            The token is an xUDT on CKB bound to Bitcoin outputs by RGB++. Only the mint script can
+            issue it, and only for a paid ticket and a valid hash. <a href="#/lab">How the standard works</a>.
+          </p>
         </Panel>
       </section>
 
-      <section className="split">
-        <MinePanel
-          mining={mining}
-          challenge={challenge}
-          fields={fields}
-          blocked={blockedReason(identity, ticket !== null, epochBlockHash)}
-        />
-        <ClaimPanel
-          launch={launch}
-          rules={rules}
-          ledger={ledger}
-          ticketing={ticketing}
-          epochBlockHash={epochBlockHash}
-          candidate={mining.sample.best}
-          onClaimed={mining.stop}
-        />
-      </section>
+      <MinerSteps launch={launch} tip={tip} />
 
-      <Panel eyebrow="schedule" title="Issuance ceiling and this launch's position">
-        <EmissionChart
-          schedule={launch.schedule}
-          spanBlocks={12096n}
-          cursor={BigInt(launch.elapsed)}
-          markers={MILESTONES.map((m) => ({ at: m.blocks, label: m.label }))}
-          height={210}
-        />
+      <Panel eyebrow="schedule" title="What a ticket mints, by halving">
+        <RewardChart h0={launch.h0} tip={synced ? tip : null} symbol={launch.symbol} />
       </Panel>
     </div>
   );
-}
-
-/** Why mining is unavailable, in the order a visitor has to resolve them. */
-function blockedReason(
-  identity: string | null,
-  hasTicket: boolean,
-  epochBlockHash: string | null,
-): string | null {
-  if (!identity) return "Connect a wallet — the challenge commits to your identity.";
-  if (!epochBlockHash) return "Waiting for the hash of the block that opened this epoch.";
-  if (!hasTicket) return "Buy a ticket. The challenge commits to its txid, so work done without one counts for nothing.";
-  return null;
 }

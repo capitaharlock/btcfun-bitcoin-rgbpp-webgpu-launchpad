@@ -10,30 +10,30 @@ import { Activity } from "./views/Activity";
 import { Create } from "./views/Create";
 import { NETWORK, WalletProvider, formatBtc, shortAddress, useWallet } from "./state/WalletProvider";
 import { LaunchesProvider } from "./state/LaunchesProvider";
+import { TokensProvider } from "./state/TokensProvider";
 import { group } from "./lib/format";
 import { Chip } from "./ui/primitives";
 
 type Route =
   | { name: "launches" }
   | { name: "launch"; id: string }
-  | { name: "proof"; id: string }
+  | { name: "proof"; txid?: string }
   | { name: "lab" }
   | { name: "create" }
   | { name: "holdings" }
-  | { name: "market"; id?: string }
+  | { name: "market" }
   | { name: "activity" }
   | { name: "wallet" };
 
 function parse(hash: string): Route {
   const path = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-  if (path[0] === "launch" && path[1]) {
-    return path[2] === "proof" ? { name: "proof", id: path[1] } : { name: "launch", id: path[1] };
-  }
+  if (path[0] === "launch" && path[1]) return { name: "launch", id: path[1] };
+  if (path[0] === "proof") return { name: "proof", txid: path[1] };
   if (path[0] === "lab") return { name: "lab" };
   if (path[0] === "create") return { name: "create" };
   if (path[0] === "activity") return { name: "activity" };
   if (path[0] === "holdings") return { name: "holdings" };
-  if (path[0] === "market") return { name: "market", id: path[1] };
+  if (path[0] === "market") return { name: "market" };
   if (path[0] === "wallet") return { name: "wallet" };
   return { name: "launches" };
 }
@@ -59,7 +59,9 @@ export default function App() {
   return (
     <WalletProvider>
       <LaunchesProvider>
-        <Shell />
+        <TokensProvider>
+          <Shell />
+        </TokensProvider>
       </LaunchesProvider>
     </WalletProvider>
   );
@@ -79,8 +81,7 @@ function Shell() {
 
   // Detail pages belong to the section they were reached from, so the nav
   // never goes blank halfway through a flow.
-  const tab =
-    route.name === "launch" || route.name === "proof" ? "launches" : route.name;
+  const tab = route.name === "launch" ? "launches" : route.name;
 
   return (
     <div className="shell">
@@ -127,12 +128,12 @@ function Shell() {
         <div className="wrap">
           {route.name === "launches" && <Launches />}
           {route.name === "launch" && <LaunchView id={route.id} />}
-          {route.name === "proof" && <ProofView id={route.id} />}
+          {route.name === "proof" && <ProofView txid={route.txid} />}
           {route.name === "lab" && <Lab />}
           {route.name === "create" && <Create />}
           {route.name === "activity" && <Activity />}
           {route.name === "holdings" && <Holdings />}
-          {route.name === "market" && <Market launchId={route.id} />}
+          {route.name === "market" && <Market />}
           {route.name === "wallet" && <WalletView />}
         </div>
       </main>
@@ -140,8 +141,8 @@ function Shell() {
       <footer className="footer">
         <div className="wrap row wrapped" style={{ gap: 14 }}>
           <span>
-            Prototype on {NETWORK.label}. Tickets and balances are real; token
-            settlement is not on chain yet.
+            Testnet: tickets, mints, transfers and sales are real RGB++ transactions on {NETWORK.label} and
+            CKB testnet. <a href="#/proof">Verify a mint</a>.
           </span>
           <span className="spacer" />
           <a href="https://meshkore.com/standard">MeshKore standard</a>

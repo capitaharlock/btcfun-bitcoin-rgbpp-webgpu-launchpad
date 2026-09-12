@@ -74,6 +74,24 @@ describe("plans", () => {
   const minerCap = minerCellCapacity(TESTNET, terms);
   const tokenCap = tokenCellCapacity(TESTNET, terms);
 
+  it("never plan a cell below what it occupies, data included", () => {
+    const plans = [
+      planOpen(TESTNET, terms, paymaster),
+      planTicket(TESTNET, terms, miner("idle", minerCap), terms.h0),
+      planMint(TESTNET, terms, { miner: miner("armed", minerCap), held: null, nonce: 1n, reward: 5n, paymaster }),
+      planTransfer(TESTNET, terms, { from: [{ ...sealed(2, tokenCap), amount: 9n }], amount: 4n, to: paymaster.address, paymaster }),
+    ];
+    for (const plan of plans) {
+      plan.virtualTx.outputs.forEach((output, i) => {
+        const cell = ccc.CellOutput.from(output);
+        const data = ccc.bytesFrom(plan.virtualTx.outputsData[i]);
+        expect(cell.capacity >= ccc.fixedPointFrom(cell.occupiedSize + data.length)).toBe(true);
+      });
+    }
+    // 8 capacity + RGB++ lock (32+1+36) + xUDT type (32+1+36) + 16 bytes of amount.
+    expect(tokenCap).toBe(ccc.fixedPointFrom(8 + 69 + 69 + 16) + CKB_FEE);
+  });
+
   it("open fits in one paymaster cell and seals the miner to output 1", () => {
     const plan = planOpen(TESTNET, terms, paymaster);
     expect(plan.needPaymasterCell).toBe(true);
@@ -134,13 +152,14 @@ describe("plans", () => {
 
   it("a transfer with change needs capacity for a second cell; a whole-cell transfer does not", () => {
     const from: TokenCell[] = [{ ...sealed(2, tokenCap), amount: 1_000n }];
-    const partial = planTransfer(TESTNET, terms, { from, amount: 300n, paymaster });
+    const partial = planTransfer(TESTNET, terms, { from, amount: 300n, to: paymaster.address, paymaster });
     expect(partial.needPaymasterCell).toBe(true);
     expect(partial.virtualTx.outputsData.map(decodeAmount)).toEqual([300n, 700n]);
+    expect(partial.btcOutputs[0]).toMatchObject({ kind: "payment", address: paymaster.address });
 
-    const whole = planTransfer(TESTNET, terms, { from, amount: 1_000n, paymaster });
+    const whole = planTransfer(TESTNET, terms, { from, amount: 1_000n, to: paymaster.address, paymaster });
     expect(whole.needPaymasterCell).toBe(false);
     expect(whole.sumInputsCapacity - sum(whole.virtualTx.outputs)).toBe(CKB_FEE);
-    expect(() => planTransfer(TESTNET, terms, { from, amount: 1_001n, paymaster })).toThrow();
+    expect(() => planTransfer(TESTNET, terms, { from, amount: 1_001n, to: paymaster.address, paymaster })).toThrow();
   });
 });

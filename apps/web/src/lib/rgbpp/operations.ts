@@ -108,8 +108,13 @@ export interface Paymaster {
   feeSats: number;
 }
 
-function occupied(output: ccc.CellOutputLike, data: ccc.HexLike): bigint {
-  return ccc.fixedPointFrom(ccc.CellOutput.from(output, data).occupiedSize);
+/**
+ * Capacity a cell occupies, data included. CCC's `occupiedSize` counts the
+ * output alone, and a cell holding less than output plus data is rejected by
+ * every CKB node, so the data length is added here explicitly.
+ */
+export function occupied(output: ccc.CellOutputLike, data: ccc.HexLike): bigint {
+  return ccc.fixedPointFrom(ccc.CellOutput.from({ ...output, capacity: 0 }).occupiedSize + ccc.bytesFrom(data).length);
 }
 
 /** Capacity a miner cell is opened with: what it occupies, plus its fee reserve. */
@@ -256,16 +261,18 @@ export function planMint(config: RgbppConfig, terms: LaunchTerms, request: MintR
 export interface TransferRequest {
   from: TokenCell[];
   amount: bigint;
+  /** The recipient's Bitcoin address: their tokens are sealed to the output that pays it. */
+  to: string;
   paymaster: Paymaster;
 }
 
 /**
- * Transfer: the recipient's tokens at output 1, the sender's change at
- * output 2. A new recipient cell needs capacity the sender's cells do not
- * have, which the paymaster provides.
+ * Transfer: the recipient's tokens sealed to output 1, which pays their
+ * address; the sender's change sealed to output 2. A new recipient cell needs
+ * capacity the sender's cells do not have, which the paymaster provides.
  */
 export function planTransfer(config: RgbppConfig, terms: LaunchTerms, request: TransferRequest): Plan {
-  const { from, amount, paymaster } = request;
+  const { from, amount, to, paymaster } = request;
   const total = from.reduce((sum, cell) => sum + cell.amount, 0n);
   if (amount <= 0n) throw new RangeError("a transfer moves a positive amount");
   if (amount > total) throw new RangeError("the transfer exceeds the balance");
@@ -276,7 +283,7 @@ export function planTransfer(config: RgbppConfig, terms: LaunchTerms, request: T
 
   const outputs: ccc.CellOutputLike[] = [{ capacity: cellCapacity, lock: pendingLock(config, 1), type: token }];
   const outputsData: ccc.Hex[] = [encodeAmount(amount)];
-  const btcOutputs: PlannedOutput[] = [{ kind: "seal", value: SEAL_SATS }];
+  const btcOutputs: PlannedOutput[] = [{ kind: "payment", address: to, value: SEAL_SATS }];
   if (change > 0n) {
     outputs.push({ capacity: cellCapacity, lock: pendingLock(config, 2), type: token });
     outputsData.push(encodeAmount(change));
