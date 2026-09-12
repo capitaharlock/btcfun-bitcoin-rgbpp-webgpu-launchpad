@@ -58,7 +58,9 @@ export function faultIn(signed: SignedActivity): string | null {
   if (typeof body.at !== "string" || body.at.length > 40) return "Malformed timestamp.";
   if (body.meta !== undefined) {
     if (typeof body.meta !== "string" || body.meta.length > MAX_META) return "Payload too large.";
-    if (body.kind !== "launch") return "Only a launch event may carry a payload.";
+    // A launch carries its announcement; an offer carries its listing, whose
+    // seller-signed PSBT is what lets a buyer complete the sale alone.
+    if (body.kind !== "launch" && body.kind !== "offer") return "Only a launch or an offer may carry a payload.";
   }
   if (!/^[0-9a-f]{128}$/.test(signature)) return "Malformed signature.";
   if (!verifySignature(hexToBytes(body.actor), activityDigest(body), hexToBytes(signature))) {

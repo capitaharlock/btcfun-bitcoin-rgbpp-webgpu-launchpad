@@ -1,260 +1,137 @@
-/* Marketplace.
+/* The market: buy a listing alone, or list your own.
  *
- * The honest version of a token market on an architecture that has no
- * settlement yet. Offers are signed, so nobody can forge or alter one.
- * Payments are real and carry a commitment to the offer they settle, so a
- * payment is evidence rather than a coincidence of amount. The transfer is a
- * signed ledger record like any other.
+ * A listing is a seller-signed half of a Bitcoin transaction (`lib/rgbpp/
+ * sale.ts`). Buying completes it: one transaction pays the seller and moves
+ * the tokens to the buyer, and the seller does not need to be online. Nobody
+ * holds anything in between — not the seller's tokens, not the buyer's money,
+ * not this app.
  *
- * What the page will not do is call this a trade. The taker pays first and the
- * maker signs afterwards; a maker who keeps both is not prevented by anything
- * here. The panel at the top states that, names who is exposed at each status,
- * and says precisely what closes the gap — which is the one thing this whole
- * project exists to build.
+ * A listing sells one whole cell. Selling part of a balance is two steps:
+ * send that part to yourself, which puts it in a cell of its own, then list
+ * that cell. Cancelling moves the cell, which spends the output the listing
+ * signed and so voids it.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { sha256 } from "@noble/hashes/sha2";
 
-import { navigate } from "../App";
-import type { Launch } from "../data/launches";
-import { useLaunches, useLaunchRules, useTip } from "../hooks/useLaunches";
-import { useLedger } from "../hooks/useLedger";
-import { useMarket, type UseMarket } from "../hooks/useMarket";
-import {
-  exportOffer,
-  fillMemo,
-  offerId,
-  settlementMemo,
-  signOffer,
-  type OfferView,
-} from "../lib/market";
-import { recordId, signTransfer, type LaunchRules } from "../lib/ledger";
-import { useAnnounce } from "../hooks/useAnnounce";
-import { txUrl } from "../lib/bitcoin";
+import { useLaunches } from "../hooks/useLaunches";
+import { useListings, type OpenListing } from "../hooks/useListings";
+import { record, signActivity } from "../lib/activity";
+import { getUtxos } from "../lib/bitcoin";
+import { txUrl } from "../lib/bitcoin/network";
+import { bytesToHex } from "../lib/bytes";
+import { atoms, group, parseAmount, shortHash } from "../lib/format";
+import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
+import { planTransfer, type TokenCell } from "../lib/rgbpp/operations";
+import { completePurchase, planPurchase, signListing } from "../lib/rgbpp/sale";
+import { DECIMALS } from "../lib/standard";
+import { useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
-import { atoms, group, parseAmount } from "../lib/format";
-import { Chip, KV, Notice, Panel, Stat } from "../ui/primitives";
-import { Copyable } from "../ui/Copyable";
+import type { Launch } from "../data/launches";
+import { Chip, Field, Notice, Panel } from "../ui/primitives";
+import { Sigil } from "../ui/Sigil";
 
-/** Blocks an offer stays valid by default — about a day on mainnet timing. */
-const DEFAULT_TTL = 144;
-
-const STATUS_TONE: Record<OfferView["status"], "ok" | "cyan" | "amber" | "warn" | "danger" | undefined> = {
-  open: "cyan",
-  expired: undefined,
-  "awaiting-transfer": "amber",
-  settled: "ok",
-  invalid: "danger",
-};
-
-export function Market({ launchId }: { launchId?: string }) {
+export function Market() {
   const launches = useLaunches();
-  const selected = launches.find((l) => l.id === launchId) ?? launches[0];
-
-  if (!selected) return <Panel title="No launches">Nothing to trade.</Panel>;
+  const { listings, loading, reload } = useListings(launches);
+  const wallet = useWallet();
+  const mine = wallet.vault?.identity ?? null;
 
   return (
     <div className="stack-lg">
       <div className="row wrapped">
         <div>
-          <div className="eyebrow">marketplace</div>
-          <h1 style={{ fontSize: 28 }}>Offers</h1>
+          <div className="eyebrow">market</div>
+          <h1 style={{ fontSize: 30 }}>
+            Buy and sell, <span className="grad-text">no middleman</span>
+          </h1>
         </div>
         <span className="spacer" />
-        <div className="segmented" role="group" aria-label="Launch">
-          {launches.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              className={l.id === selected.id ? "on" : ""}
-              aria-pressed={l.id === selected.id}
-              onClick={() => navigate(`/market/${l.id}`)}
-            >
-              {l.symbol}
-            </button>
-          ))}
-        </div>
+        <Chip tone="cyan">{listings.length} open</Chip>
       </div>
 
-      <Notice tone="warn">
-        <b>These swaps are not atomic.</b> The taker pays first; the maker signs
-        the transfer afterwards. A maker who takes the payment and never signs
-        keeps both, and nothing on this page prevents that — the two legs settle
-        on different systems and nothing binds them.
-        <br />
-        <br />
-        That is the problem RGB++ single-use seals solve, and the reason this
-        project exists. With a seal, an offer commits to a specific Bitcoin
-        UTXO, the taker's payment spends it, and the same transaction that moves
-        the satoshis authorises the token movement — one transaction, both legs,
-        no escrow and no operator. Task <span className="mono">V3</span>. Until
-        then every offer below is ranked by who is exposed.
-      </Notice>
-
-      <MarketBody key={selected.id} launch={selected} />
-    </div>
-  );
-}
-
-function MarketBody({ launch }: { launch: Launch }) {
-  const rules = useLaunchRules(launch);
-  const ledger = useLedger(rules);
-  const tip = useTip();
-  const wallet = useWallet();
-  const market = useMarket({
-    launch: launch.id,
-    decimals: launch.schedule.decimals,
-    tipHeight: tip,
-    records: ledger.records,
-    maker: wallet.vault ? { identity: wallet.vault.identity, address: wallet.vault.address } : null,
-  });
-  const held = ledger.balanceOf(wallet.vault?.identity);
-
-  return (
-    <div className="stack-lg">
-      <section className="split">
-        <Panel
-          flush
-          eyebrow="book"
-          title={`${launch.symbol} offers`}
-          aside={
-            market.watching ? (
-              <div className="row" style={{ gap: 8 }}>
-                <Chip tone="cyan" live title="Payments to your address are checked every 30 seconds">
-                  watching for payments
-                </Chip>
-                <button className="btn ghost" onClick={market.checkPayments}>
-                  Check now
-                </button>
-              </div>
-            ) : undefined
-          }
-        >
-          {market.offers.length === 0 ? (
-            <p className="tiny faint" style={{ padding: 18, margin: 0 }}>
-              No offers yet. Sign one on the right, or paste one someone sent
-              you — there is no shared order book to read from, because a
-              matching service would be an operator everyone has to trust.
-            </p>
-          ) : (
+      <Panel eyebrow="open listings" title="Buy">
+        {loading ? (
+          <p className="faint" style={{ margin: 0 }}>Reading listings and checking each against the chain…</p>
+        ) : listings.length === 0 ? (
+          <p style={{ margin: 0 }}>No open listings. Every listing here has been checked live on CKB and Bitcoin.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
             <table className="table">
               <thead>
                 <tr>
-                  <th>Amount</th>
-                  <th className="right">Price</th>
-                  <th className="right">Per token</th>
-                  <th className="right">Expires</th>
-                  <th className="right">Status</th>
+                  <th>token</th>
+                  <th>amount</th>
+                  <th>price</th>
+                  <th>per token</th>
+                  <th>seller</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {market.offers.map((view) => (
-                  <OfferRow
-                    key={view.id}
-                    view={view}
-                    launch={launch}
-                    rules={rules}
-                    market={market}
-                    ledger={ledger}
-                    tip={tip}
-                  />
+                {listings.map((item) => (
+                  <ListingRow key={`${item.listing.outPoint.txHash}:${item.listing.outPoint.index}`} item={item} own={item.seller === mine} onDone={reload} />
                 ))}
               </tbody>
             </table>
-          )}
-        </Panel>
+          </div>
+        )}
+        <p className="tiny faint" style={{ marginBottom: 0 }}>
+          Buying signs one Bitcoin transaction that pays the seller and moves the tokens to you. If someone buys
+          first, your transaction is simply rejected and costs nothing.
+        </p>
+      </Panel>
 
-        <div className="stack-lg">
-          <MakeOffer launch={launch} market={market} held={held} tip={tip} />
-          <ImportOffer market={market} />
-        </div>
-      </section>
-
-      {market.error && <Notice tone="warn">{market.error}</Notice>}
-      {ledger.error && <Notice tone="warn">{ledger.error}</Notice>}
+      <Sell launches={launches} onListed={reload} />
     </div>
   );
 }
 
-function OfferRow({
-  view,
-  launch,
-  rules,
-  market,
-  ledger,
-  tip,
-}: {
-  view: OfferView;
-  launch: Launch;
-  rules: LaunchRules;
-  market: UseMarket;
-  ledger: ReturnType<typeof useLedger>;
-  tip: number;
-}) {
+function ListingRow({ item, own, onDone }: { item: OpenListing; own: boolean; onDone: () => void }) {
   const wallet = useWallet();
-  const announce = useAnnounce();
+  const tokens = useTokens();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shown, setShown] = useState(false);
+  const [done, setDone] = useState<Operation | null>(null);
+  const { listing, launch, cell } = item;
+  const amount = BigInt(listing.amount);
+  const perToken = Number(listing.priceSats) / (Number(amount) / 10 ** DECIMALS);
 
-  const { offer } = view.signed;
-  const mine = wallet.vault?.identity === offer.maker;
-  const next = nextStep(view.status, mine, wallet.vault?.identity === view.fill?.taker);
+  const buy = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const plan = planPurchase(ACTIVE_RGBPP, launch.terms, cell);
+      setDone(
+        await tokens.submit(
+          plan,
+          { kind: "buy", launchId: launch.id, tokenId: launch.tokenId, atoms: listing.amount, sats: listing.priceSats },
+          (key, _sealed, free, feeRate) => completePurchase(key, listing, plan, free, feeRate),
+        ),
+      );
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  /** Taker leg: pay the price, committing to this offer's id. */
-  const pay = async () => {
+  const cancel = async () => {
     if (!wallet.vault) return;
     setBusy(true);
     setError(null);
     try {
-      const { txid } = await wallet.pay(
-        offer.payTo,
-        Number(offer.priceSats),
-        fillMemo(view.id, wallet.vault.identity),
-      );
-      market.recordFill({
-        offerId: view.id,
-        txid,
-        taker: wallet.vault.identity,
-        paidSats: Number(offer.priceSats),
-        at: new Date().toISOString(),
+      // Moving the cell spends the output the listing signed, which voids it.
+      const plan = planTransfer(ACTIVE_RGBPP, launch.terms, {
+        from: [cell],
+        amount,
+        to: wallet.vault.address,
+        paymaster: await tokens.service.paymaster(),
       });
-      void announce({
-        kind: "fill",
-        launch: launch.id,
-        amount: BigInt(offer.amount),
-        sats: Number(offer.priceSats),
-        ref: view.id,
-        txid,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /** Maker leg: sign the transfer the payment was for. */
-  const settle = async () => {
-    if (!wallet.vault || !view.fill) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const record = await signTransfer(wallet.vault, ledger.ledger, rules, {
-        to: view.fill.taker,
-        amount: BigInt(offer.amount),
-        memo: settlementMemo(view.id),
-      });
-      ledger.append(record);
-      void announce({
-        kind: "transfer",
-        launch: launch.id,
-        amount: BigInt(offer.amount),
-        sats: Number(offer.priceSats),
-        ref: recordId(record.body),
-      });
-      market.reload();
+      setDone(await tokens.submit(plan, { kind: "cancel", launchId: launch.id, tokenId: launch.tokenId, atoms: listing.amount }));
+      onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -263,309 +140,158 @@ function OfferRow({
   };
 
   return (
-    <>
-      <tr>
-        <td className="n">{atoms(BigInt(offer.amount), launch.schedule.decimals, 4)}</td>
-        <td className="n">{group(Number(offer.priceSats))} sats</td>
-        <td className="n">{view.unitPrice.toFixed(0)}</td>
-        <td className="n faint">
-          {view.status === "expired" ? "expired" : `${group(offer.expiresAt - tip)} blk`}
-        </td>
-        <td className="right">
-          <Chip tone={STATUS_TONE[view.status]} title={view.fault}>
-            {view.status}
-          </Chip>
-        </td>
-        <td className="right">
-          <div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
-            {view.status === "open" && !mine && (
-              <button className="btn primary" disabled={busy || !wallet.vault} onClick={() => void pay()}>
-                {busy ? "Paying…" : `Pay ${group(Number(offer.priceSats))}`}
-              </button>
-            )}
-            {view.status === "awaiting-transfer" && mine && (
-              <button className="btn primary" disabled={busy} onClick={() => void settle()}>
-                {busy ? "Signing…" : "Sign the transfer"}
-              </button>
-            )}
-            {view.status === "awaiting-transfer" && !mine && <span className="tiny faint">you are exposed</span>}
-            <button className="btn ghost" onClick={() => setShown((s) => !s)}>
-              {shown ? "Hide" : "Details"}
-            </button>
-          </div>
-        </td>
-      </tr>
-      {(next || error) && (
-        <tr>
-          <td colSpan={6}>
-            <div className="stack-sm" style={{ padding: "4px 0 12px" }}>
-              {/* Outside the details row on purpose: a payment that failed has
-                  to say so where the person just clicked, not behind a toggle. */}
-              {error && <Notice tone="warn">{error}</Notice>}
-              {next && <Notice tone={next.tone}>{next.text}</Notice>}
-              {next?.chain && <Copyable value={ledger.exportChain()} label="your chain, for the buyer" />}
-            </div>
-          </td>
-        </tr>
-      )}
-      {shown && (
-        <tr>
-          <td colSpan={6}>
-            <div className="stack-sm" style={{ padding: "4px 0 12px" }}>
-              <KV
-                rows={[
-                  ["Offer id", `${view.id.slice(0, 24)}…`],
-                  ["Maker", `${offer.maker.slice(0, 20)}…${mine ? " (you)" : ""}`],
-                  ["Pay to", offer.payTo],
-                  ["Expires at height", group(offer.expiresAt)],
-                  ...(view.fill
-                    ? ([
-                        [
-                          "Payment",
-                          <a key="tx" href={txUrl(view.fill.txid)} target="_blank" rel="noreferrer">
-                            {view.fill.txid.slice(0, 16)}… ↗
-                          </a>,
-                        ],
-                        ["Taker", `${view.fill.taker.slice(0, 20)}…`],
-                      ] as Array<[string, React.ReactNode]>)
-                    : []),
-                  ...(view.settlement
-                    ? ([
-                        [
-                          "Delivered",
-                          `${atoms(
-                            BigInt(view.settlement.record.body.amount),
-                            launch.schedule.decimals,
-                            4,
-                          )} — record ${recordId(view.settlement.record.body).slice(0, 16)}…`,
-                        ],
-                      ] as Array<[string, React.ReactNode]>)
-                    : []),
-                ]}
-              />
-              {view.fault && <Notice tone="danger">{view.fault}</Notice>}
-              <Copyable value={exportOffer(view.signed)} label="signed offer" />
-              <button className="btn ghost" onClick={() => market.remove(view.id)}>
-                Remove from my book
-              </button>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+    <tr>
+      <td>
+        <span className="row" style={{ gap: 8 }}>
+          <Sigil symbol={launch.symbol} accent={launch.accent} size="sm" />
+          <a href={`#/launch/${launch.id}`}>{launch.symbol}</a>
+        </span>
+      </td>
+      <td className="mono">{atoms(amount, DECIMALS, 2)}</td>
+      <td className="mono">{group(listing.priceSats)} sats</td>
+      <td className="mono">{perToken < 1 ? perToken.toFixed(4) : group(Math.round(perToken))} sats</td>
+      <td className="mono">{shortHash(listing.seller, 8, 4)}</td>
+      <td>
+        {done ? (
+          <a href={txUrl(done.btcTxid)} target="_blank" rel="noreferrer">{done.kind === "buy" ? "bought" : "cancelled"} ↗</a>
+        ) : own ? (
+          <button className="btn ghost" disabled={busy} onClick={() => void cancel()}>{busy ? "…" : "Cancel"}</button>
+        ) : (
+          <button className="btn primary" disabled={busy || !wallet.vault} onClick={() => void buy()}>
+            {busy ? "Signing…" : "Buy"}
+          </button>
+        )}
+        {error && <div className="tiny" style={{ color: "var(--danger)", maxWidth: 260 }}>{error}</div>}
+      </td>
+    </tr>
   );
 }
 
-function MakeOffer({
-  launch,
-  market,
-  held,
-  tip,
-}: {
-  launch: Launch;
-  market: UseMarket;
-  held: bigint;
-  tip: number;
-}) {
+function Sell({ launches, onListed }: { launches: Launch[]; onListed: () => void }) {
   const wallet = useWallet();
-  const announce = useAnnounce();
-  const [amount, setAmount] = useState("");
-  const [price, setPrice] = useState("");
-  const [ttl, setTtl] = useState(String(DEFAULT_TTL));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<string | null>(null);
-
-  const scale = 10n ** BigInt(launch.schedule.decimals);
-  const atomsWanted = parseAmount(amount, launch.schedule.decimals);
-  const priceSats = /^\d+$/.test(price.trim()) ? BigInt(price.trim()) : null;
-  const blocks = Number(ttl);
-  const valid =
-    atomsWanted !== null && atomsWanted > 0n && atomsWanted <= held && priceSats !== null && priceSats > 0n && blocks > 0;
-
-  const create = async () => {
-    if (!wallet.vault || atomsWanted === null || priceSats === null) return;
-    setBusy(true);
-    setError(null);
-    setCreated(null);
-    try {
-      const signed = await signOffer(wallet.vault, {
-        launch: launch.id,
-        amount: atomsWanted,
-        priceSats,
-        expiresAt: tip + blocks,
-      });
-      if (market.add(signed)) {
-        setCreated(exportOffer(signed));
-        void announce({
-          kind: "offer",
-          launch: launch.id,
-          amount: atomsWanted,
-          sats: Number(priceSats),
-          ref: offerId(signed.offer),
-        });
-        setAmount("");
-        setPrice("");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
+  const tokens = useTokens();
+  const byToken = useMemo(() => new Map(launches.map((l) => [l.tokenId, l])), [launches]);
+  const cells = useMemo(() => {
+    const out: Array<{ launch: Launch; cell: TokenCell }> = [];
+    for (const [tokenId, list] of tokens.holdings?.tokens ?? []) {
+      const launch = byToken.get(tokenId);
+      if (launch) for (const cell of list) out.push({ launch, cell });
     }
-  };
+    return out;
+  }, [tokens.holdings, byToken]);
+
+  const [choice, setChoice] = useState(0);
+  const [priceText, setPriceText] = useState("");
+  const [splitText, setSplitText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "cyan" | "danger"; text: string } | null>(null);
 
   if (!wallet.vault) {
     return (
-      <Panel eyebrow="sell" title="Make an offer">
-        <p>Offers are signed by your wallet key.</p>
-        <a className="btn primary" href="#/wallet">Connect a wallet</a>
+      <Panel eyebrow="sell" title="List your tokens">
+        <p style={{ margin: 0 }}><a href="#/wallet">Connect a wallet</a> to list tokens you hold.</p>
+      </Panel>
+    );
+  }
+  if (cells.length === 0) {
+    return (
+      <Panel eyebrow="sell" title="List your tokens">
+        <p style={{ margin: 0 }}>You hold no tokens this app knows. Mine some on a launch page first.</p>
       </Panel>
     );
   }
 
+  const selected = cells[Math.min(choice, cells.length - 1)];
+  const price = Number(priceText);
+  const priceOk = Number.isInteger(price) && price >= 546;
+  const split = parseAmount(splitText, DECIMALS);
+  const splitOk = split !== null && split > 0n && split < selected.cell.amount;
+
+  const list = async () => {
+    const vault = wallet.vault!;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const utxos = await getUtxos(vault.address);
+      const seal = utxos.find((u) => u.txid === selected.cell.seal.txid && u.vout === selected.cell.seal.vout);
+      if (!seal) throw new Error("The output this cell is sealed to is not in your wallet yet.");
+      const listing = await vault.use((key) =>
+        signListing(key, { launchId: selected.launch.id, tokenId: selected.launch.tokenId }, selected.cell, seal.value, price),
+      );
+      const meta = JSON.stringify(listing);
+      const signed = await signActivity(vault, {
+        kind: "offer",
+        launch: selected.launch.id,
+        amount: selected.cell.amount,
+        sats: price,
+        ref: bytesToHex(sha256(new TextEncoder().encode(meta))),
+        meta,
+      });
+      await record(signed);
+      setMessage({ tone: "cyan", text: "Listed. Anyone can now buy it without you being online." });
+      setPriceText("");
+      onListed();
+    } catch (err) {
+      setMessage({ tone: "danger", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const splitCell = async () => {
+    if (!splitOk || split === null) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const plan = planTransfer(ACTIVE_RGBPP, selected.launch.terms, {
+        from: [selected.cell],
+        amount: split,
+        to: wallet.vault!.address,
+        paymaster: await tokens.service.paymaster(),
+      });
+      await tokens.submit(plan, { kind: "transfer", launchId: selected.launch.id, tokenId: selected.launch.tokenId, atoms: split.toString() });
+      setMessage({ tone: "cyan", text: "Splitting. The new cell appears once the transaction settles on CKB." });
+      setSplitText("");
+    } catch (err) {
+      setMessage({ tone: "danger", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <Panel eyebrow="sell" title="Make an offer">
-      <Stat
-        k="you hold"
-        v={atoms(held, launch.schedule.decimals, 4)}
-        unit={launch.symbol}
-        small
-        tone={held > 0n ? "amber" : undefined}
-      />
-
-      {held === 0n ? (
-        <p className="tiny faint" style={{ marginTop: 10 }}>
-          Nothing to sell yet. Mine a claim on the{" "}
-          <a href={`#/launch/${launch.id}`}>launch page</a> first.
-        </p>
-      ) : (
-        <div className="stack-sm" style={{ marginTop: 12 }}>
-          <div className="field">
-            <label htmlFor="offer-amount">amount ({launch.symbol})</label>
-            <div className="row" style={{ gap: 8 }}>
-              <input
-                id="offer-amount"
-                className="input"
-                inputMode="decimal"
-                placeholder="0.0000"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <button className="btn" onClick={() => setAmount((Number(held) / Number(scale)).toString())}>
-                Max
-              </button>
-            </div>
-          </div>
-          <div className="field">
-            <label htmlFor="offer-price">price (satoshis)</label>
-            <input
-              id="offer-price"
-              className="input"
-              inputMode="numeric"
-              placeholder="10000"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="offer-ttl">valid for (blocks)</label>
-            <input
-              id="offer-ttl"
-              className="input"
-              inputMode="numeric"
-              value={ttl}
-              onChange={(e) => setTtl(e.target.value)}
-            />
-          </div>
-
-          <button className="btn primary block" disabled={!valid || busy} onClick={() => void create()}>
-            {busy ? "Signing…" : "Sign the offer"}
+    <Panel eyebrow="sell" title="List your tokens">
+      <div className="split" style={{ alignItems: "start" }}>
+        <div className="stack-sm">
+          <Field label="Cell to sell" hint="A listing sells one whole cell.">
+            <select className="input" value={choice} onChange={(e) => setChoice(Number(e.target.value))}>
+              {cells.map(({ launch, cell }, i) => (
+                <option key={`${cell.seal.txid}:${cell.seal.vout}:${i}`} value={i}>
+                  {atoms(cell.amount, DECIMALS, 2)} {launch.symbol} · output {cell.seal.txid.slice(0, 8)}…:{cell.seal.vout}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Price (sats, for the whole cell)" hint={priceText && !priceOk ? "At least 546 sats." : "Paid to your address when someone buys."}>
+            <input className="input" inputMode="numeric" value={priceText} onChange={(e) => setPriceText(e.target.value.replace(/[^0-9]/g, ""))} />
+          </Field>
+          <button className="btn primary" disabled={!priceOk || busy} onClick={() => void list()}>
+            {busy ? "Signing…" : `List ${atoms(selected.cell.amount, DECIMALS, 2)} ${selected.launch.symbol}`}
           </button>
-
-          {created && (
-            <div className="stack-sm">
-              <Notice tone="cyan">
-                Signed. Send this to a buyer — there is no shared book, so an
-                offer reaches someone by being handed over.
-              </Notice>
-              <Copyable value={created} label="signed offer" />
-            </div>
-          )}
-          {error && <Notice tone="warn">{error}</Notice>}
         </div>
-      )}
-    </Panel>
-  );
-}
 
-function ImportOffer({ market }: { market: UseMarket }) {
-  const [json, setJson] = useState("");
-
-  return (
-    <Panel eyebrow="buy" title="Add an offer you were sent">
-      <div className="field">
-        <label htmlFor="offer-json">signed offer</label>
-        <textarea
-          id="offer-json"
-          className="input mono"
-          placeholder="paste a signed offer"
-          value={json}
-          onChange={(e) => setJson(e.target.value)}
-        />
+        <div className="stack-sm">
+          <Field label="Sell only part? Split it first" hint={splitText && !splitOk ? "Less than the whole cell." : "Sends this much to yourself, in a cell of its own."}>
+            <input className="input" inputMode="decimal" placeholder="0.0" value={splitText} onChange={(e) => setSplitText(e.target.value)} />
+          </Field>
+          <button className="btn" disabled={!splitOk || busy} onClick={() => void splitCell()}>Split</button>
+          <Notice>
+            Signing a listing authorises exactly one thing: this cell's output, in exchange for your price paid to
+            your address. Cancel by moving the cell, which voids the signature.
+          </Notice>
+        </div>
       </div>
-      <button
-        className="btn block"
-        disabled={!json.trim()}
-        onClick={() => {
-          if (market.importOffer(json)) setJson("");
-        }}
-      >
-        Verify and add
-      </button>
-      <Notice>
-        The signature is checked before it enters your book, so an altered offer
-        is rejected rather than displayed. An offer that fails still appears in
-        the table as <span className="mono">invalid</span> if it was already
-        there — hiding it would make a tampered offer indistinguishable from one
-        that was never sent.
-      </Notice>
+      {message && <Notice tone={message.tone}>{message.text}</Notice>}
     </Panel>
   );
-}
-
-
-/**
- * What the person looking at a paid offer should do next, if anything.
- *
- * A sale between two browsers has one hand-over left once the payment is on
- * chain: the maker's signed chain, back to the buyer. Neither side can be
- * expected to know that, so each is told at the moment it matters.
- */
-function nextStep(
-  status: OfferView["status"],
-  mine: boolean,
-  paidByMe: boolean,
-): { tone: "warn" | "cyan"; text: string; chain?: boolean } | null {
-  if (status === "awaiting-transfer" && mine) {
-    return {
-      tone: "warn",
-      text: "The buyer's payment is on chain and names this offer. Sign the transfer to deliver what you sold.",
-    };
-  }
-  if (status === "awaiting-transfer" && paidByMe) {
-    return {
-      tone: "warn",
-      text:
-        "Paid. The seller's page finds your payment on chain by itself. Once they sign the transfer, " +
-        "ask them for their chain and paste it under Holdings → Receive tokens.",
-    };
-  }
-  if (status === "settled" && mine) {
-    return {
-      tone: "cyan",
-      text: "Delivered. Send the buyer this chain — they paste it under Holdings → Receive tokens.",
-      chain: true,
-    };
-  }
-  return null;
 }

@@ -33,6 +33,7 @@ export {
   getFeeRate,
   getTipHeight,
   getAddressTxs,
+  isSpent,
   getTx,
   getTxStatus,
   getUtxos,

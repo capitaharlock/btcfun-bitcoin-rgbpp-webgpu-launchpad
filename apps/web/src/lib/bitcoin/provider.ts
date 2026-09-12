@@ -218,3 +218,15 @@ export async function getAddressTxs(address: string, network: NetworkConfig = AC
   if (!Array.isArray(body)) throw new ProviderError("Malformed address history in provider response");
   return body.map(toChainTx);
 }
+
+/**
+ * Whether an output has been spent, confirmed or not. A listed cell's seal
+ * that is already spent means a sale or a cancellation is landing, and a
+ * second buyer's transaction would only be rejected as a double spend.
+ */
+export async function isSpent(txid: string, vout: number, network: NetworkConfig = ACTIVE): Promise<boolean> {
+  const response = await fetch(`${network.api}/tx/${txid}/outspend/${vout}`);
+  if (!response.ok) throw new ProviderError(`outspend lookup failed: HTTP ${response.status}`);
+  return ((await response.json()) as { spent: boolean }).spent;
+}
+

@@ -17,7 +17,7 @@ export interface ActivityDraft {
   /** Digest of the record, offer or fill this reports. */
   ref: string;
   txid?: string;
-  /** Inline payload. Only valid on a `launch` event — see `ActivityBody`. */
+  /** Inline payload. Only valid on `launch` and `offer` events — see `ActivityBody`. */
   meta?: string;
 }
 

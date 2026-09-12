@@ -51,11 +51,12 @@ export interface ActivityBody {
    * Canonical JSON payload, for events that *are* the record rather than
    * reporting one.
    *
-   * Only `launch` uses it. A mint or a transfer points at a ledger record that
-   * already exists, so restating it here could only create a disagreement; a
-   * launch has no prior record — its creation is the record — so the spec is
-   * carried inline, signed with everything else. Capped, because the index
-   * should never become a general-purpose store.
+   * `launch` carries its announcement and `offer` its listing, whose
+   * seller-signed PSBT is what lets a buyer complete a sale alone. Neither has
+   * a prior record — the event is the record — so the payload travels inline,
+   * signed with everything else. Other kinds point at chain transactions that
+   * already exist, so restating them could only create a disagreement. Capped,
+   * because the index should never become a general-purpose store.
    */
   meta?: string;
   /** Author's clock. Display only — the index keeps its own arrival time. */
