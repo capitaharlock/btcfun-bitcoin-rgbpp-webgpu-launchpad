@@ -37,6 +37,14 @@ export function Market() {
   const { listings, loading, reload } = useListings(launches);
   const wallet = useWallet();
   const mine = wallet.vault?.identity ?? null;
+  // A bought or cancelled listing leaves the table at once, since it is no
+  // longer open; this is where the person sees what they just did.
+  const [lastOp, setLastOp] = useState<Operation | null>(null);
+  const done = (op: Operation) => {
+    setLastOp(op);
+    reload();
+  };
+  const launchOf = (id: string) => launches.find((l) => l.id === id);
 
   return (
     <div className="stack-lg">
@@ -50,6 +58,18 @@ export function Market() {
         <span className="spacer" />
         <Chip tone="cyan">{listings.length} open</Chip>
       </div>
+
+      {lastOp && (
+        <Notice tone="cyan">
+          {lastOp.kind === "buy" ? "Bought" : "Cancelled"} {atoms(BigInt(lastOp.atoms ?? "0"), DECIMALS, 2)}{" "}
+          {launchOf(lastOp.launchId)?.symbol ?? ""}
+          {lastOp.kind === "buy" && lastOp.sats ? ` for ${group(lastOp.sats)} sats` : ""} —{" "}
+          <a href={txUrl(lastOp.btcTxid)} target="_blank" rel="noreferrer">view the Bitcoin transaction</a>.{" "}
+          {lastOp.kind === "buy"
+            ? "The tokens settle to your address once it confirms."
+            : "The cell moves back to you once it confirms, which voids the listing."}
+        </Notice>
+      )}
 
       <Panel eyebrow="open listings" title="Buy">
         {loading ? (
@@ -71,7 +91,7 @@ export function Market() {
               </thead>
               <tbody>
                 {listings.map((item) => (
-                  <ListingRow key={`${item.listing.outPoint.txHash}:${item.listing.outPoint.index}`} item={item} own={item.seller === mine} onDone={reload} />
+                  <ListingRow key={`${item.listing.outPoint.txHash}:${item.listing.outPoint.index}`} item={item} own={item.seller === mine} onDone={done} />
                 ))}
               </tbody>
             </table>
@@ -88,12 +108,11 @@ export function Market() {
   );
 }
 
-function ListingRow({ item, own, onDone }: { item: OpenListing; own: boolean; onDone: () => void }) {
+function ListingRow({ item, own, onDone }: { item: OpenListing; own: boolean; onDone: (op: Operation) => void }) {
   const wallet = useWallet();
   const tokens = useTokens();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<Operation | null>(null);
   const { listing, launch, cell } = item;
   const amount = BigInt(listing.amount);
   const perToken = Number(listing.priceSats) / (Number(amount) / 10 ** DECIMALS);
@@ -103,14 +122,13 @@ function ListingRow({ item, own, onDone }: { item: OpenListing; own: boolean; on
     setError(null);
     try {
       const plan = planPurchase(ACTIVE_RGBPP, launch.terms, cell);
-      setDone(
+      onDone(
         await tokens.submit(
           plan,
           { kind: "buy", launchId: launch.id, tokenId: launch.tokenId, atoms: listing.amount, sats: listing.priceSats },
           (key, _sealed, free, feeRate) => completePurchase(key, listing, plan, free, feeRate),
         ),
       );
-      onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -130,8 +148,7 @@ function ListingRow({ item, own, onDone }: { item: OpenListing; own: boolean; on
         to: wallet.vault.address,
         paymaster: await tokens.service.paymaster(),
       });
-      setDone(await tokens.submit(plan, { kind: "cancel", launchId: launch.id, tokenId: launch.tokenId, atoms: listing.amount }));
-      onDone();
+      onDone(await tokens.submit(plan, { kind: "cancel", launchId: launch.id, tokenId: launch.tokenId, atoms: listing.amount }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -152,9 +169,7 @@ function ListingRow({ item, own, onDone }: { item: OpenListing; own: boolean; on
       <td className="mono">{perToken < 1 ? perToken.toFixed(4) : group(Math.round(perToken))} sats</td>
       <td className="mono">{shortHash(listing.seller, 8, 4)}</td>
       <td>
-        {done ? (
-          <a href={txUrl(done.btcTxid)} target="_blank" rel="noreferrer">{done.kind === "buy" ? "bought" : "cancelled"} ↗</a>
-        ) : own ? (
+        {own ? (
           <button className="btn ghost" disabled={busy} onClick={() => void cancel()}>{busy ? "…" : "Cancel"}</button>
         ) : (
           <button className="btn primary" disabled={busy || !wallet.vault} onClick={() => void buy()}>
