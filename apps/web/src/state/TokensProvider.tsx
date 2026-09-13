@@ -21,7 +21,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { getFeeRate, getUtxos, type Utxo, type WalletKey } from "../lib/bitcoin";
 import { signOperation } from "../lib/rgbpp/bitcoin";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
-import { decodeAmount, decodeMinerCell, type MinerCell, type Plan, type TokenCell } from "../lib/rgbpp/operations";
+import { decodeAmount, decodeMinerCell, SEAL_SATS, type MinerCell, type Plan, type TokenCell } from "../lib/rgbpp/operations";
 import { sealFromArgs } from "../lib/rgbpp/seal";
 import { RgbppService, type ServiceCell } from "../lib/rgbpp/service";
 import { useWallet } from "./WalletProvider";
@@ -170,7 +170,12 @@ export function TokensProvider({ children }: { children: ReactNode }) {
             if (!utxo) throw new Error("A cell this operation moves is sealed to a UTXO that is not spendable yet.");
             return utxo;
           });
-      const funding = free.filter((u) => u.confirmed);
+      // Never fund with a seal. The service reports a UTXO as carrying RGB++
+      // cells only once its CKB transaction has landed; until then the seal
+      // of an operation still in flight looks like a plain 546-sat output,
+      // and spending it would strand the cells it is about to carry.
+      const landing = new Set(readOps(vault.address).filter((op) => op.stage === "sent" || op.stage === "queued").map((op) => op.btcTxid));
+      const funding = free.filter((u) => u.confirmed && u.value !== SEAL_SATS && !landing.has(u.txid));
       const rate = Math.max(1, feeRate);
       const signed = await vault.use((key) =>
         sign ? sign(key, sealed, funding, rate) : signOperation(key, plan, sealed, funding, rate),

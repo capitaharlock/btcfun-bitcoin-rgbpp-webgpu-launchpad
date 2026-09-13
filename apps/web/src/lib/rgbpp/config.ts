@@ -24,6 +24,8 @@ export interface RgbppConfig {
   mintDep: ccc.CellDepLike;
   /** RGB++ assets service: SPV proofs, the transaction queue and the paymaster. */
   service: string;
+  /** CKB JSON-RPC over HTTP, with the indexer: supply, listings, verification. */
+  ckbRpc: string;
   /** Explorer page for a CKB transaction. */
   ckbExplorer: string;
 }
@@ -56,6 +58,7 @@ export const TESTNET: RgbppConfig = {
     depType: "code",
   },
   service: import.meta.env.VITE_RGBPP_SERVICE ?? "https://api.testnet.rgbpp.io",
+  ckbRpc: import.meta.env.VITE_CKB_RPC ?? "https://testnet.ckb.dev/",
   ckbExplorer: "https://testnet.explorer.nervos.org/transaction/",
 };
 

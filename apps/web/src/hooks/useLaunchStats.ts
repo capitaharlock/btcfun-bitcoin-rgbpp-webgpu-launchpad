@@ -14,18 +14,13 @@ import { ccc } from "@ckb-ccc/core";
 
 import type { Launch } from "../data/launches";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
+import { ckbClient } from "../lib/rgbpp/ckb";
 import { decodeAmount } from "../lib/rgbpp/operations";
 import { mintScript, tokenScript } from "../lib/rgbpp/launch";
 
 const POLL_MS = 60_000;
 /** Enough for any launch this demo will see; a larger one says "at least". */
 const CELL_LIMIT = 2_000;
-
-let client: ccc.Client | null = null;
-function ckb(): ccc.Client {
-  client ??= new ccc.ClientPublicTestnet();
-  return client;
-}
 
 export interface LaunchStats {
   supply: bigint;
@@ -37,7 +32,7 @@ export interface LaunchStats {
 
 async function count(script: ccc.Script, onCell: (cell: ccc.Cell) => void): Promise<boolean> {
   let seen = 0;
-  for await (const cell of ckb().findCellsByType(script, true)) {
+  for await (const cell of ckbClient().findCellsByType(script, true)) {
     onCell(cell);
     if (++seen >= CELL_LIMIT) return true;
   }

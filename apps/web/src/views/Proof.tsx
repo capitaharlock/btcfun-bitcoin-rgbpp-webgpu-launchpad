@@ -9,23 +9,18 @@
  */
 
 import { useEffect, useState } from "react";
-import { ccc } from "@ckb-ccc/core";
 
 import { navigate } from "../App";
 import { getTx } from "../lib/bitcoin";
 import { txUrl } from "../lib/bitcoin/network";
 import { atoms } from "../lib/format";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
+import { ckbClient } from "../lib/rgbpp/ckb";
 import { verifyMint, type MintVerdict } from "../lib/rgbpp/verify";
 import { DECIMALS } from "../lib/standard";
 import { useTokens } from "../state/TokensProvider";
 import { Chip, Field, Notice, Panel } from "../ui/primitives";
 
-let client: ccc.Client | null = null;
-function ckb(): ccc.Client {
-  client ??= new ccc.ClientPublicTestnet();
-  return client;
-}
 
 type State =
   | { kind: "idle" }
@@ -49,12 +44,12 @@ export function ProofView({ txid }: { txid?: string }) {
       if (!status.ckbTxHash) {
         return { kind: "pending", detail: `The RGB++ queue has not settled it on CKB yet (${status.state}).` } as State;
       }
-      const response = await ckb().getTransaction(status.ckbTxHash);
+      const response = await ckbClient().getTransaction(status.ckbTxHash);
       if (!response) return { kind: "error", message: "The CKB node does not know that transaction." } as State;
       const tx = response.transaction;
       const inputs = await Promise.all(
         tx.inputs.map(async (i) => {
-          const cell = await ckb().getCell(i.previousOutput);
+          const cell = await ckbClient().getCell(i.previousOutput);
           if (!cell) throw new Error("A consumed cell could not be fetched from the CKB node.");
           return { output: cell.cellOutput, data: cell.outputData };
         }),

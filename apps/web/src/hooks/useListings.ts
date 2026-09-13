@@ -14,7 +14,6 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { ccc } from "@ckb-ccc/core";
 import { p2wpkh } from "@scure/btc-signer";
 
 import type { Launch } from "../data/launches";
@@ -23,6 +22,7 @@ import { ACTIVE } from "../lib/bitcoin/network";
 import { isSpent } from "../lib/bitcoin";
 import { hexToBytes } from "../lib/bytes";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
+import { ckbClient } from "../lib/rgbpp/ckb";
 import { mintScript, tokenScript } from "../lib/rgbpp/launch";
 import { decodeAmount, type TokenCell } from "../lib/rgbpp/operations";
 import { checkListing, type Listing } from "../lib/rgbpp/sale";
@@ -38,12 +38,6 @@ export interface OpenListing {
   /** Identity that signed the listing. */
   seller: string;
   at: string;
-}
-
-let client: ccc.Client | null = null;
-function ckb(): ccc.Client {
-  client ??= new ccc.ClientPublicTestnet();
-  return client;
 }
 
 async function verified(entry: ActivityEntry, launches: Map<string, Launch>): Promise<OpenListing | null> {
@@ -63,7 +57,7 @@ async function verified(entry: ActivityEntry, launches: Map<string, Launch>): Pr
   if (p2wpkh(hexToBytes(body.actor), ACTIVE.params).address !== listing.seller) return null;
 
   const token = tokenScript(ACTIVE_RGBPP, mintScript(ACTIVE_RGBPP, launch.terms));
-  const live = await ckb().getCellLive(listing.outPoint, true);
+  const live = await ckbClient().getCellLive(listing.outPoint, true);
   if (!live || !live.cellOutput.type?.eq(token)) return null;
   if (!live.cellOutput.lock.eq(rgbppLock(ACTIVE_RGBPP, listing.seal))) return null;
   const amount = decodeAmount(live.outputData);

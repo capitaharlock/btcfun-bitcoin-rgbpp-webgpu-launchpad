@@ -55,7 +55,7 @@ export async function open() {
     // variable must become the literal `undefined` rather than "", or the
     // `??` defaults in `network.ts` never fire and the API base is empty.
     define: Object.fromEntries(
-      ["VITE_BITCOIN_NETWORK", "VITE_MEMPOOL_API", "VITE_API_BASE", "VITE_RP_ID", "VITE_RGBPP_SERVICE"].map((name) => [
+      ["VITE_BITCOIN_NETWORK", "VITE_MEMPOOL_API", "VITE_API_BASE", "VITE_RP_ID", "VITE_RGBPP_SERVICE", "VITE_CKB_RPC"].map((name) => [
         `import.meta.env.${name}`,
         process.env[name] ? JSON.stringify(process.env[name]) : "undefined",
       ]),
