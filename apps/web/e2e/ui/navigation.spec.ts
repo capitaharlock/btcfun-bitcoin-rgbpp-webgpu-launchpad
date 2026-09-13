@@ -3,15 +3,13 @@
 import { test, expect } from "../support/fixtures";
 
 const SECTIONS = [
-  { route: "/", heading: /Launches|launch/i },
+  { route: "/", heading: /Tokens you/i },
   { route: "/create", heading: /Launch your own/i },
-  { route: "/market", heading: /Offers/i },
+  { route: "/market", heading: /Buy and sell/i },
   { route: "/activity", heading: /What people are/i },
-  { route: "/holdings", heading: /Holdings/i },
-  { route: "/wallet", heading: /wallet|passkey|demo key/i },
-  { route: "/lab", heading: /emission|lab|schedule/i },
-  { route: "/launch/mesh", heading: /MESH/ },
-  { route: "/launch/mesh/proof", heading: /proof|MESH/i },
+  { route: "/wallet", heading: /wallet|keys/i },
+  { route: "/lab", heading: /One set of rules/i },
+  { route: "/proof", heading: /Verify a/i },
 ];
 
 test.describe("navigation", () => {
@@ -35,6 +33,13 @@ test.describe("navigation", () => {
     await expect(page.getByText("151,234").first()).toBeVisible();
   });
 
+  test("an empty catalogue says so and points at creation, with no invented launches", async ({ page, app, ux }) => {
+    await app.goto("/");
+    await expect(page.getByText("No launches have been announced yet.")).toBeVisible();
+    await expect(page.locator(".tokencard")).toHaveCount(0);
+    ux.note("With nothing announced the front page shows no sample launches, only the way to create the first.");
+  });
+
   test("an unknown launch says so instead of rendering an empty page", async ({ page, app }) => {
     await app.goto("/launch/nope-0000000000000000");
     await expect(page.getByText("Launch not found")).toBeVisible();
@@ -51,8 +56,8 @@ test.describe("navigation", () => {
     sim.outage = 503;
     await app.goto("/");
     await expect(page.getByRole("heading", { name: "All launches" })).toBeVisible();
-    await app.goto("/launch/mesh");
-    await expect(page.getByRole("heading", { name: "MESH" })).toBeVisible();
-    ux.note("With the Bitcoin provider down the app still renders every page from its fallback height.");
+    await app.goto("/lab");
+    await expect(page.getByRole("heading", { name: /One set of rules/ })).toBeVisible();
+    ux.note("With the Bitcoin provider down every page still renders; the header waits for the tip.");
   });
 });

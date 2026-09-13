@@ -2,59 +2,98 @@
  *
  * Each is what a person does on screen — no shortcuts through storage — so a
  * spec that uses one is also, incidentally, re-testing the path it relies on.
+ * Time passes by mining simulated blocks: a block confirms what was broadcast,
+ * and the RGB++ simulator settles what confirmed.
  */
 
-import { createHash } from "node:crypto";
 import { expect, type Browser, type Page } from "@playwright/test";
-import { amountOf, type App, type Wallet } from "./fixtures";
-import { ChainSim } from "./chain";
+import type { App, Wallet } from "./fixtures";
+import type { ChainSim } from "./chain";
+import { RgbppSim } from "./rgbpp";
 
-/** The launch's burn address as a scriptPubKey, derived independently of the app. */
-export function reserveScript(launchId: string): string {
-  const hash = createHash("sha256").update(`btc.fun/reserve/v1/${launchId}`).digest().subarray(0, 20);
-  return `0014${hash.toString("hex")}`;
-}
-
-export async function fundedWallet(app: App, sim: ChainSim, sats = 50_000): Promise<Wallet> {
+export async function fundedWallet(app: App, sim: ChainSim, sats = 200_000): Promise<Wallet> {
   const wallet = await app.createDemoKey();
   sim.fund(wallet.address, sats);
   return wallet;
 }
 
-export async function buyTicket(page: Page, timeout = 20_000): Promise<void> {
-  const buy = page.getByRole("button", { name: /^Buy a ticket for epoch/ });
-  await expect(buy).toBeEnabled({ timeout });
-  await buy.click();
-  await expect(page.getByText("ticket held")).toBeVisible({ timeout: 60_000 });
+export interface Draft {
+  symbol: string;
+  name?: string;
+  blurb?: string;
+  promoter?: string;
+  opensInBlocks?: number;
 }
 
-export async function mineUntilQualified(
-  page: Page,
-  device: "Auto" | "GPU" | "CPU" = "Auto",
-  timeout = 180_000,
-) {
-  await page.getByRole("group", { name: "Mining device" }).getByRole("button", { name: device }).click();
+/** Announce a launch through the wizard; returns its id from the URL it opens at. */
+export async function announce(page: Page, draft: Draft): Promise<string> {
+  await page.goto("/#/create");
+  await page.getByLabel("Symbol").fill(draft.symbol);
+  await page.getByLabel("Name").fill(draft.name ?? `${draft.symbol} collective`);
+  await page.getByLabel("One sentence").fill(draft.blurb ?? "A community token for people who build things together.");
+  await page.getByRole("button", { name: "Continue →" }).click();
+  if (draft.promoter) await page.getByLabel("Ticket income to").fill(draft.promoter);
+  await page.getByLabel("Opens in (blocks)").fill(String(draft.opensInBlocks ?? 1));
+  await page.getByRole("button", { name: "Continue →" }).click();
+  await page.getByRole("button", { name: `Announce ${draft.symbol}` }).click();
+  await page.getByRole("button", { name: `Open ${draft.symbol}` }).click();
+  await expect(page).toHaveURL(/#\/launch\/[a-z0-9]+-[0-9a-f]{16}$/);
+  return decodeURIComponent(page.url().split("#/launch/")[1]);
+}
+
+/** Mine a block and let the page read the result. */
+export async function block(page: Page, sim: ChainSim, count = 1): Promise<void> {
+  sim.advance(count);
+  await page.reload();
+}
+
+/** Open a miner cell on the launch page that is showing, and let it settle. */
+export async function openMiner(page: Page, sim: ChainSim): Promise<void> {
+  await page.getByRole("button", { name: "Open miner cell" }).click();
+  await expect(page.getByText("Opening your miner cell")).toBeVisible();
+  await block(page, sim);
+  await expect(page.getByRole("button", { name: /^Buy ticket/ })).toBeVisible({ timeout: 30_000 });
+}
+
+/** Buy a ticket; returns once mining is possible (the ticket is landing). */
+export async function buyTicket(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /^Buy ticket/ }).click();
+  await expect(page.getByRole("button", { name: "Mine", exact: true })).toBeVisible({ timeout: 30_000 });
+}
+
+/** Mine on the CPU until a hash qualifies; returns the mint button. */
+export async function mineUntilMintable(page: Page, timeout = 180_000) {
+  await page.getByRole("group", { name: "Mining device" }).getByRole("button", { name: "CPU" }).click();
   await page.getByRole("button", { name: "Mine", exact: true }).click();
-  const claim = page.getByRole("button", { name: /^Claim / });
-  await expect(claim).toBeVisible({ timeout });
-  return claim;
+  const mint = page.getByRole("button", { name: /^Mint [0-9,.]+ / });
+  await expect(mint).toBeVisible({ timeout });
+  await page.getByRole("button", { name: "Stop" }).click();
+  return mint;
 }
 
-/** Ticket, mine, claim on a launch page already open. Returns atoms claimed as shown. */
-export async function claimOnce(page: Page, device: "Auto" | "GPU" | "CPU" = "GPU"): Promise<number> {
+/** The whole loop on the launch page that is showing: open, ticket, mine, mint. Returns atoms minted as displayed. */
+export async function mintOnce(page: Page, sim: ChainSim): Promise<string> {
+  // Wait for the page to have read the chain before deciding which step it is on.
+  const step = page.getByRole("button", { name: /^(Open miner cell|Buy ticket)/ });
+  await expect(step).toBeVisible({ timeout: 30_000 });
+  if ((await step.innerText()).startsWith("Open")) await openMiner(page, sim);
   await buyTicket(page);
-  const claim = await mineUntilQualified(page, device);
-  const shown = amountOf((await claim.innerText()).replace(/^Claim /, "").replace(/[A-Z]+$/, ""));
-  await claim.click();
-  await expect(page.getByText(/^Claimed /)).toBeVisible();
-  return shown;
+  await block(page, sim);
+  const mint = await mineUntilMintable(page);
+  const label = (await mint.innerText()).replace(/^Mint /, "").trim();
+  await mint.click();
+  await expect(page.getByText(/^Minting /)).toBeVisible();
+  await block(page, sim);
+  await expect(page.getByRole("button", { name: /^Buy ticket/ })).toBeVisible({ timeout: 30_000 });
+  return label;
 }
 
-/** A second person, in their own browser, on the same simulated chain. */
-export async function secondVisitor(browser: Browser, sim: ChainSim): Promise<Page> {
+/** A second person, in their own browser, on the same simulated chains. */
+export async function secondVisitor(browser: Browser, sim: ChainSim, rgbpp: RgbppSim): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
   const page = await context.newPage();
   await sim.install(page);
+  await rgbpp.install(page);
   return page;
 }
 
@@ -68,9 +107,4 @@ export async function demoKeyOn(page: Page): Promise<Wallet> {
     () => (JSON.parse(localStorage.getItem("btcfun:vault:v1") ?? "{}") as { identity: string }).identity,
   );
   return { address, identity };
-}
-
-/** Text of the first Copyable carrying `label`. */
-export async function copyableText(page: Page, index = 0): Promise<string> {
-  return (await page.locator(".copyable code").nth(index).innerText()).trim();
 }

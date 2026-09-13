@@ -19,7 +19,7 @@ const hex = {
   encode: (b: Uint8Array) => Buffer.from(b).toString("hex"),
 };
 
-const API = "https://mempool.space/testnet4/api";
+export const API = "https://mempool.space/testnet/api";
 
 export interface SimUtxo {
   txid: string;
@@ -60,6 +60,10 @@ export class ChainSim {
   /** Heights the provider answers 404 for this many more times — a tip that
    *  is announced before its block can be fetched by height. */
   readonly unindexed = new Map<number, number>();
+  /** Every outpoint any broadcast has spent, as `txid:vout`. */
+  readonly spent = new Set<string>();
+  /** Called after each block, so other simulators can settle what confirmed. */
+  readonly onBlock: Array<(height: number) => void> = [];
 
   constructor(tip = 150_000) {
     this.tip = tip;
@@ -72,6 +76,7 @@ export class ChainSim {
     if (blocks > 0) {
       for (const list of this.utxos.values()) for (const u of list) u.confirmed = true;
       for (const tx of this.broadcasts) tx.confirmed = true;
+      for (const listener of this.onBlock) listener(this.tip);
     }
     return this.tip;
   }
@@ -89,9 +94,51 @@ export class ChainSim {
     await page.route(`${API}/**`, (route) => this.answer(route));
   }
 
+  /** Accept a raw transaction as a node would. Returns its txid, or an error. */
+  accept(raw: string): { txid: string } | { error: string } {
+    let tx: Transaction;
+    try {
+      tx = Transaction.fromRaw(hex.decode(raw.trim()), { allowUnknownOutputs: true });
+    } catch (err) {
+      return { error: `sendrawtransaction RPC error: ${String(err)}` };
+    }
+    const inputs: string[] = [];
+    for (let i = 0; i < tx.inputsLength; i++) {
+      const input = tx.getInput(i);
+      if (input.txid) inputs.push(`${hex.encode(input.txid)}:${input.index}`);
+    }
+    const conflict = inputs.find((key) => this.spent.has(key));
+    if (conflict) return { error: `sendrawtransaction RPC error: bad-txns-inputs-missingorspent (${conflict})` };
+
+    const txid = tx.id;
+    const outputs: Array<{ script: string; amount: bigint; address: string | null }> = [];
+    for (let i = 0; i < tx.outputsLength; i++) {
+      const out = tx.getOutput(i);
+      const script = hex.encode(out.script ?? new Uint8Array());
+      outputs.push({ script, amount: out.amount ?? 0n, address: addressOf(script) });
+    }
+    this.broadcasts.push({ txid, hex: raw.trim(), outputs, confirmed: false });
+    for (const key of inputs) this.spent.add(key);
+    for (const [address, list] of this.utxos) {
+      this.utxos.set(address, list.filter((u) => !this.spent.has(`${u.txid}:${u.vout}`)));
+    }
+    // Credit every output that pays an address we track — change, or a
+    // payment to another simulated wallet — as unconfirmed, as a node would.
+    outputs.forEach((out, vout) => {
+      const list = out.address ? this.utxos.get(out.address) : undefined;
+      if (list) list.push({ txid, vout, value: Number(out.amount), confirmed: false });
+    });
+    return { txid };
+  }
+
+  /** Start tracking an address, so outputs paying it become spendable UTXOs. */
+  track(address: string): void {
+    if (!this.utxos.has(address)) this.utxos.set(address, []);
+  }
+
   private async answer(route: Route): Promise<void> {
     const request = route.request();
-    const path = new URL(request.url()).pathname.replace(/^\/testnet4\/api/, "");
+    const path = new URL(request.url()).pathname.replace(/^\/testnet\/api/, "");
 
     if (this.outage) {
       return route.fulfill({ status: this.outage, body: "simulated outage" });
@@ -141,6 +188,9 @@ export class ChainSim {
         : route.fulfill({ status: 404, body: "Transaction not found" });
     }
 
+    const outspend = /^\/tx\/([0-9a-f]{64})\/outspend\/(\d+)$/.exec(path);
+    if (outspend) return route.fulfill({ json: { spent: this.spent.has(`${outspend[1]}:${outspend[2]}`) } });
+
     const history = /^\/address\/([a-z0-9]+)\/txs$/.exec(path);
     if (history) {
       const touching = this.broadcasts.filter((b) => b.outputs.some((o) => o.address === history[1]));
@@ -151,45 +201,11 @@ export class ChainSim {
     return route.fulfill({ status: 501, body: `simulator: no handler for ${path}` });
   }
 
-  /** Accept a transaction the way a node would: parse it, spend its inputs,
-   *  credit outputs to tracked wallets, and answer with the txid it hashes to. */
   private async broadcast(route: Route, raw: string): Promise<void> {
-    let tx: Transaction;
-    try {
-      tx = Transaction.fromRaw(hex.decode(raw.trim()), { allowUnknownOutputs: true });
-    } catch (err) {
-      return route.fulfill({ status: 400, body: `sendrawtransaction RPC error: ${String(err)}` });
-    }
-
-    const txid = tx.id;
-    const outputs: Array<{ script: string; amount: bigint; address: string | null }> = [];
-    for (let i = 0; i < tx.outputsLength; i++) {
-      const out = tx.getOutput(i);
-      const script = hex.encode(out.script ?? new Uint8Array());
-      outputs.push({ script, amount: out.amount ?? 0n, address: addressOf(script) });
-    }
-    this.broadcasts.push({ txid, hex: raw.trim(), outputs, confirmed: false });
-
-    // Spend the inputs from whichever wallet held them.
-    const spent = new Set<string>();
-    for (let i = 0; i < tx.inputsLength; i++) {
-      const input = tx.getInput(i);
-      if (input.txid) spent.add(`${hex.encode(input.txid)}:${input.index}`);
-    }
-    for (const [address, list] of this.utxos) {
-      this.utxos.set(
-        address,
-        list.filter((u) => !spent.has(`${u.txid}:${u.vout}`)),
-      );
-    }
-
-    // Credit every output that pays an address we track — change, or a
-    // payment to another simulated wallet — as unconfirmed, as a node would.
-    outputs.forEach((out, vout) => {
-      const list = out.address ? this.utxos.get(out.address) : undefined;
-      if (list) list.push({ txid, vout, value: Number(out.amount), confirmed: false });
-    });
-    return route.fulfill({ body: txid });
+    const result = this.accept(raw);
+    return "error" in result
+      ? route.fulfill({ status: 400, body: result.error })
+      : route.fulfill({ body: result.txid });
   }
 
   /** A broadcast transaction in the shape mempool.space returns. */

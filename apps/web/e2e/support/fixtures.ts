@@ -14,6 +14,7 @@
 
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { ChainSim } from "./chain";
+import { RgbppSim } from "./rgbpp";
 
 export interface Wallet {
   address: string;
@@ -27,8 +28,6 @@ export interface App {
   createDemoKey(): Promise<Wallet>;
   /** Restore a demo key from its 64-hex secret through the wallet page. */
   restoreKey(secretHex: string): Promise<Wallet>;
-  /** Pin a launch's opening height before the app first sees it. */
-  pinOrigin(launchId: string, height: number): Promise<void>;
   /** Seed arbitrary localStorage before the app loads. */
   seedStorage(entries: Record<string, string>): Promise<void>;
   /** Errors the page raised so far. */
@@ -52,7 +51,7 @@ async function readWallet(page: Page): Promise<Wallet> {
   return { address, identity };
 }
 
-export const test = base.extend<{ sim: ChainSim; app: App; ux: Ux }>({
+export const test = base.extend<{ sim: ChainSim; rgbpp: RgbppSim; app: App; ux: Ux }>({
   sim: async ({ page }, use) => {
     const sim = new ChainSim();
     await sim.install(page);
@@ -60,8 +59,16 @@ export const test = base.extend<{ sim: ChainSim; app: App; ux: Ux }>({
     expect(sim.unexpected, "the app called provider endpoints the simulator does not know").toEqual([]);
   },
 
-  app: async ({ page, sim }, use) => {
-    void sim; // ensure the simulator is installed before anything navigates
+  rgbpp: async ({ page, sim }, use) => {
+    const rgbpp = new RgbppSim(sim);
+    await rgbpp.install(page);
+    await use(rgbpp);
+    expect(rgbpp.unexpected, "the app called RGB++ or CKB endpoints the simulator does not know").toEqual([]);
+  },
+
+  app: async ({ page, sim, rgbpp }, use) => {
+    void sim; // ensure both simulators are installed before anything navigates
+    void rgbpp;
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -83,17 +90,6 @@ export const test = base.extend<{ sim: ChainSim; app: App; ux: Ux }>({
         await page.getByRole("button", { name: "Restore", exact: true }).click();
         await expect(page.locator(".copyable code").first()).toHaveText(/^tb1q/);
         return readWallet(page);
-      },
-      async pinOrigin(launchId, height) {
-        await page.addInitScript(
-          ([id, h]) => {
-            const key = "btcfun:origins:v1";
-            const map = JSON.parse(localStorage.getItem(key) ?? "{}") as Record<string, number>;
-            map[id as string] = h as number;
-            localStorage.setItem(key, JSON.stringify(map));
-          },
-          [launchId, height] as const,
-        );
       },
       async seedStorage(entries) {
         await page.addInitScript((pairs) => {

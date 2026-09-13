@@ -2,7 +2,7 @@
 
 import { test, expect } from "../support/fixtures";
 
-const ROUTES = ["/", "/create", "/market", "/activity", "/holdings", "/wallet", "/launch/mesh", "/launch/mesh/proof"];
+const ROUTES = ["/", "/create", "/market", "/activity", "/holdings", "/wallet", "/lab", "/proof"];
 
 test.describe("layout", () => {
   for (const route of ROUTES) {

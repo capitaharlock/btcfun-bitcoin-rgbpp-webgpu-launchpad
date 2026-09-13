@@ -12,7 +12,7 @@ import { wordlist } from "@scure/bip39/wordlists/english";
 
 const WALLET_PATH = fileURLToPath(new URL("../../.e2e-wallet.json", import.meta.url));
 
-export const MEMPOOL = "https://mempool.space/testnet4/api";
+export const MEMPOOL = "https://mempool.space/testnet/api";
 
 /** The funded wallet's secret as 64 hex characters, or null when absent. */
 export function fundedSecret(): string | null {
@@ -43,7 +43,7 @@ export async function fetchTx(txid: string, attempts = 20): Promise<ChainTx> {
     if (response.ok) return (await response.json()) as ChainTx;
     await new Promise((r) => setTimeout(r, 3_000));
   }
-  throw new Error(`transaction ${txid} never appeared on testnet4`);
+  throw new Error(`transaction ${txid} never appeared on testnet3`);
 }
 
 export async function tipHeight(): Promise<number> {
@@ -73,5 +73,5 @@ export async function findAddressTx(
     }
     await new Promise((r) => setTimeout(r, 3_000));
   }
-  throw new Error(`no matching transaction appeared for ${address} on testnet4`);
+  throw new Error(`no matching transaction appeared for ${address} on testnet3`);
 }

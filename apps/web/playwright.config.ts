@@ -8,7 +8,7 @@
  *         is where time is moved forward a day, a week, twenty-one days, and
  *         where every wrong input is tried. Nothing leaves the machine.
  *
- *   live  Real testnet4, real satoshis, the funded end-to-end wallet restored
+ *   live  Real testnet3 and CKB testnet, real satoshis, the funded end-to-end wallet restored
  *         through the wallet page like any user would. Serial, slow, and the
  *         only project that can spend money. Skipped unless E2E_LIVE=1.
  *
