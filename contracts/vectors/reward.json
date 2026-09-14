@@ -4,7 +4,8 @@
   "UNIT": "100000000",
   "HALVING_BLOCKS": 1008,
   "MIN_CLZ": 16,
-  "TICKET_SATS": 5000
+  "TICKET_SATS": 10000,
+  "PLATFORM_FEE_SATS": 500
  },
  "reward": [
   {

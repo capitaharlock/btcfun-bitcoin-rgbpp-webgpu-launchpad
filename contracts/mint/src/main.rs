@@ -28,7 +28,7 @@ use ckb_std::{
     },
 };
 use mint_core::{
-    anchor_valid, pays_tickets, reward, ticket_challenge, udt_amount, work_clz, LaunchTerms, MinerCell,
+    anchor_valid, pays_tickets, PLATFORM_SCRIPT, reward, ticket_challenge, udt_amount, work_clz, LaunchTerms, MinerCell,
     MinerState,
 };
 use rgbpp_core::{
@@ -275,11 +275,12 @@ fn arm(btc: &VerifiedBitcoin, terms: &LaunchTerms, armed: MinerCell) -> Result<(
     }
 }
 
-/// The Bitcoin transaction pays the promoter one ticket for every miner cell
-/// it arms, across every launch of this script that names the same promoter.
+/// The Bitcoin transaction pays one ticket for every miner cell it arms: the
+/// promoter's share across every launch of this script that names the same
+/// promoter, and the platform's share across every launch.
 fn require_ticket(tx: &BTCTx, terms: &LaunchTerms) -> Result<(), Error> {
     let own = load_script()?;
-    let mut armed = 0u64;
+    let (mut own_armed, mut all_armed) = (0u64, 0u64);
     for (index, type_script) in QueryIter::new(load_cell_type, Source::Output).enumerate() {
         let Some(type_script) = type_script else { continue };
         if type_script.code_hash().as_slice() != own.code_hash().as_slice()
@@ -289,16 +290,16 @@ fn require_ticket(tx: &BTCTx, terms: &LaunchTerms) -> Result<(), Error> {
         }
         let args: Bytes = type_script.args().unpack();
         let Ok(other) = LaunchTerms::parse(&args) else { continue };
-        if other.promoter_script != terms.promoter_script {
-            continue;
-        }
         let data = load_cell_data(index, Source::Output)?;
         if MinerCell::parse(&data).is_some_and(|cell| cell.state == MinerState::Armed) {
-            armed += 1;
+            all_armed += 1;
+            if other.promoter_script == terms.promoter_script {
+                own_armed += 1;
+            }
         }
     }
     let outputs = tx.outputs.iter().map(|out| (out.value, out.script.as_ref()));
-    if pays_tickets(outputs, terms.promoter_script, armed) {
+    if pays_tickets(outputs, terms.promoter_script, PLATFORM_SCRIPT, own_armed, all_armed) {
         Ok(())
     } else {
         Err(Error::TicketUnpaid)

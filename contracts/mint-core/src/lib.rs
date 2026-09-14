@@ -15,8 +15,20 @@ pub const UNIT: u64 = 100_000_000;
 pub const HALVING_BLOCKS: u32 = 1008;
 /// Smallest mintable result.
 pub const MIN_CLZ: u32 = 16;
-/// Price of one ticket, in satoshis, paid to the promoter.
-pub const TICKET_SATS: u64 = 5_000;
+/// Price of one ticket, in satoshis, split between the promoter and the platform.
+pub const TICKET_SATS: u64 = 10_000;
+/// The platform's share of a ticket: 5 %. A share of a 5,000-sat ticket would
+/// fall below Bitcoin's dust limit and could not be relayed as its own output.
+pub const PLATFORM_FEE_SATS: u64 = TICKET_SATS / 20;
+/// The promoter's share of a ticket.
+pub const PROMOTER_SATS: u64 = TICKET_SATS - PLATFORM_FEE_SATS;
+/// The platform's fee output: P2WPKH `tb1q7hq7fdm88ewl4g6g7l865ltnau9f0ga76e6gye`
+/// on Bitcoin testnet3. Fixed in the script, not in the launch terms, so no
+/// launch can redirect it. A mainnet build must replace it.
+pub const PLATFORM_SCRIPT: &[u8] = &[
+    0x00, 0x14, 0xf5, 0xc1, 0xe4, 0xb7, 0x67, 0x3e, 0x5d, 0xfa, 0xa3, 0x48, 0xf7, 0xcf, 0xaa, 0x7d, 0x73, 0xef,
+    0x0a, 0x97, 0xa3, 0xbe,
+];
 /// How far behind its confirming block a ticket's declared anchor may be.
 pub const ANCHOR_GRACE_BLOCKS: u32 = 144;
 
@@ -192,22 +204,40 @@ pub fn anchor_valid(anchor: u32, h0: u32, confirmed: u32) -> bool {
     anchor >= h0 && anchor <= confirmed && confirmed - anchor <= ANCHOR_GRACE_BLOCKS
 }
 
-/// True when the outputs pay `promoter` at least `tickets` full tickets.
+/// True when the outputs pay every ticket they arm: the promoter's share for
+/// each of `own` cells armed for this promoter, and the platform's share for
+/// each of `all` cells armed in the transaction.
 ///
 /// Counted in total rather than per output: one transaction may arm miner
-/// cells of several launches by the same promoter, and each needs its own
-/// ticket — a single payment must not be counted twice.
+/// cells of several launches, and each needs its own ticket — a single payment
+/// must not be counted twice. A promoter who is the platform owes both shares
+/// to the one script.
 pub fn pays_tickets<'o>(
-    outputs: impl IntoIterator<Item = (i64, &'o [u8])>,
+    outputs: impl IntoIterator<Item = (i64, &'o [u8])> + Clone,
     promoter: &[u8],
-    tickets: u64,
+    platform: &[u8],
+    own: u64,
+    all: u64,
 ) -> bool {
-    let paid: i128 = outputs
-        .into_iter()
-        .filter(|(_, script)| *script == promoter)
-        .map(|(value, _)| i128::from(value.max(0)))
-        .sum();
-    paid >= i128::from(tickets) * i128::from(TICKET_SATS)
+    let owed = |script: &[u8]| {
+        let mut due = 0i128;
+        if script == promoter {
+            due += i128::from(own) * i128::from(PROMOTER_SATS);
+        }
+        if script == platform {
+            due += i128::from(all) * i128::from(PLATFORM_FEE_SATS);
+        }
+        due
+    };
+    let paid = |script: &[u8]| -> i128 {
+        outputs
+            .clone()
+            .into_iter()
+            .filter(|(_, s)| *s == script)
+            .map(|(value, _)| i128::from(value.max(0)))
+            .sum()
+    };
+    paid(promoter) >= owed(promoter) && paid(platform) >= owed(platform)
 }
 
 /// The amount in an xUDT cell's data: the first 16 bytes, little-endian.

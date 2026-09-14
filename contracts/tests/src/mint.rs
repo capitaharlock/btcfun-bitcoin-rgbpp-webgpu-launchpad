@@ -4,7 +4,7 @@ use crate::env::*;
 use ckb_testtool::ckb_types::packed::Script;
 use mint_core::{
     reward, ticket_challenge, work_clz, MinerCell, MinerState, ANCHOR_GRACE_BLOCKS, HALVING_BLOCKS, MIN_CLZ,
-    TICKET_SATS,
+    PLATFORM_FEE_SATS, PLATFORM_SCRIPT, PROMOTER_SATS,
 };
 
 // The script's error codes (`mint/src/main.rs`).
@@ -87,8 +87,9 @@ impl Launch {
         Out { seal: Some(1), lock: None, type_: Some(self.udt.clone()), data: amount(atoms) }
     }
 
-    fn ticket(&self) -> (i64, Vec<u8>) {
-        (TICKET_SATS as i64, self.env.promoter.clone())
+    /// One ticket's two payments: the promoter's share and the platform's fee.
+    fn ticket(&self) -> [(i64, Vec<u8>); 2] {
+        [(PROMOTER_SATS as i64, self.env.promoter.clone()), (PLATFORM_FEE_SATS as i64, PLATFORM_SCRIPT.to_vec())]
     }
 
     /// A mint of a ticket anchored at H0 with the given nonce, confirmed at
@@ -171,7 +172,7 @@ fn a_paid_ticket_arms_the_cell() {
     op.inputs.push(l.miner_input(IDLE));
     op.outputs.push(l.miner_out(ARMED));
     op.btc_outputs.push((546, p2wpkh(0x01)));
-    op.btc_outputs.push(l.ticket());
+    op.btc_outputs.extend(l.ticket());
     let (tx, _) = op.build(&l.env);
     let cycles = l.env.verify(&tx).unwrap();
     println!("ticket: {cycles} cycles");
@@ -179,17 +180,70 @@ fn a_paid_ticket_arms_the_cell() {
 
 #[test]
 fn an_unpaid_underpaid_or_misdirected_ticket_is_refused() {
-    for payment in [None, Some((TICKET_SATS as i64 - 1, None)), Some((TICKET_SATS as i64, Some(p2wpkh(0xbb))))] {
+    let promoter = || Launch::new().env.promoter;
+    let platform = || PLATFORM_SCRIPT.to_vec();
+    let (share, fee) = (PROMOTER_SATS as i64, PLATFORM_FEE_SATS as i64);
+    let cases: [Vec<(i64, Vec<u8>)>; 6] = [
+        vec![],
+        vec![(share, promoter())],
+        vec![(fee, platform())],
+        vec![(share - 1, promoter()), (fee, platform())],
+        vec![(share, promoter()), (fee - 1, platform())],
+        vec![(share, p2wpkh(0xbb)), (fee, platform())],
+    ];
+    for payments in cases {
         let mut l = Launch::new();
         let mut op = Op::new();
         op.inputs.push(l.miner_input(IDLE));
         op.outputs.push(l.miner_out(ARMED));
         op.btc_outputs.push((546, p2wpkh(0x01)));
-        if let Some((value, to)) = payment {
-            op.btc_outputs.push((value, to.unwrap_or_else(|| l.env.promoter.clone())));
-        }
+        op.btc_outputs.extend(payments);
         let (tx, _) = op.build(&l.env);
         expect_code(l.env.verify(&tx), TICKET_UNPAID);
+    }
+}
+
+#[test]
+fn the_platform_is_paid_for_every_launch_armed_in_one_transaction() {
+    // Two launches by different promoters: each promoter is paid in full, but
+    // the platform's fee covers only one of the two tickets.
+    let mut l = Launch::new();
+    let other_promoter = p2wpkh(0xcc);
+    let other_mint = l.env.mint_type(H0 + 1, &other_promoter);
+    let build = |l: &mut Launch, fees: i64| {
+        let mut op = Op::new();
+        op.inputs.push(l.miner_input(IDLE));
+        let second = l.env.rgbpp_lock([0x48; 32], 0);
+        op.inputs.push((l.env.live(second, Some(other_mint.clone()), cell(IDLE, 0)), Some(([0x48; 32], 0))));
+        op.outputs.push(l.miner_out(ARMED));
+        op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint.clone()), data: anchored(ARMED, 0, H0 + 1) });
+        op.height = H0 + 1;
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        op.btc_outputs.push((PROMOTER_SATS as i64, l.env.promoter.clone()));
+        op.btc_outputs.push((PROMOTER_SATS as i64, other_promoter.clone()));
+        op.btc_outputs.push((fees * PLATFORM_FEE_SATS as i64, PLATFORM_SCRIPT.to_vec()));
+        op.build(&l.env).0
+    };
+    let tx = build(&mut l, 1);
+    expect_code(l.env.verify(&tx), TICKET_UNPAID);
+    let tx = build(&mut l, 2);
+    l.env.verify(&tx).unwrap();
+}
+
+#[test]
+fn a_promoter_who_is_the_platform_owes_the_whole_ticket() {
+    let mut l = Launch::new();
+    l.env.promoter = PLATFORM_SCRIPT.to_vec();
+    l.mint = l.env.mint_type(H0, &PLATFORM_SCRIPT.to_vec());
+    l.udt = l.env.xudt_type(&l.mint);
+    for (paid, ok) in [(PROMOTER_SATS as i64, false), ((PROMOTER_SATS + PLATFORM_FEE_SATS) as i64, true)] {
+        let mut op = Op::new();
+        op.inputs.push(l.miner_input(IDLE));
+        op.outputs.push(l.miner_out(ARMED));
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        op.btc_outputs.push((paid, PLATFORM_SCRIPT.to_vec()));
+        let (tx, _) = op.build(&l.env);
+        if ok { l.env.verify(&tx).unwrap(); } else { expect_code(l.env.verify(&tx), TICKET_UNPAID); }
     }
 }
 
@@ -201,7 +255,7 @@ fn a_ticket_cannot_mint() {
     op.outputs.push(l.miner_out(ARMED));
     op.outputs.push(l.udt_out(1));
     op.btc_outputs.push((546, p2wpkh(0x01)));
-    op.btc_outputs.push(l.ticket());
+    op.btc_outputs.extend(l.ticket());
     let (tx, _) = op.build(&l.env);
     expect_code(l.env.verify(&tx), BALANCE_INCREASED);
 }
@@ -266,7 +320,7 @@ fn a_ticket_is_anchored_at_most_a_day_before_it_confirms() {
         op.inputs.push(l.miner_input(IDLE));
         op.outputs.push(l.miner_out_anchored(ARMED, anchor));
         op.btc_outputs.push((546, p2wpkh(0x01)));
-        op.btc_outputs.push(l.ticket());
+        op.btc_outputs.extend(l.ticket());
         op.height = confirmed;
         let (tx, _) = op.build(&l.env);
         let result = l.env.verify(&tx);
@@ -335,7 +389,7 @@ fn a_mint_cannot_buy_the_next_ticket() {
     let atoms = reward(clz, H0, H0).unwrap();
     let mut l = Launch::new();
     let mut op = l.mint_op(nonce, H0, atoms.into(), ARMED);
-    op.btc_outputs.push(l.ticket());
+    op.btc_outputs.extend(l.ticket());
     let (tx, _) = op.build(&l.env);
     expect_code(l.env.verify(&tx), MINT_MUST_DISARM);
 }
@@ -372,7 +426,7 @@ fn one_ticket_arms_one_cell() {
     op.outputs.push(l.miner_out(ARMED));
     op.outputs.push(l.miner_out(ARMED));
     op.btc_outputs.push((546, p2wpkh(0x01)));
-    op.btc_outputs.push(l.ticket());
+    op.btc_outputs.extend(l.ticket());
     let (tx, _) = op.build(&l.env);
     expect_code(l.env.verify(&tx), TOO_MANY_MINER_CELLS);
 }
@@ -442,7 +496,7 @@ fn a_forged_unlock_behind_a_sibling_cell_cannot_pay_for_a_ticket() {
     op.outputs.push(l.udt_out(10));
     op.outputs.push(l.miner_out(ARMED));
     op.btc_outputs.push((546, p2wpkh(0x01)));
-    let forged = forged_unlock(vec![l.ticket()], seal, H0);
+    let forged = forged_unlock(l.ticket().to_vec(), seal, H0);
     op.witness_overrides.push((1, forged));
     let (tx, _) = op.build(&l.env);
     expect_code(l.env.verify(&tx), TICKET_UNPAID);
@@ -462,7 +516,7 @@ fn one_payment_buys_one_ticket_even_across_launches() {
     op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint), data: anchored(ARMED, 0, H0 + 1) });
     op.height = H0 + 1;
     op.btc_outputs.push((546, p2wpkh(0x01)));
-    op.btc_outputs.push(l.ticket());
+    op.btc_outputs.extend(l.ticket());
     let (tx, _) = op.build(&l.env);
     expect_code(l.env.verify(&tx), TICKET_UNPAID);
 
@@ -478,8 +532,8 @@ fn one_payment_buys_one_ticket_even_across_launches() {
     op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint), data: anchored(ARMED, 0, H0 + 1) });
     op.height = H0 + 1;
     op.btc_outputs.push((546, p2wpkh(0x01)));
-    op.btc_outputs.push(l.ticket());
-    op.btc_outputs.push(l.ticket());
+    op.btc_outputs.extend(l.ticket());
+    op.btc_outputs.extend(l.ticket());
     let (tx, _) = op.build(&l.env);
     l.env.verify(&tx).unwrap();
 }

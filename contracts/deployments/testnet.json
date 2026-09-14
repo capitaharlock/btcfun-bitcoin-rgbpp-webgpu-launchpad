@@ -1,18 +1,18 @@
 {
   "network": "ckb-testnet",
   "script": "btcfun-mint",
-  "codeHash": "0xb8af59e91ebaf94496aa747bf03fa6adbc1633a45e8381390f9079f7a3f9c72f",
+  "codeHash": "0x43771432002b57f3334f60c10399ff98d77e1b2a0507e21cfeba372d2cb02f74",
   "hashType": "data1",
   "cellDep": {
     "outPoint": {
-      "txHash": "0x3869513d5debb86e1334b268067e31cb322d06ad20353fde1e9b105d89e34611",
+      "txHash": "0x9ef99a72f96ca02b34ce3d3e2f3eb69679a41fd0da07e456976fc4da1089af32",
       "index": "0x0"
     },
     "depType": "code"
   },
-  "bytes": 73896,
+  "bytes": 74360,
   "lock": "secp256k1-blake160 with zero args: unspendable",
-  "deployedAt": "2026-09-24T11:29:25.852Z",
+  "deployedAt": "2026-09-24T12:34:20.543Z",
   "build": {
     "toolchain": "rustc 1.91.1",
     "command": "cargo build -p btcfun-mint --release --target riscv64imac-unknown-none-elf"
@@ -28,6 +28,17 @@
         "depType": "code"
       },
       "deployedAt": "2026-09-24T11:12:51.037Z"
+    },
+    {
+      "codeHash": "0xb8af59e91ebaf94496aa747bf03fa6adbc1633a45e8381390f9079f7a3f9c72f",
+      "cellDep": {
+        "outPoint": {
+          "txHash": "0x3869513d5debb86e1334b268067e31cb322d06ad20353fde1e9b105d89e34611",
+          "index": "0x0"
+        },
+        "depType": "code"
+      },
+      "deployedAt": "2026-09-24T11:29:25.852Z"
     }
   ]
 }

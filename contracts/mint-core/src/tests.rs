@@ -84,17 +84,29 @@ fn parses_launch_terms_exactly() {
 }
 
 #[test]
-fn a_ticket_must_pay_the_promoter_in_full() {
+fn a_ticket_pays_the_promoter_and_the_platform_in_full() {
     let promoter: &[u8] = &[0x00, 0x14, 9, 9];
     let other: &[u8] = &[0x00, 0x14, 8, 8];
-    let ticket = TICKET_SATS as i64;
-    assert!(pays_tickets([(ticket, promoter)], promoter, 1));
-    assert!(!pays_tickets([(ticket - 1, promoter)], promoter, 1));
-    assert!(!pays_tickets([(ticket, other)], promoter, 1));
+    let platform: &[u8] = PLATFORM_SCRIPT;
+    let (share, fee) = (PROMOTER_SATS as i64, PLATFORM_FEE_SATS as i64);
+    assert_eq!(PROMOTER_SATS + PLATFORM_FEE_SATS, TICKET_SATS);
+    assert_eq!(PLATFORM_FEE_SATS * 20, TICKET_SATS);
+    // Both shares survive Bitcoin's P2WPKH dust limit on their own.
+    assert!(PLATFORM_FEE_SATS >= 294);
+    let pays = |outs: &[(i64, &[u8])], own, all| pays_tickets(outs.iter().copied(), promoter, platform, own, all);
+    assert!(pays(&[(share, promoter), (fee, platform)], 1, 1));
+    assert!(!pays(&[(share - 1, promoter), (fee, platform)], 1, 1));
+    assert!(!pays(&[(share, promoter), (fee - 1, platform)], 1, 1));
+    assert!(!pays(&[(share, other), (fee, platform)], 1, 1));
+    assert!(!pays(&[(share + fee, promoter)], 1, 1));
     // Two tickets need two tickets' worth, in one output or several.
-    assert!(!pays_tickets([(ticket, promoter)], promoter, 2));
-    assert!(pays_tickets([(ticket, promoter), (ticket, promoter)], promoter, 2));
-    assert!(pays_tickets([(2 * ticket, promoter)], promoter, 2));
+    assert!(!pays(&[(share, promoter), (fee, platform)], 2, 2));
+    assert!(pays(&[(share, promoter), (share, promoter), (2 * fee, platform)], 2, 2));
+    // Another promoter's ticket in the same transaction owes the platform too.
+    assert!(!pays(&[(share, promoter), (fee, platform)], 1, 2));
+    // A promoter who is the platform owes both shares to the one script.
+    assert!(pays_tickets([(share + fee, platform)], platform, platform, 1, 1));
+    assert!(!pays_tickets([(share, platform)], platform, platform, 1, 1));
 }
 
 #[test]
