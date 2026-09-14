@@ -7,18 +7,18 @@ owner: rjj
 category: security
 initiative: security-hardening
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Define assets, adversaries and trust boundaries before protocol design is frozen; refine with Phase 1 evidence.
+Define assets, adversaries and trust boundaries of the standard model: the mint script, the xUDT's owner mode, the RGB++ lock and SPV client, the queue and paymaster services, and the buyer-completed sale.
 
 ## Execution
 
-- Phase: 0.
-- Prerequisites: `E1`.
+- Phase: 2.
+- Prerequisites: `OC2`, `OC5`.
 
 ## Done when
 
-- Cover issuance authority, backing, pending deposits, tickets, data availability, operator omission/outage and cross-chain finality.
-- Identify upgrade/owner-mode control, censorship assumptions, maximum batch bounds and required recovery paths.
-- Map each requirement to an attack scenario and proposed evidence; scope the independent fund-controlling-script review.
+- Cover issuance authority, ticket payment, the anchor rule, data availability, service omission or outage and cross-chain finality.
+- Identify script-version control, censorship assumptions and the path to complete an operation without btc.fun's services.
+- Map each requirement to an attack scenario and evidence; scope the independent review of the mint script (SH6).

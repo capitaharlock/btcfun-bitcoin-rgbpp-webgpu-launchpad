@@ -7,18 +7,18 @@ owner: rjj
 category: security
 initiative: security-hardening
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Model reserve extraction, turnout collapse, isolated epochs, timing, ticket spam and creator self-dealing; feed scenarios into E3/E4.
+Model economic attacks on the standard: a promoter mining their own launch (the ticket pays themselves, so issuance costs only fees), halving-boundary timing, anchor declarations, sale-listing abuse and misleading supply comparisons. Feeds E4.
 
 ## Execution
 
-- Phase: 0.
-- Prerequisites: `E1`, `SH1`.
+- Phase: 2.
+- Prerequisites: `SH1`.
 
 ## Done when
 
-- Quantify the old-model reserve dilution counterexample and bounds for candidate replacements.
-- Cover deposits before issuance, unclaimed tokens, last redemption, burns, refunds and escrow release.
-- Document accepted economic risks and cases that invalidate a candidate instead of assuming attacks self-limit.
+- Quantify what self-mining by a promoter costs and yields per halving, and how the interface discloses it.
+- Cover ticket timing around a halving, withheld mints, listings that cannot be filled and dust or capacity griefing.
+- Document accepted economic risks, and the cases that would change the standard, instead of assuming attacks self-limit.

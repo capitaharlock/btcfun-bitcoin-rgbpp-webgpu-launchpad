@@ -7,10 +7,10 @@ owner: rjj
 category: security
 initiative: security-hardening
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Prepare production operations without deploying mainnet: dependency pinning, reproducible contract builds, hash verification, monitoring, durable data, backups and incident handling.
+Prepare production operations without deploying mainnet: dependency pinning, reproducible contract builds, hash verification, monitoring, durable index data, backups and incident handling.
 
 ## Execution
 
@@ -19,7 +19,7 @@ Prepare production operations without deploying mainnet: dependency pinning, rep
 
 ## Done when
 
-- Rehearse service loss, restore and permissionless recovery without privileged reserve access.
-- Monitor solvency/accounting, pending ticket age, relayer lag, batch limits and subsidy spending.
-- Document deployment identities, fee payer, capacity budget and incident communications/runbook.
-- Production checklist references independent review and commercial readiness; this task alone cannot authorize launch.
+- Rehearse loss of the Worker and index, restore, and operation completion without btc.fun's services.
+- Monitor queue lag, pending operations, paymaster spend and index drift from chain.
+- Document deployment identities, fee payer, CKB capacity budget and incident communications and runbook.
+- The production checklist references independent review and commercial readiness; this task alone cannot authorize launch.

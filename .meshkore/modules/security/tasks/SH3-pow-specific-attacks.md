@@ -7,18 +7,18 @@ owner: rjj
 category: security
 initiative: security-hardening
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Analyze work allocation jointly with capital/ticket strategies, device advantage and admission/challenge timing.
+Analyze work allocation under the standard reward: device advantage, clz² concentration and the ticket as challenge.
 
 ## Execution
 
-- Phase: 0.
-- Prerequisites: `E1`, `SH1`.
+- Phase: 2.
+- Prerequisites: `SH1`.
 
 ## Done when
 
-- Test free candidate grinding, proof replay, ticket splitting, last-moment entry, selective withholding and zero weights.
-- Provide a model of reward concentration across work budgets; clz² is not accepted as proof of farm immunity.
-- Define challenge binding and admission requirements for E3/V7; account for browser resource misuse.
+- Test candidate grinding, proof replay across tickets, precomputation before a ticket exists and ticket splitting.
+- Model reward concentration across work budgets; clz² is not accepted as proof of farm immunity.
+- Account for browser resource misuse and state the residual advantage of specialised hardware.

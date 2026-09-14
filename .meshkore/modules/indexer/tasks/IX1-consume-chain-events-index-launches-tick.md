@@ -7,18 +7,18 @@ owner: rjj
 category: indexer
 initiative: indexer-api
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Derive launch, ticket, epoch, claim, expiry, burn and redemption events from actual chain transactions/Cell transitions.
+Derive launches, tickets, mints, transfers and sales from chain transactions and cell transitions, so the public index is a projection that can be rebuilt rather than a store of self-reported events.
 
 ## Execution
 
 - Phase: 2.
-- Prerequisites: `TC1`, `MN3`, `V8`.
+- Prerequisites: `OC3`, `OC6`, `V8`.
 
 ## Done when
 
-- Rows include chain provenance, script version and provisional/final status.
-- A fresh database reconstructs the reference launch from chain data and required public evidence.
-- Indexer latency is measured separately from chain finality.
+- Rows carry chain provenance, the mint script's code hash and provisional or final status.
+- A fresh database reconstructs a reference launch — supply, tickets sold, promoter income — from chain data alone.
+- Indexer latency is measured separately from chain finality; supply is not labelled demand and cells are not labelled people.

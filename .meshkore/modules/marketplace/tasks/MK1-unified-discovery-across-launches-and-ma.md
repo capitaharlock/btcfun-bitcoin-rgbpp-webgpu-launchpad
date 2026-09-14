@@ -7,7 +7,7 @@ owner: rjj
 category: marketplace
 initiative: unified-marketplace
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 Build unified discovery only after actual launches and markets justify it.
@@ -19,5 +19,5 @@ Build unified discovery only after actual launches and markets justify it.
 
 ## Done when
 
-- Display lifecycle, backing and market liquidity as distinct concepts.
+- Lifecycle (halving reached, tickets sold), listings and venue liquidity are displayed as distinct concepts; no launch is presented as backed.
 - Ranking inputs are transparent and do not claim Sybil-resistant popularity.

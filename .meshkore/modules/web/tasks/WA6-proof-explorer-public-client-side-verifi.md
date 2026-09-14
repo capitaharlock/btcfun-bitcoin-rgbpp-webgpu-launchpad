@@ -7,19 +7,19 @@ owner: rjj
 category: web
 initiative: provable-trust
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Build a browser verifier for binding/authorization, accepted clock, allowance expiry, work validity, admission/closure, allocation and reserve reconciliation.
+The proof page recomputes commitment, ticket, disarm, work and amount of any mint from chain data (`apps/web/src/views/Proof.tsx`, `lib/rgbpp/verify.ts`). What remains is portability and declared trust roots.
 
 ## Execution
 
 - Phase: 2.
-- Prerequisites: `MN6`, `IX2`, `V3`, `V8`.
+- Prerequisites: `V3`, `V8`.
 
 ## Done when
 
-- Evidence can be exported and verified without btc.fun’s backend using user-selected public sources or local nodes.
-- Expose exactly what was verified, chain-selection/confirmation assumptions and provisional status.
+- Evidence can be exported as a bundle and verified without btc.fun's backend, against user-selected public sources or a local node.
+- Each check states what it verified and its chain-selection and confirmation assumptions.
 - Tampered, omitted, stale and unavailable data are visibly distinct from valid evidence.
-- Do not equate valid work with economic fairness or public RPC access with canonicality proof.
+- Valid work is not equated with economic fairness, nor public RPC access with canonicality.

@@ -34,5 +34,5 @@ Gate order and shared evidence: [roadmap](../../docs/roadmap.md).
 ## Task plan
 
 - [`TC1` — Permissionless launch and future-height commitment](../../modules/token-creation/tasks/TC1-launch-transaction-token-factory-and-h0-.md)
-- [`TC2` — Metadata and creator escrow lifecycle](../../modules/token-creation/tasks/TC2-metadata-schema-validation-and-creator-a.md)
+- [`TC2` — Metadata validation and image storage](../../modules/token-creation/tasks/TC2-metadata-schema-validation-and-creator-a.md)
 - [`TC3` — Minimal launch SDK and preflight](../../modules/token-creation/tasks/TC3-typescript-launch-sdk-preflight-and-expl.md)

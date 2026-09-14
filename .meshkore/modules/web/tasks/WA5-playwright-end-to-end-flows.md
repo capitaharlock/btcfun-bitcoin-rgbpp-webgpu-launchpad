@@ -7,18 +7,18 @@ owner: rjj
 category: web
 initiative: web-app
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Automate the integrated launch → ticket → mine → settle → verify → redeem path with deterministic local fixtures, plus a recorded real-wallet testnet run.
+The deterministic browser suite over simulated Bitcoin, RGB++ and CKB covers create, ticket, mine, mint, transfer, sale and proof, with the mint rules as an independent oracle (`TEST_RESULTS.md`). What remains is the recorded real-network run and the cases the simulators do not yet produce.
 
 ## Execution
 
 - Phase: 2.
-- Prerequisites: `WA2`, `WA3`, `WA4`, `WA6`, `IX4`, `GR4`.
+- Prerequisites: `OC8`, `WA6`, `IX4`.
 
 ## Done when
 
-- CI covers normal, rejected proof, expired ticket, recovery, final redemption and reorg-status cases.
-- Fixture success is distinguished from the actual wallet/network run.
+- The suite covers reorg-status and invalid-mint-from-the-browser cases.
+- Fixture success is distinguished from the recorded real-wallet testnet run (OC8).
 - A reviewer can reproduce the demo with pinned scripts and instructions.

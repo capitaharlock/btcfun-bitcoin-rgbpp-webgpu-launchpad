@@ -39,5 +39,5 @@ Gate order and shared evidence: [roadmap](../../docs/roadmap.md).
 - [`PC4` — Checked integer arithmetic and selected decay approximation](../../modules/protocol/tasks/PC4-q64-64-math-crate-typescript-port.md)
 - [`PC5` — Bound work verification and validated weighting](../../modules/protocol/tasks/PC5-on-chain-pow-verification-and-clz-weight.md)
 - [`PC6` — Segregated reserve and integer redemption accounting](../../modules/protocol/tasks/PC6-reserve-floor-and-floor-invariant-redemp.md)
-- [`PC7` — Property, differential and fuzz checks for adopted invariants](../../modules/protocol/tasks/PC7-property-fuzz-tests-for-emission-and-res.md)
+- [`PC7` — Property, differential and fuzz checks for the mint rules](../../modules/protocol/tasks/PC7-property-fuzz-tests-for-emission-and-res.md)
 - [`PC8` — xUDT issuance authority, burns and script version policy](../../modules/protocol/tasks/PC8-xudt-issuance-authority-burns-and-script-version-policy.md)

@@ -7,10 +7,10 @@ owner: rjj
 category: token-creation
 initiative: token-launch
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Provide the minimal unsigned transaction builders and preflight diagnostics for the selected wallet/network.
+Package the builders `scripts/rgbpp/live.mjs` already uses into a minimal SDK a third party can call, with preflight diagnostics for the selected network.
 
 ## Execution
 
@@ -19,6 +19,6 @@ Provide the minimal unsigned transaction builders and preflight diagnostics for 
 
 ## Done when
 
-- A third-party script creates a launch end to end without the btc.fun web app.
-- Preflight reports reserve denomination, fees/capacity, signed authorization and finality stages.
-- Return transaction IDs and evidence required by the verifier.
+- A third-party script creates a launch and runs open, ticket, mint and transfer without the btc.fun web app.
+- Preflight reports network, fees, CKB capacity and paymaster cost, and the confirmation stages to expect.
+- Returns the transaction IDs and evidence the proof page needs.

@@ -7,7 +7,7 @@ owner: rjj
 category: indexer
 initiative: indexer-api
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 Add only the search/discovery needed for community pilots; full market discovery remains deferred.
@@ -15,7 +15,7 @@ Add only the search/discovery needed for community pilots; full market discovery
 ## Execution
 
 - Phase: 3.
-- Prerequisites: `IX2`, `PV1`.
+- Prerequisites: `IX1`, `PV1`.
 
 ## Done when
 

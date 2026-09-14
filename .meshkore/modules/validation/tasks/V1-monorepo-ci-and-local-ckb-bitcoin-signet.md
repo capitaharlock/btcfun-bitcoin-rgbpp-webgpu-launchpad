@@ -7,18 +7,18 @@ owner: rjj
 category: validation
 initiative: validate-architecture
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
-Set up only the Rust/TypeScript workspace and network tools needed by the spike. Verify the selected Bitcoin/CKB network pairing across wallets, SPV and scripts; reachable endpoints alone are insufficient.
+Toolchains are pinned (`contracts/rust-toolchain.toml`, `apps/web/package-lock.json`) and the simulated chains cover controlled failures in the browser suite. What remains is continuous integration and a documented public route.
 
 ## Execution
 
 - Phase: 1.
-- Prerequisites: `E5`.
+- Prerequisites: `OC1`.
 
 ## Done when
 
-- Pinned toolchains and dependencies reproduce locally and in CI.
-- Local/regtest fixtures support controlled failures; one compatible public testnet route is documented.
-- Network IDs, script deployments and service requirements are recorded; no unnecessary application packages are scaffolded.
+- CI builds the mint script, runs `cargo test`, the unit suite and the browser suite on every change.
+- The public route — Bitcoin testnet3, CKB testnet, the RGB++ services and the deployed scripts — is recorded with network IDs and service requirements.
+- No unnecessary application packages are scaffolded.
