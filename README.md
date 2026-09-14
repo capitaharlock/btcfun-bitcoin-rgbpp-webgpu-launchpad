@@ -1,67 +1,86 @@
-# btc.fun — Bitcoin · WebGPU · RGB++ token launchpad
+# btc.fun — Bitcoin · RGB++ · CKB token launchpad
 
-**Permissionless token issuance on Bitcoin, mined in your browser on the GPU.**
+**Community tokens mined in the browser, issued on CKB and owned on Bitcoin.**
 
-`TypeScript (strict)` · `Bitcoin testnet4` · `WebGPU / WGSL` · `WebAuthn PRF`
-· `React 19` · `Vite` · `Cloudflare Workers` · `D1` · `secp256k1` · `BIP32/39/84`
+`Rust (no_std) · CKB-VM` · `RGB++` · `xUDT` · `TypeScript (strict)` · `CCC`
+· `WebGPU / WGSL` · `WebAuthn PRF` · `React 19` · `Vite` · `Cloudflare Workers` · `D1`
 
-Create a token, pay a real Bitcoin ticket, mine real proof of work at
-**186 MH/s in the browser**, and hold a balance any stranger can re-derive from
-genesis. No backend owns your keys, your tokens or your history.
+Every token follows one standard. Buy a ticket on Bitcoin, mine against it in
+the browser, and mint what the result is worth, in that moment, into a Bitcoin
+output you control. The rule is enforced by a script on CKB, not by this app,
+and anyone can recompute any mint from the two chains.
 
+## How it works
+
+```text
+TICKET   pay 5,000 sats to the launch's promoter; the ticket's Bitcoin output is the challenge
+MINE     search for a nonce in the browser; the reward for the best hash is shown live
+MINT     spend the ticket output; the tokens exist in that transaction's output
+         → transfer, sell, verify, or buy the next ticket
 ```
-186 MH/s   WebGPU compute kernel, two fixed SHA-256 compressions per invocation
-  7 MH/s   Web Worker fallback, same kernel, same verification
-    122    unit tests · 9 routes verified in a real browser, zero console errors
-     $0    cost at rest — one Cloudflare Worker over D1, scales to zero
+
+```text
+challenge = sha256(ticket_txid ‖ ticket_vout)
+clz       = leading zero bits of sha256d(challenge ‖ nonce)        mintable from 16
+k         = halvings (every 1008 Bitcoin blocks) from the launch's opening to the ticket's anchor
+reward    = floor(10^8 × clz² / 2^k) atoms                          8 decimals
 ```
 
-## What actually runs today
+- **One standard.** A creator chooses the token's identity (symbol, name, one
+  sentence, an accent colour), the Bitcoin address that receives ticket income
+  and the opening height. Nothing economic: supply, tickets sold and halving are
+  comparable between launches.
+- **The ticket fixes the rate.** Its anchor must lie within 144 blocks of the
+  ticket's SPV-proven confirmation. A signed mint therefore never depends on
+  when it confirms, and can never be stranded by a halving.
+- **No cap, bounded anyway.** Mints are independent and can run in parallel.
+  The reward reaches zero after at most 43 halvings, and the cost of a token
+  doubles every week while the ticket price stays fixed.
+- **No reserve, no floor, no redemption.** Ticket income is the promoter's
+  revenue. A token is worth what someone will pay for it.
+
+## What it is built from
 
 | | |
 |---|---|
-| **Bitcoin** | Real testnet4 P2WPKH payments — coin selection, fee from measured transaction weight, OP_RETURN commitments, broadcast. `@scure/btc-signer`, `@noble`, no Buffer polyfill |
-| **Mining** | A WGSL compute shader doing SHA-256d over a fixed 40-byte preimage, auto-tuned to a 45 ms dispatch, lock-free hit buffer via `atomicAdd`. Every GPU candidate is re-hashed on the CPU before anything believes it |
-| **Wallet** | WebAuthn PRF → BIP39 → BIP84 `m/84'/1'/0'/0/0`. Touch ID derives the key; no seed phrase, no private key in storage. Standard path, so the coins are sweepable by any wallet |
-| **Ledger** | Hash-chained signed records, replay-from-genesis as the *only* state producer, exhaustive runtime decoding at the storage boundary |
-| **Market** | Signed offers, payment bound to an offer by OP_RETURN, settlement joined across offer + payment + delivery |
-| **Edge** | One Cloudflare Worker serving the SPA and `/api` over D1. It verifies with the same module the client runs — it can omit, never forge |
+| **Mint script** | A Rust `no_std` CKB type script that enforces open, ticket, mint and close of a per-miner *miner cell*, the promoter payment and the exact reward. Deployed on CKB testnet in an unspendable cell (`contracts/deployments/testnet.json`, code hash `0xb8af59e9…c72f`). Per whole transaction: open ~42k cycles, ticket ~273k, mint ~313k |
+| **Token** | An RGB++ xUDT on CKB bound to a Bitcoin UTXO. Owner mode by input type, with the mint script hash as owner, so the token can be minted no other way |
+| **Network** | Bitcoin testnet3 with CKB testnet: the public RGB++ services verify testnet3, and testnet4 has no SPV client on CKB |
+| **Settlement** | The app builds the CKB transaction and the Bitcoin transaction that commits to it. The RGB++ queue service attaches the SPV proof and submits; its paymaster provides CKB capacity for a BTC fee. It cannot change what was committed, and anyone can complete the same transaction without it |
+| **Sales** | The seller signs its token UTXO and price with `SIGHASH_SINGLE \| ANYONECANPAY`; the buyer completes and broadcasts alone. Payment and delivery are one transaction |
+| **Mining** | A WGSL compute shader doing SHA-256d over a fixed 40-byte preimage, with a Web Worker fallback. Every GPU candidate is re-hashed on the CPU before anything believes it |
+| **Wallet** | WebAuthn PRF → BIP39 → BIP84. A standard path, so the coins are sweepable by any wallet |
+| **Proof** | A page that takes a mint's Bitcoin txid and re-checks every rule from raw chain data: commitment, ticket, hash and amount |
+| **Edge** | One Cloudflare Worker serving the SPA and `/api` over D1, holding signed announcements and listings. It can omit, never forge |
 
-## What is specified but not built
+## Status
 
-**RGB++ single-use seals, Nervos CKB settlement, xUDT, CKB-VM scripts.** The
-protocol is written ([`PROTOCOL.md`](PROTOCOL.md)); there is no Rust and no CKB
-SDK in this repository, and nothing here pretends otherwise.
+The mint script is deployed and passes 24 CKB-VM tests, including weak hashes,
+unpaid tickets, work against another ticket, an idle cell minting again and
+amounts above or below the reward. The client passes 65 browser tests over
+simulated Bitcoin, RGB++ and CKB, with the mint rules as the oracle.
+The Rust and TypeScript reward functions pass the same vectors.
 
-That line is the point of the project, not a caveat on it. Building the offer
-book is what made the atomicity gap concrete — the taker pays first, the maker
-delivers second, and no amount of care in the client closes it. That is exactly
-what single-use seals are for, and the offer format is already shaped so the
-seal can be added without changing a caller.
+Pending: the live end-to-end run over RGB++ on testnet (funds), and a redeploy
+of the Worker so the public index carries listing payloads. Nothing here has
+been reviewed for real money, and nothing points at mainnet.
 
 [**`capabilities.md`**](.meshkore/docs/capabilities.md) splits every capability
-three ways — implemented, experimental, absent — with the task that unblocks each.
+into implemented, pending and absent, with the task that unblocks each.
 
 ## Engineering
 
 Quality is the deliverable here, ahead of scope. One concept, one
-implementation; ports where a second backend is foreseeable (mining backends,
-chain providers, the token ledger); discriminated unions over optional soup;
-comments that explain *why*. Every rule that can be tested is tested, and the UI
-is verified in a real browser before it is called done.
-
-The last pass over the codebase was a correctness review rather than a feature:
-nine defects found and fixed, each with a regression test. The interesting ones
-were quiet — a fee estimator that underpaid every transaction carrying a memo, a
-market status that implied evidence it did not have, and an emission schedule
-that rounded the opposite way from the formula its own comment declared. None of
-the three could fail loudly, which is why the rule here is that nothing is named
-more strongly than the code can support.
+implementation; ports where a second backend is foreseeable; discriminated
+unions over optional soup; comments that explain *why*. Every rule that can be
+tested is tested, and the UI is verified in a real browser before it is called
+done. Nothing is named more strongly than the code can support.
 
 ## Read next
 
-- [What is implemented, experimental and absent](.meshkore/docs/capabilities.md)
 - [Protocol specification](PROTOCOL.md)
+- [What is implemented, pending and absent](.meshkore/docs/capabilities.md)
+- [The decision: one standard, an instant mint](.meshkore/context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md)
 - [Hosting: why Cloudflare, and what the index may never be](.meshkore/docs/hosting.md)
 - [Design history — including the directions already rejected](.meshkore/context/idea-evolution.md)
 - [Roadmap and acceptance gates](.meshkore/docs/roadmap.md)
@@ -69,26 +88,33 @@ more strongly than the code can support.
 ## Run it
 
 ```bash
-cd apps/web && npm install && npm run dev      # the app
-npm test && npm run typecheck                  # 122 tests, strict TS
-npm run verify:ui                              # 9 routes + both miners, in Chromium
-npm run db:local && npx wrangler dev           # the Worker over a local D1
+cd apps/web && npm install
+npm run dev                    # the app
+npm test && npm run typecheck  # unit tests, strict TS
+npm run test:browser           # the browser suite, simulated chains + phone layout
+npm run test:browser:headed    # the same, on screen
+npm run build                  # production build, Worker included
+npm run db:local && npm run dev:edge   # the Worker over a local D1
 ```
 
-### End to end, on the real network
+### The mint script
 
 ```bash
-npm run e2e:wallet     # create a testnet4 wallet, print the address to fund
-npm run e2e:dry        # the whole lifecycle except the broadcast
-npm run e2e            # the real thing: pay, mine, claim, transfer, list
+cd contracts && cargo build -p btcfun-mint --release --target riscv64imac-unknown-none-elf && cargo test
 ```
 
-`npm run e2e` creates a launch, pays a real ticket to its burn address with an
-OP_RETURN commitment, grinds real proof of work against the challenge that
-txid derives, signs a claim the validator accepts, transfers, lists an offer,
-and replays the whole chain from genesis — then prints the explorer link. It
-runs the app's own modules through Vite's SSR loader, so it exercises the code
-that ships rather than a copy of it. About 2,300 sat per run; testnet only, and
-the runner refuses to start against a mainnet build.
+### On the real network (testnet only)
+
+```bash
+cd apps/web
+npm run e2e:wallet                     # create the runner's wallet, print the address to fund
+npm run ckb:deploy-mint -- --dry-run   # deploy the mint script to CKB testnet; drop --dry-run to send
+npm run rgbpp:live -- <step>           # launch | open | ticket | mine | mint | transfer | status
+```
+
+`rgbpp:live` walks a token's whole life with the app's own modules — every
+Bitcoin transaction is built exactly as the browser builds it — and records
+each step so the steps can run minutes apart while Bitcoin confirms and the
+RGB++ queue completes the CKB side. The configuration is CKB testnet's only.
 
 Project management follows the [MeshKore standard](https://meshkore.com/standard).

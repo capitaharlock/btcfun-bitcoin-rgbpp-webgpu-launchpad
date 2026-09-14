@@ -1,54 +1,70 @@
 ---
 title: Architecture
-updated: 2026-09-23
+updated: 2026-09-24
 status: draft
 ---
 
-# Architecture — target to validate
+# Architecture
 
 ```text
-Browser + one supported wallet
-  ├─ ticket admission / mining / claim / redemption
-  ├─ independent verifier (portable evidence, declared trust roots)
-  └─ read API / indexer (rebuildable projections)
+Browser + app wallet (BIP84, Bitcoin testnet3)
+  ├─ miner (WebGPU, CPU fallback) — reward shown live with the standard's function
+  ├─ plans RGB++ operations: open, ticket, mint, transfer, sale
+  ├─ signs the Bitcoin side; the commitment sits in OP_RETURN at output 0
+  └─ proof page: recomputes any mint from the two chains
                     │
-Bitcoin headers / SPV / accepted clock policy
+Bitcoin testnet3 ── SPV client on CKB testnet
                     │
-RGB++ binding and authorization ── CKB Cells / CKB-VM
-                                    ├─ launch config + mint authority
-                                    ├─ ticket intents / epoch closure
-                                    ├─ emission / allocation liabilities
-                                    └─ segregated reserve / redemption
+RGB++ lock ── CKB cells / CKB-VM
+               ├─ miner cell per miner and launch (idle | armed), type = mint script
+               ├─ token cells: xUDT, owner mode by input type = mint script hash
+               └─ mint script args = launch terms (version, h0, promoter script, metadata hash)
                     │
-Permissionless settlement or bounded refund/exit
-Official settler is one implementation, not the only recovery route
+RGB++ queue service: attaches the SPV proof, submits the CKB side;
+its paymaster adds CKB capacity for a BTC fee. Anyone can complete
+the same transaction without it.
+                    │
+Cloudflare Worker + D1: signed announcements and listings; never authoritative
 ```
 
-Bitcoin schedules issuance and supplies explicitly accepted challenge blocks.
-CKB validates economic transitions. Specify for each transition whether authority
-comes from spending a Bitcoin-bound UTXO, a CKB lock, or another proved mechanism.
-Using a UTXO in a hash does not itself prove authority over that UTXO.
+Authority for every transition comes from spending a Bitcoin UTXO that an RGB++
+lock binds a cell to: the Bitcoin transaction commits to the CKB transaction,
+and the RGB++ lock accepts it only with an SPV proof of that Bitcoin
+transaction. The mint script relies on that check rather than repeating it, and
+reads the same proof for the ticket payment and the ticket's confirming height.
 
-The standard RGB++ transfer path, leap and transaction folding are separate
-capabilities to test. Folding is not an assumed universal acceleration layer;
-graduation is not inherently a leap. Report provisional, CKB-confirmed and
-Bitcoin-anchored status separately, with confirmation thresholds and residual risk.
+**Mint script.** One Rust `no_std` type script, one code hash for every launch,
+deployed on CKB testnet with `hash_type: data1` in a cell nobody can spend
+(`contracts/deployments/testnet.json`). It validates open, ticket, mint and close
+transitions of a miner cell, the promoter payment per armed cell, the anchor
+window and the exact reward. The xUDT's owner mode requires the mint script, so
+the token cannot be minted any other way. Measured per whole transaction in the
+CKB-VM tests: open about 42k cycles, ticket about 273k, mint about 313k.
 
-Cells hold immutable configuration, uniquely controlled issuance state, ticket
-intents, epoch data and reserve liabilities. Avoid a global cross-token Cell, and
-measure per-token contention between tickets, settlement and redemption too.
-Do not promise an unbounded epoch in one transaction: benchmark the supported
-batch size and define overflow/closure behavior before choosing a chunked design.
+**Rate fixed by the ticket.** A signed mint must never become invalid: once its
+Bitcoin transaction spends sealed UTXOs, its committed CKB transaction is the
+only way those cells move. The reward is therefore priced at the ticket's
+anchor, not at the mint's confirmation, and a mint may not re-arm, so nothing a
+mint is checked against depends on when it confirms.
 
-xUDT composition requires a concrete authority/extension design. Define the full
-token Type identity, permitted owner-mode paths and voluntary-burn behavior; an
-off-chain circulating-supply counter is not sufficient for redemption accounting.
+**Separate outputs.** The miner cell and the tokens are sealed to different
+Bitcoin outputs, so a transfer never has to move the miner cell, and plain
+UTXOs used for funding are only those the RGB++ service reports as carrying no
+cells.
 
-**First demo:** one CKB-side reserve asset; wallets and SDK selected by a measured
-compatibility matrix. Native BTC custody is deferred research, not a transparent
-swap of an interface. No automatic graduation or reserve migration to a DEX.
+**Sales.** The seller signs its listed UTXO and the price output with
+`SIGHASH_SINGLE | ANYONECANPAY`; the buyer adds the commitment, their token
+output, funding and change, and broadcasts alone. The index stores the listing
+as signed public data and gives it no control over funds.
 
-**Repository:** grow from a Rust protocol/math workspace and minimal TypeScript
-SDK/verifier. Add web, indexer and settler when the corresponding vertical slice
-needs them. The target layout is documented in `PROTOCOL.md` §9; do not scaffold
-empty packages to demonstrate breadth.
+**Index.** Launches, mints, transfers and listings are derived from
+transactions; the Worker is a rebuildable projection that may omit but cannot
+forge. Balances and supply are read from CKB, through a configurable endpoint.
+
+Report provisional, CKB-confirmed and Bitcoin-anchored status separately.
+Confirmation policy and reorg treatment remain open (`V8`). Graduation is not
+inherently a leap and is deferred.
+
+**Repository:** `contracts/` (mint script, shared core, CKB-VM tests, reward
+vectors, deployment record) and `apps/web` (client, miner, Worker). Do not
+scaffold empty packages to demonstrate breadth.

@@ -1,6 +1,6 @@
 ---
 title: Idea evolution
-updated: 2026-09-23
+updated: 2026-09-24
 status: draft
 ---
 
@@ -118,3 +118,55 @@ policy and terminal accounting. `V3`/`V6`: actual SDK/wallet/network and reserve
 asset. `V7`–`V10`: hash/weight measurements, accepted Bitcoin clock, admission and
 recovery, full-cycle costs and batch limits. `PV1`–`PV3`: audience, pilot thresholds
 and repeat-use evidence. `GR1`/`LQ1`: separately funded markets, only if justified.
+
+## 9. One standard and an instant mint (adopted 2026-09-24)
+
+The epoch model settled a ticket only after everyone else in its window had
+been counted, so a miner could not know what their work was worth until later,
+and a creator could make a token look scarce by choosing a small cap. The
+decision `2026-09-24-standard-tokenomics-and-instant-mint` replaced it: one
+standard for every launch, a fixed 5,000-sat ticket paid to the promoter, and a
+mint that settles one miner's result the moment it happens, at
+`floor(10^8 × clz² / 2^k)` with a halving every 1008 blocks from the launch's
+opening. The 21M cap, epoch budgets, pari-mutuel allocation, ticket-funded
+reserve and redemption were withdrawn with it, and so was the browser-local
+signed ledger that stood in for settlement.
+
+Why:
+
+- **Immediacy.** The miner sees what the current hash is worth and receives
+  exactly that; the result no longer depends on other people's turnout.
+- **Comparable tokens.** Identical rules make supply a product of tickets
+  bought and when, so launches can be compared and none can fake scarcity.
+- **Bounded without a cap.** Mints are independent and can run in parallel,
+  which a shared cap forbids. The halving bounds supply instead: the reward is
+  exactly zero after at most 43 halvings, and the cost of a token doubles every
+  week while the ticket price stays fixed.
+- **The ticket anchors the work and the rate.** The challenge is the ticket's
+  own output, so work cannot be precomputed or reused, and the promoter is paid
+  before anyone mines.
+
+The per-miner rate that §6's pari-mutuel record rejected is re-adopted
+deliberately. That rejection assumed a hard cap; this decision gives up the cap
+on purpose and accepts a supply that is finite in practice rather than by
+ceiling. It is not a silent return to a discarded design.
+
+Two findings from implementing it:
+
+- **The RGB++ network is testnet3.** The public RGB++ testnet services verify
+  Bitcoin testnet3; testnet4 has no SPV client on CKB, and the Signet service
+  was unreachable when checked. The RGB++ path runs on testnet3, and the
+  earlier ticket experiments stay on testnet4 until it replaces them.
+- **A signed mint must never become invalid.** Once a Bitcoin transaction spends
+  sealed UTXOs, the CKB transaction it commits to is the only way those cells
+  move. A first version of the script priced the mint at its confirming height,
+  so a mint confirming after a halving would have been rejected forever and its
+  balance stranded. The rate is now fixed by the ticket's anchor, checked
+  against the ticket's SPV-proven confirmation, and a mint may not re-arm, so
+  the only time-dependent check never sits in a transaction that carries a
+  balance.
+
+The E-series questions (replacement economics, schedule, ticket timing, fee and
+terminal accounting) are answered by the standard and are no longer a gate.
+The platform fee, confirmation policy, capacity funding and pilot evidence
+remain open.

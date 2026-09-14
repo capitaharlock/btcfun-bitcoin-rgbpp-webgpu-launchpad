@@ -2,11 +2,17 @@
 title: September 23 design review
 category: docs
 tags: [economics, architecture, evidence]
-updated: 2026-09-23
+updated: 2026-09-24
 owner: rjj
 status: draft
 related: [economic-validation, validate-architecture]
 ---
+
+> **Superseded model.** This review's findings about the epoch, emission-ceiling
+> and reserve model led to its replacement by the standard tokenomics — one rule
+> set for every launch, an instant per-ticket mint, no cap and no reserve
+> ([decision](../context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md),
+> `PROTOCOL.md` §4). The text below is kept as the record of that review.
 
 # Design review — findings driving the revised plan
 

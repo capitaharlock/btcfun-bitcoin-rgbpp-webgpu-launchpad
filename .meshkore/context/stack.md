@@ -1,33 +1,29 @@
 ---
 title: Stack
-updated: 2026-09-23
+updated: 2026-09-24
 status: draft
 ---
 
-# Stack — candidates and validation obligations
+# Stack — choices and remaining obligations
 
-| Layer | Direction | Required evidence |
+| Layer | Choice | Evidence held / still required |
 |---|---|---|
-| Issuance clock | Bitcoin block height, candidate half-life 1008 blocks | Accepted-header/SPV policy, confirmations, freshness, reorg behavior (`V8`) |
-| Ownership | Bitcoin UTXOs through RGB++, explicit CKB execution states | Real authorization lifecycle and unilateral recovery (`V3`, `V9`) |
-| Token | xUDT | Type identity, owner-mode restrictions, extension and burn compatibility (`V2`, `PC8`) |
-| Contracts | Rust `no_std`, `ckb-std`, CKB-VM/RISC-V | Reproducible builds, script tests and complete-transaction cycles |
-| Math | Integer amounts + checked `mul_div`; fixed-point only where justified | Canonical rounding, independent reference, Rust/TS vectors (`E2`, `V5`) |
-| PoW | SHA256d or Eaglesong, unresolved | Cost, challenge binding and hardware concentration; choose on evidence (`SH3`, `V7`) |
-| Miner | WebGPU with WASM fallback | Correctness parity, responsiveness and device/energy measurements |
-| SDK | Evaluate `RGBPlusPlus/rgbpp-sdk` and `@ckb-ccc/rgbpp` | Pin tested versions, networks, script deployments and service dependencies |
-| Wallet | One real wallet selected in `V3` | Actual ticket/claim/redemption signatures, not just PSBT support |
-| Reserve | One directly manageable CKB-side asset for first demo | Exact denomination, custody and occupied-capacity accounting (`V6`) |
-| Client | TypeScript, React, Vite, TanStack Query, Zod | Minimal integrated flow and independent proof inspection |
-| Services | TypeScript settler + rebuildable indexer | Operator failure, resumption, idempotency and externally usable data |
-| Storage | PostgreSQL; Redis/Valkey only if justified | Durable admission evidence must not live only in a transient queue |
-| Hosting / CI | Cloudflare, Fly.io, GitHub Actions as needed | Measured operating costs and reproducible environment |
+| Issuance clock | Bitcoin height; halving every 1008 blocks from the launch's `h0`, rate fixed at the ticket's anchor | Anchor checked against the SPV-proven confirmation within 144 blocks. Confirmation policy and reorg behavior still open (`V8`) |
+| Bitcoin network | testnet3 for the RGB++ path | The public RGB++ services verify testnet3; testnet4 has no SPV client on CKB. Earlier ticket experiments ran on testnet4 |
+| Ownership | Bitcoin UTXOs through the RGB++ lock | Commitment implemented in the client and pinned by test to the RGB++ SDK and lock |
+| Token | xUDT, owner mode by input type, owner = mint script hash | 8 decimals for every launch; metadata hashed into the mint script args |
+| Contracts | Rust `no_std`, `ckb-std`, `rgbpp-core`, CKB-VM/RISC-V | 24 CKB-VM tests with `ckb-testtool`; cycles measured per whole transaction; deployed on CKB testnet |
+| Math | Exact integers; `floor(10^8 × clz² / 2^k)` as a shift | Rust and TypeScript pass the same vectors (`contracts/vectors/reward.json`) |
+| PoW | SHA-256d over a 40-byte preimage (`sha256(txid‖vout)` ‖ nonce) | Hardware concentration still to be measured in pilots |
+| Miner | WebGPU with CPU worker fallback | Every GPU candidate re-hashed on the CPU before use |
+| CKB client | CCC (`@ckb-ccc/core`), one client behind a configurable endpoint | — |
+| Settlement service | RGB++ queue service and its paymaster | Completes the CKB side for a BTC fee; replaceable by anyone with an SPV proof |
+| Wallet | App wallet: WebAuthn PRF → BIP39 → BIP84 | Other wallets undecided |
+| Client | TypeScript, React, Vite | 65 browser tests over simulated Bitcoin, RGB++ and CKB |
+| Index | One Cloudflare Worker over D1 | Must be redeployed to carry listing payloads |
 
 The original `utxostack/rgbpp-sdk` repository is archived and points to its
-successor. Do not assume a fork or a preview package is production-ready; `V3`
-records actual release maturity and API compatibility. Sources are recorded in
-`.meshkore/docs/design-review.md`.
-
-No parallel native-BTC reserve implementation, multiple-wallet suite, payment
-channels, or full marketplace in the first demo. Testnet network support must be
-verified across the wallet, SDK, SPV service and deployed scripts as one system.
+successor. Pin tested versions and record them; do not assume a preview package
+is production-ready. Testnet network support must be verified across the
+wallet, SDK, SPV service and deployed scripts as one system. Sources are
+recorded in `.meshkore/docs/design-review.md`.
