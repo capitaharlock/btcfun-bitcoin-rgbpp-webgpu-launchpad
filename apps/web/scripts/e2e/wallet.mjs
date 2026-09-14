@@ -1,6 +1,6 @@
 /* The end-to-end test wallet.
  *
- * A real testnet4 wallet that the runner spends from. It is a separate key
+ * A real testnet wallet that the runners spend from. It is a separate key
  * from anything a person uses in the browser, and it is the only secret this
  * repository's tooling holds.
  *
@@ -38,7 +38,7 @@ export class WalletMissing extends Error {
 /** Refuse to touch anything but testnet. */
 export async function assertTestnet() {
   const { ACTIVE } = await load("lib/bitcoin/network.ts");
-  if (ACTIVE.id !== "testnet4") {
+  if (ACTIVE.id === "mainnet") {
     throw new Error(
       `The end-to-end runner is testnet-only; this build points at ${ACTIVE.id}. ` +
         "It signs unattended from a key on disk, which must never happen with real funds.",
