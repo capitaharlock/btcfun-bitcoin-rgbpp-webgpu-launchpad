@@ -215,8 +215,7 @@ repeating it, and reads the same proof for the ticket payment and its confirming
 Tooling: the current RGB++ SDK (`rgbpp`, built on CCC) with CCC for CKB. The
 public RGB++ testnet services verify Bitcoin testnet3; the Signet service was
 unreachable when checked on 2026-09-24, and testnet4 has no SPV client on CKB.
-The app's own ticket experiments stay on testnet4 until the RGB++ path replaces
-them. Label provisional, CKB-confirmed and Bitcoin-anchored states honestly.
+The whole app runs on testnet3, so payments, tickets and tokens share one chain. Label provisional, CKB-confirmed and Bitcoin-anchored states honestly.
 
 ### 6.3 The mint script
 

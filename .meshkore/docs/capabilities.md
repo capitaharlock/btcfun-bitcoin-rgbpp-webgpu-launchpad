@@ -29,7 +29,7 @@ verification. *Implemented* does not mean *run live*: see the next section.
 | RGB++ operations | Plans for open, ticket, mint and transfer; the commitment, pinned by test to the RGB++ SDK and lock; the signed Bitcoin side; hand-off to the RGB++ queue service | `lib/rgbpp/` |
 | Token identity | A launch is identity, promoter address and opening height; its terms are the mint script args, so the xUDT type hash commits to them | `lib/rgbpp/launch.ts`, `lib/launches/create.ts` |
 | Browser mining | CPU workers and a WebGPU kernel over the ticket's challenge, reward shown live; every GPU candidate re-hashed on the CPU | `lib/mining/` |
-| Wallet | WebAuthn PRF → BIP39 → BIP84, P2WPKH on testnet3 (testnet4 selectable); a standard mnemonic, so coins are sweepable elsewhere | `lib/bitcoin/` |
+| Wallet | WebAuthn PRF → BIP39 → BIP84, P2WPKH on testnet3; a standard mnemonic, so coins are sweepable elsewhere | `lib/bitcoin/` |
 | Holdings and transfers | Balances read from xUDT cells sealed to the wallet's outputs; a transfer is one Bitcoin transaction | `views/Holdings.tsx` |
 | Sales | Seller signs its token UTXO and price with `SIGHASH_SINGLE \| ANYONECANPAY`; the buyer completes and broadcasts alone | `lib/rgbpp/sale.ts`, `views/Market.tsx` |
 | Proof page | Recomputes a mint from the Bitcoin and CKB transactions: commitment, ticket, hash, amount | `lib/rgbpp/verify.ts`, `views/Proof.tsx` |

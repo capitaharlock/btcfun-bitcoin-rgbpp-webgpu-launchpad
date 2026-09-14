@@ -9,7 +9,7 @@ status: draft
 | Layer | Choice | Evidence held / still required |
 |---|---|---|
 | Issuance clock | Bitcoin height; halving every 1008 blocks from the launch's `h0`, rate fixed at the ticket's anchor | Anchor checked against the SPV-proven confirmation within 144 blocks. Confirmation policy and reorg behavior still open (`V8`) |
-| Bitcoin network | testnet3 for the RGB++ path | The public RGB++ services verify testnet3; testnet4 has no SPV client on CKB. Earlier ticket experiments ran on testnet4 |
+| Bitcoin network | testnet3, the only test network | The public RGB++ services verify testnet3 and testnet4 has no SPV client on CKB, so payments, tickets and tokens share testnet3. The earliest ticket experiments ran on testnet4 |
 | Ownership | Bitcoin UTXOs through the RGB++ lock | Commitment implemented in the client and pinned by test to the RGB++ SDK and lock |
 | Token | xUDT, owner mode by input type, owner = mint script hash | 8 decimals for every launch; metadata hashed into the mint script args |
 | Contracts | Rust `no_std`, `ckb-std`, `rgbpp-core`, CKB-VM/RISC-V | 24 CKB-VM tests with `ckb-testtool`; cycles measured per whole transaction; deployed on CKB testnet |
