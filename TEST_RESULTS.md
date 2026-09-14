@@ -1,309 +1,273 @@
 # Test results
 
-Every user journey of btc.fun, exercised in a real Chromium browser — the path
-that works and every path that must be refused — first against a simulated
-Bitcoin chain whose clock the tests control, then on testnet4 with real
-satoshis. This document is the account of that campaign: what was tested, what
-it found, what changed, and the latest numbers.
+btc.fun's tokens are RGB++ xUDT cells on CKB, minted under one standard by a
+script on chain. This document accounts for how that is tested — the script in
+CKB-VM, the rules in two languages, and every user journey in a real browser,
+the path that works and every path that must be refused — what the testing
+found, and the latest numbers.
 
 | Layer | Tests | Result |
 |---|---:|---|
-| Unit — rules, encodings, signatures, payments | 135 | all passing |
-| Browser — simulated chain (`ui`) | 87 | all passing |
+| Mint script in CKB-VM, against the deployed xUDT and RGB++ lock (`contracts/tests`) | 24 | all passing |
+| Standard rules in Rust (`contracts/mint-core`) | 8 | all passing |
+| Unit — reward, challenge, plans, commitment, sales, verifier, launches, payments, mining | 79 | all passing |
+| Browser — simulated Bitcoin, RGB++ and CKB (`ui`) | 56 | all passing |
 | Browser — phone layout (`mobile`) | 9 | all passing |
-| Browser — live testnet4 (`live`) | 10 | all passing, real satoshis — [live run](#live-testnet4-two-browsers-real-satoshis) |
+| Live — testnet3 and CKB testnet | — | pending: the end-to-end wallet has no testnet3 funds yet |
 
 ```bash
+cd contracts
+cargo build -p btcfun-mint --release --target riscv64imac-unknown-none-elf
+cargo test                    # mint-core rules + the script in CKB-VM
+
 cd apps/web
-npm test                     # unit
-npm run test:browser         # browser, simulated chain + phone layout
-npm run test:browser:headed  # the same, on screen
-npm run test:browser:live    # real testnet4 money, on screen (needs the funded wallet)
-npm run test:report          # refresh the generated section below
+npm test                      # unit
+npm run test:browser          # browser, simulated chains + phone layout
+npm run test:browser:headed   # the same, on screen
+npm run rgbpp:live -- status  # live testnet run, step by step (needs the funded wallet)
+npm run test:report           # refresh the generated section below
 ```
 
-## How the browser suite works
+## How it is tested
 
-**A simulated chain.** The app's clock is the Bitcoin block height: epochs,
-issuance and whether a launch is open all derive from the tip. The suite
-replaces the provider with a simulator it steers, so a test can live through a
-day (144 blocks), a week (1,008), the twenty-first day and the end of issuance
-in seconds. Every transaction the page signs is captured and parsed — its
-inputs spent, its outputs credited back to the right wallet — so tests check
-what *would* have been broadcast without spending anything. Any request the
-simulator does not recognise fails the test, so nothing reaches the network by
-accident.
+**The script, in the VM that runs it.** `contracts/tests` executes the mint
+script in CKB-VM with `ckb-testtool`, next to the xUDT and RGB++ config fetched
+from their deployed cells on CKB testnet and installed under the same type-id
+scripts, so the identities the script trusts are the real ones. The RGB++ lock
+is the upstream build with only its SPV lookup mocked. Each test builds the
+Bitcoin transaction and the CKB transaction it commits to, as a wallet would,
+and asserts the script's decision by error code, so a refusal for the wrong
+reason does not pass as a refusal.
 
-**Real browsers, real journeys.** Tests drive what a person sees: labels,
-buttons, the text on the screen. Two-person journeys run in two separate
-browser contexts with separate storage, exactly like two people on two
-machines. An uncaught page error fails a test even when every assertion passed.
+**One set of vectors, two implementations.** `contracts/vectors/reward.json`
+is generated independently in Python with exact integers. The Rust rules and
+the TypeScript client both reproduce it, so the amount the page shows while
+mining is the amount the script accepts.
 
-**Expected values from first principles.** Time tests compute the schedule from
-`1 − 2^(−n/H)`, not from the app's own code, so a regression in the schedule
-cannot agree with itself.
+**Every journey in a real browser, over simulated chains.** The Playwright
+suite replaces three services with simulators the tests steer: the Bitcoin
+provider (block height is the clock, so a test lives through a day, a week or
+day 21 in seconds), the RGB++ service with its queue and paymaster, and a CKB
+node. The simulated queue settles an operation once its Bitcoin transaction
+has a block and refuses what the chain would: a commitment that does not match,
+seals left unspent, dead inputs, cells below their occupied capacity, and every
+rule of the mint script, restated in the simulator as an independent oracle
+rather than imported from the app. A client that built the wrong transaction
+fails here instead of agreeing with itself. The suite runs against the
+production build; two-person journeys use separate browser contexts; any
+request the simulators do not recognise, and any uncaught page error, fails the
+test.
 
 ## What was covered
 
 | Area | Works as intended | Refused as it must be |
 |---|---|---|
-| Navigation | all nine routes render; four sections in order; chain tip shown; unknown launch and route handled; provider outage survived | — |
-| Wallet | demo key; funds appear; restore is deterministic; secret round-trips; disconnect forgets | short secret; non-hex secret (in plain words) |
-| Create a token | the whole wizard signs and lands in the grid; opens for mining when the chain reaches it; draft survives a detour to the wallet page; halvings stated | one-character, digit-first, punctuated and reserved symbols; long symbols; short name and description; opening now or in the past; sub-dust ticket; committing without a wallet |
-| Time | day 0, 1, 7, 14, 21, 42; allowance halves each week; countdown tracks the chain; a new block reaches an open page; issuance ends at the terminal block | — |
-| Mining | ticket pays the burn address with its commitment and a fair fee; GPU and CPU mine and claim; the proof explorer replays it | no wallet; empty wallet; one sat short; a second claim on one ticket; a ticket carried into the next epoch |
-| Holdings | position shown; transfer; a newcomer receives a chain | malformed, short, zero, negative, over-precise and over-balance transfers; sending to yourself; a forged chain; non-JSON; corrupt storage; reset without confirmation |
-| Market | a complete sale between two browsers | non-JSON offer; tampered price; wrong launch; seller paying themselves; overselling; zero price; unaffordable payment (nothing broadcast); expired offer |
-| Activity | local-only feed shows your own actions; figures called announcements | a tampered event is shown as failing its signature |
-| Phone | no horizontal scroll on any page; sections reachable | — |
+| Mint script (CKB-VM) | open an idle miner cell; a paid ticket arms it; a valid hash mints exactly the reward; a mint adds to an existing balance; the reward is priced at the ticket's anchor however late the mint confirms; two tickets for two launches of one promoter | armed without a ticket; a cell not bound to Bitcoin; unpaid, underpaid or misdirected ticket; a ticket that mints; one payment arming two cells; anchor too old, in the future or before opening; weak hash; amount one atom high or low; work against another ticket; an idle cell minting; a mint that re-arms; closing that mints; a miner cell under another lock; a forged Bitcoin transaction behind a sibling cell; the xUDT minting with no miner cell |
+| Navigation and layout | every route renders; four sections in order; chain tip shown; empty catalogue says so; no horizontal scroll on desktop or phone | unknown launch; unknown route; provider outage |
+| Wallet | demo key; funds appear; restore is deterministic; secret round-trips; disconnect forgets | short secret; non-hex secret in plain words |
+| Create a token | three steps announce a launch whose id is its token's; defaults the income address to the creator's; opens when the chain reaches it; draft survives a detour to the wallet | malformed symbol, name or sentence; an income address on another network; opening now; no economic parameter is ever asked |
+| Mining | an empty wallet to a real balance: open through the paymaster, ticket paid to the promoter, mining before the ticket settles, minting after it; a second mint adds to the balance; the best hash survives a reload | no wallet; before opening; empty wallet (nothing broadcast); a stalled queue shows the ticket landing, not failed |
+| Time | day 0, 1, 7 and 21: the rate halves exactly at each 1,008 blocks, on every screen; a ticket bought before a halving mints at its rate after it; the launch is spent after the terminal halving | — |
+| Holdings | a transfer reaches a second browser's wallet, which sees it without any action; change stays with the sender | more than the balance; not an address; a mainnet address; zero |
+| Market | a buyer completes a listing while the seller is away: one transaction pays the seller and moves the tokens; cancellation voids a listing | a listing whose PSBT was altered is never shown; an own listing cannot be bought |
+| Proof | a real mint passes commitment, ticket, disarm, work and amount, recomputed from chain data | a ticket is not a mint and says why; a malformed txid |
+| Activity | an announcement reaches another browser through the index | an announcement altered in the index is dropped |
 
-## What the campaign changed in the product
+## What testing changed in the product
 
-Each of these started as a test describing how the product should behave, and
-ended as a feature that makes it so.
+Each was found by a test or by building the test that would catch it, and each
+is now covered.
 
-- **Market settlement between two people.** A buyer's payment now names both
-  the offer and the buyer in its `OP_RETURN`, and the seller's page finds it on
-  chain by itself and offers to deliver. Who is owed the tokens comes from the
-  chain, so nobody watching it can claim someone else's payment. Each side is
-  told its next step as it happens.
-- **Receiving tokens.** Holdings has a Receive panel that works before the first
-  token, and accepts only a chain that extends what is already held — someone
-  else's history can never overwrite yours.
-- **Epoch block lookup that keeps asking.** A launch that has just opened waits
-  for its block to be served instead of giving up for the epoch. Found on
-  testnet4, where the provider announced a block before it could serve it.
-- **A wizard that remembers.** The draft and step persist while the visitor goes
-  to get a wallet, and are cleared once the launch is committed.
-- **Chain resets that ask first,** naming how many records would be deleted.
-- **Accessible forms and navigation.** Labels are associated with their fields;
-  the four sections are links that open in a new tab.
-- **A layout that fits a phone,** on every page.
-- **Readable errors,** where an internal function name used to be — and a
-  failed payment reports where the person clicked, not inside a folded row.
-- **A lapsed ticket is named,** instead of vanishing from the page when its
-  epoch closes unused.
-- **"Reading the chain…"** while the first tip is on its way, with the figures
-  dimmed, instead of placeholder epochs shown as fact.
-- **Sellers see their address being watched** for payments, and can check at
-  once.
+- **A signed mint can never be stranded.** Once a Bitcoin transaction spends
+  sealed UTXOs, the CKB transaction it commits to is the only way those cells
+  move again. Pricing a mint at the height it confirms would have made a mint
+  that confirmed after a halving invalid forever, balance included. The rate is
+  now fixed by the ticket's anchor, the mint reads no height or witness, and a
+  mint that re-arms is refused.
+- **The script reads the witness the RGB++ lock verified.** Cells sealed to one
+  UTXO share a lock group whose first witness is the verified one; reading the
+  miner cell's own witness would have let a forged transaction pay for a
+  ticket. A test forges exactly that and is refused.
+- **One payment buys one ticket.** A promoter with two launches could have been
+  paid once for two armed cells; the script now counts every armed cell of that
+  promoter in the transaction.
+- **Cells are sized with their data.** Plans had counted an output without its
+  data, which would have produced token cells below their occupied capacity.
+  Every plan is now checked against the occupied size, data included.
+- **Funding never spends a seal.** Until its CKB side settles, a seal looks like
+  a plain 546-sat output; spending it as funding would strand the cells it is
+  about to carry. Funding now excludes those outputs and every output of an
+  operation still landing.
+- **The nonce travels in committed data.** The RGB++ queue rewrites the
+  witnesses of RGB++ inputs, so the nonce lives in the new miner cell's data,
+  which the Bitcoin commitment covers.
+- **Purchases and cancellations are confirmed on screen.** A listing leaves the
+  table the moment it is bought or cancelled; the market now keeps a notice of
+  what was done and its transaction.
+- **The script's release build avoids LTO and size optimisation**, both of which
+  produced layouts CKB-VM rejects as writes to executable pages.
 
-## Live testnet4: two browsers, real satoshis
+## Live testnet run
 
-Alice is the funded wallet, restored through the wallet page. Bob is a fresh
-demo key holding no bitcoin at all.
+Pending. The mint script is deployed on CKB testnet
+(`contracts/deployments/testnet.json`) and the end-to-end wallet holds CKB
+testnet funds; it needs Bitcoin testnet3 funds at
+`tb1q93pwzegduvqq2mahaxy6vq0ydnz5yqv9kz7qc4`. Then
+`npm run rgbpp:live -- launch | open | ticket | mine | mint | transfer | status`
+walks one launch through the real services and records every transaction here.
 
 <!-- live:start -->
-_Run of 2026-09-23 21:46 UTC — 10/10 steps passed, headed Chromium, real testnet4._
-
-| | Step | Time |
-|---|---|---:|
-| ✅ | Alice restores the funded wallet through the wallet page | 1.7 s |
-| ✅ | Bob creates a demo key with no bitcoin at all | 1.0 s |
-| ✅ | Alice buys a real MESH ticket, found on testnet4 | 0.7 s |
-| ✅ | Alice mines on the GPU and claims MESH | 1.2 s |
-| ✅ | Alice sends Bob two MESH, and Bob receives the chain | 2.5 s |
-| ✅ | Bob lists one MESH for sale | 1.0 s |
-| ✅ | Alice pays Bob for real; the payment names the offer and Alice | 1.2 s |
-| ✅ | Bob's page finds the payment on testnet4 by itself, and he delivers | 1.7 s |
-| ✅ | Alice creates a token through the wizard | 2.8 s |
-| ✅ | testnet4 opens the new token, and Alice mines it for real | 75.8 s |
-
-What each step recorded:
-
-- Alice restored the funded wallet; the page showed 0.00088609 tBTC.
-- Ticket 420ef844159984edc8519d087ea3bf67b0172e2a4d400ee51b6fc564b2729431: 2000 sat to the MESH burn address, fee 187 sat (1.00 sat/vB).
-- MESH claimed: Claim 28,032.7766 MESH after 0.6 s on the GPU.
-- Payment dfe8b1691aad16f33a8bb62d4f1bed0f75f715f82d003854c357183803296ac0: 1000 sat to Bob, memo naming the offer and Alice's key.
-- A real sale settled between two browsers: Bob learned of the payment from testnet4, delivered, and Alice received.
-- LIVEQA opened at 153738 after 1.0 min; Claim 86,464.9031 LIVEQA after 0.6 s on the GPU — mined on the token we created.
-
-On the explorer:
-
-- [`420ef844159984ed…`](https://mempool.space/testnet4/tx/420ef844159984edc8519d087ea3bf67b0172e2a4d400ee51b6fc564b2729431)
-- [`dfe8b1691aad16f3…`](https://mempool.space/testnet4/tx/dfe8b1691aad16f33a8bb62d4f1bed0f75f715f82d003854c357183803296ac0)
 <!-- live:end -->
 
-## Experience notes
+## Latest browser run
 
-Observations recorded by the tests themselves are quoted under each file in the
-generated section below. Every note the campaign raised has been turned into
-one of the changes above; none remains open.
-
-## Latest run
+Generated from the Playwright report; experience notes recorded by the tests
+appear under the file that observed them.
 
 <!-- results:start -->
 
-_Generated from the last run on 2026-09-23 21:40 UTC — 96 tests: 96 passed, 0 failed, 0 skipped._
+_Generated from the last run on 2026-09-24 12:09 UTC — 65 tests: 65 passed, 0 failed, 0 skipped._
 
-#### `ui/activity.spec.ts` — 3/3
-
-| | Test | Project | Time |
-|---|---|---|---:|
-| ✅ | activity › with no index, the feed says it is local and still shows your own actions | ui | 20.9 s |
-| ✅ | activity › the feed calls its figures announcements, not receipts | ui | 1.3 s |
-| ✅ | activity › a tampered event in local storage is shown as failing its signature | ui | 18.2 s |
-
-> Without an index the feed labels itself 'local only' and still lists the visitor's own mint, marked 'you'.
-
-#### `ui/create-wizard.spec.ts` — 14/14
+#### `ui/activity.spec.ts` — 2/2
 
 | | Test | Project | Time |
 |---|---|---|---:|
-| ✅ | create a token › the whole wizard, signed with a wallet, lands in the launches grid | ui | 6.1 s |
-| ✅ | create a token › a committed token opens for mining once the chain reaches its height | ui | 6.5 s |
-| ✅ | create a token › the draft survives leaving the wizard to connect a wallet | ui | 2.9 s |
-| ✅ | create a token › the emission step states the halvings the schedule promises | ui | 1.4 s |
-| ✅ | create a token › stays on the rails › refuses a symbol with one character | ui | 1.5 s |
-| ✅ | create a token › stays on the rails › refuses a symbol with starts with a digit | ui | 1.6 s |
-| ✅ | create a token › stays on the rails › refuses a symbol with punctuation | ui | 2.5 s |
-| ✅ | create a token › stays on the rails › refuses a symbol with a seeded launch's symbol | ui | 1.9 s |
-| ✅ | create a token › stays on the rails › lowercase is accepted and shown as the uppercase symbol it becomes | ui | 1.2 s |
-| ✅ | create a token › stays on the rails › a symbol longer than eight characters cannot be typed | ui | 1.2 s |
-| ✅ | create a token › stays on the rails › name and one-line description need real content | ui | 2.1 s |
-| ✅ | create a token › stays on the rails › a launch cannot open in the past or right now | ui | 2.1 s |
-| ✅ | create a token › stays on the rails › a ticket below the dust limit is refused | ui | 1.4 s |
-| ✅ | create a token › stays on the rails › committing without a wallet offers to connect one instead | ui | 1.9 s |
+| ✅ | activity › an announcement reaches another browser through the index | ui | 25.8 s |
+| ✅ | activity › an announcement whose terms were altered in the index is dropped | ui | 16.9 s |
 
-> Commit → open → grid takes three clicks and the new token is visible immediately, marked as not yet open.
->
-> Step 4 sends a walletless user to the wallet page; on return they land on step 4 with everything intact, one click from signing.
+> A launch announced in one browser appears in another's catalogue after the index poll.
 
-#### `ui/holdings.spec.ts` — 14/14
+#### `ui/create-wizard.spec.ts` — 6/6
 
 | | Test | Project | Time |
 |---|---|---|---:|
-| ✅ | holdings › a claimed balance appears as a position with its records | ui | 20.3 s |
-| ✅ | holdings › receiving refuses what is not a chain, and a launch the browser has never seen | ui | 1.2 s |
-| ✅ | holdings › resetting a chain asks first, because it cannot be undone | ui | 17.5 s |
-| ✅ | holdings › sending › a transfer moves tokens and the receiver can import the chain to see them | ui | 20.0 s |
-| ✅ | holdings › sending › refuses to send a malformed recipient key | ui | 17.0 s |
-| ✅ | holdings › sending › refuses to send a key that is one character short | ui | 17.4 s |
-| ✅ | holdings › sending › refuses to send zero | ui | 17.0 s |
-| ✅ | holdings › sending › refuses to send more than is held | ui | 16.7 s |
-| ✅ | holdings › sending › refuses to send a negative amount | ui | 17.0 s |
-| ✅ | holdings › sending › refuses to send more decimals than the token has | ui | 16.7 s |
-| ✅ | holdings › sending › refuses to send to yourself | ui | 16.5 s |
-| ✅ | holdings › the chain cannot be forged › an imported chain with an inflated balance is rejected, and nothing changes | ui | 17.0 s |
-| ✅ | holdings › the chain cannot be forged › an import that is not JSON is refused in plain words | ui | 17.1 s |
-| ✅ | holdings › the chain cannot be forged › corrupted storage is reported, never shown as an empty wallet | ui | 0.9 s |
+| ✅ | create wizard › announces a launch whose id is its token's, and lists it as opening soon | ui | 8.4 s |
+| ✅ | create wizard › never asks for supply, price, difficulty or schedule | ui | 8.4 s |
+| ✅ | create wizard › keeps the draft when the visitor leaves to get a wallet | ui | 11.3 s |
+| ✅ | create wizard › refuses what is not a launch › a malformed symbol, name or sentence keeps Continue disabled with the reason in place | ui | 5.5 s |
+| ✅ | create wizard › refuses what is not a launch › an income address on another network is refused | ui | 4.7 s |
+| ✅ | create wizard › refuses what is not a launch › opening now is refused: a launch must be announced before it opens | ui | 4.0 s |
 
-> Reset chain now names how many records it will delete and needs a second, explicit click.
+> Announcing takes three steps and no economic choices; the card flips to mining when the block arrives.
 >
-> A recipient with no tokens yet can import the chain they were sent straight from the holdings page.
->
-> A corrupted local chain is named as such on the launch page instead of reading as a zero balance.
+> Leaving the wizard for the wallet and coming back lands on the last step with everything kept.
+
+#### `ui/holdings.spec.ts` — 3/3
+
+| | Test | Project | Time |
+|---|---|---|---:|
+| ✅ | holdings › a transfer reaches another wallet, which sees it with no action of its own | ui | 70.9 s |
+| ✅ | holdings › an empty wallet is told how to get tokens | ui | 1.5 s |
+| ✅ | holdings › refuses what cannot be sent › more than the balance, a non-address and a mainnet address keep Send disabled | ui | 15.8 s |
+
+> The recipient's balance appears on their own holdings page after one block, without any action from them.
 
 #### `ui/layout.spec.ts` — 18/18
 
 | | Test | Project | Time |
 |---|---|---|---:|
-| ✅ | layout › / has no horizontal scroll | ui | 3.2 s |
-| ✅ | layout › /create has no horizontal scroll | ui | 1.5 s |
-| ✅ | layout › /market has no horizontal scroll | ui | 1.3 s |
-| ✅ | layout › /activity has no horizontal scroll | ui | 1.5 s |
-| ✅ | layout › /holdings has no horizontal scroll | ui | 1.1 s |
-| ✅ | layout › /wallet has no horizontal scroll | ui | 1.3 s |
-| ✅ | layout › /launch/mesh has no horizontal scroll | ui | 1.1 s |
-| ✅ | layout › /launch/mesh/proof has no horizontal scroll | ui | 1.0 s |
-| ✅ | layout › the four sections stay reachable | ui | 1.9 s |
-| ✅ | layout › / has no horizontal scroll | mobile | 2.9 s |
-| ✅ | layout › /create has no horizontal scroll | mobile | 1.6 s |
-| ✅ | layout › /market has no horizontal scroll | mobile | 1.2 s |
-| ✅ | layout › /activity has no horizontal scroll | mobile | 1.3 s |
-| ✅ | layout › /holdings has no horizontal scroll | mobile | 1.5 s |
-| ✅ | layout › /wallet has no horizontal scroll | mobile | 1.0 s |
-| ✅ | layout › /launch/mesh has no horizontal scroll | mobile | 1.1 s |
-| ✅ | layout › /launch/mesh/proof has no horizontal scroll | mobile | 1.1 s |
-| ✅ | layout › the four sections stay reachable | mobile | 1.9 s |
+| ✅ | layout › / has no horizontal scroll | ui | 2.6 s |
+| ✅ | layout › /create has no horizontal scroll | ui | 1.9 s |
+| ✅ | layout › /market has no horizontal scroll | ui | 1.6 s |
+| ✅ | layout › /activity has no horizontal scroll | ui | 2.2 s |
+| ✅ | layout › /holdings has no horizontal scroll | ui | 2.2 s |
+| ✅ | layout › /wallet has no horizontal scroll | ui | 6.1 s |
+| ✅ | layout › /lab has no horizontal scroll | ui | 5.7 s |
+| ✅ | layout › /proof has no horizontal scroll | ui | 2.9 s |
+| ✅ | layout › the four sections stay reachable | ui | 2.8 s |
+| ✅ | layout › / has no horizontal scroll | mobile | 3.7 s |
+| ✅ | layout › /create has no horizontal scroll | mobile | 2.7 s |
+| ✅ | layout › /market has no horizontal scroll | mobile | 2.3 s |
+| ✅ | layout › /activity has no horizontal scroll | mobile | 2.6 s |
+| ✅ | layout › /holdings has no horizontal scroll | mobile | 3.2 s |
+| ✅ | layout › /wallet has no horizontal scroll | mobile | 2.1 s |
+| ✅ | layout › /lab has no horizontal scroll | mobile | 1.7 s |
+| ✅ | layout › /proof has no horizontal scroll | mobile | 1.2 s |
+| ✅ | layout › the four sections stay reachable | mobile | 1.5 s |
 
-#### `ui/market.spec.ts` — 8/8
-
-| | Test | Project | Time |
-|---|---|---|---:|
-| ✅ | market › a complete sale between two browsers | ui | 24.7 s |
-| ✅ | market › refuses › an offer that is not JSON | ui | 1.9 s |
-| ✅ | market › refuses › an offer whose price was edited after signing | ui | 18.7 s |
-| ✅ | market › refuses › an offer for a different launch | ui | 19.8 s |
-| ✅ | market › refuses › to let a seller pay their own offer | ui | 17.2 s |
-| ✅ | market › refuses › to sell more than is held, or for nothing | ui | 17.2 s |
-| ✅ | market › refuses › a payment the buyer cannot afford, without broadcasting anything | ui | 17.6 s |
-| ✅ | market › refuses › to pay an offer once it has expired | ui | 17.8 s |
-
-> A two-browser sale now completes with two hand-overs — the offer out, the chain back. The seller learns of the payment from the chain.
-
-#### `ui/mining.spec.ts` — 8/8
+#### `ui/market.spec.ts` — 4/4
 
 | | Test | Project | Time |
 |---|---|---|---:|
-| ✅ | mining › the ticket pays the launch's burn address, commits on chain and pays a fair fee | ui | 17.2 s |
-| ✅ | mining › mine on the GPU and claim: the balance is signed, replayed and shown | ui | 17.8 s |
-| ✅ | mining › mine on the CPU and claim: the balance is signed, replayed and shown | ui | 21.6 s |
-| ✅ | mining › before it can start › without a wallet, mining explains what is missing | ui | 4.2 s |
-| ✅ | mining › before it can start › with an empty wallet, the ticket cannot be bought | ui | 2.0 s |
-| ✅ | mining › before it can start › one sat short of ticket plus fee is still refused | ui | 1.8 s |
-| ✅ | mining › after a claim › the same ticket cannot claim twice | ui | 17.4 s |
-| ✅ | mining › after a claim › a ticket bought for one epoch does not carry into the next | ui | 16.9 s |
+| ✅ | market › a buyer completes a listing while the seller is away; both sides settle in one transaction | ui | 37.4 s |
+| ✅ | market › a listing the seller cancels disappears, and cannot be bought | ui | 45.3 s |
+| ✅ | market › a listing whose PSBT was tampered with is never shown | ui | 5.8 s |
+| ✅ | market › with nothing to sell, the sell panel says how to get tokens | ui | 1.4 s |
 
-> Ticket transaction: 2000 sat to the burn address, fee 185 sat for ~161 vB, memo "btcfun:t1:mesh:0:021937f533386907".
+> The seller closed their browser after listing; the buyer's single transaction paid them and moved the tokens.
 >
-> GPU: reached 24 zero bits and the claim button in 0.4 s.
->
-> CPU: reached 24 zero bits and the claim button in 4.8 s.
->
-> An unused ticket that outlives its epoch is named as lapsed, next to the offer of a new one.
+> A listing altered in the index fails its signature and PSBT checks and is not offered to buyers.
 
-#### `ui/navigation.spec.ts` — 14/14
+#### `ui/mining.spec.ts` — 6/6
 
 | | Test | Project | Time |
 |---|---|---|---:|
-| ✅ | navigation › renders / without errors | ui | 3.0 s |
-| ✅ | navigation › renders /create without errors | ui | 1.5 s |
-| ✅ | navigation › renders /market without errors | ui | 1.5 s |
-| ✅ | navigation › renders /activity without errors | ui | 1.1 s |
-| ✅ | navigation › renders /holdings without errors | ui | 1.3 s |
-| ✅ | navigation › renders /wallet without errors | ui | 1.3 s |
-| ✅ | navigation › renders /lab without errors | ui | 1.1 s |
-| ✅ | navigation › renders /launch/mesh without errors | ui | 1.0 s |
-| ✅ | navigation › renders /launch/mesh/proof without errors | ui | 1.1 s |
-| ✅ | navigation › the four main sections are in the header, in order | ui | 1.5 s |
-| ✅ | navigation › the chain tip shown in the header is the provider's | ui | 1.6 s |
-| ✅ | navigation › an unknown launch says so instead of rendering an empty page | ui | 1.6 s |
-| ✅ | navigation › an unknown route falls back to the front page | ui | 2.5 s |
-| ✅ | navigation › a provider outage degrades the header, not the app | ui | 1.5 s |
+| ✅ | mining › a first-time miner goes from nothing to a real balance | ui | 31.1 s |
+| ✅ | mining › minting again adds to the same balance, and the best hash survives a reload | ui | 45.4 s |
+| ✅ | mining › rails › without a wallet, the page explains that tokens belong to an address | ui | 16.7 s |
+| ✅ | mining › rails › before the opening block there is nothing to buy | ui | 1.5 s |
+| ✅ | mining › rails › an empty wallet is told why nothing was sent | ui | 1.8 s |
+| ✅ | mining › rails › a queue that has not settled keeps the ticket landing, not failed | ui | 2.3 s |
 
-> With the Bitcoin provider down the app still renders every page from its fallback height.
+> First tokens take four clicks and three blocks: open, ticket, mine, mint — each step says what it is waiting for.
+>
+> A reload in the middle of mining keeps the best hash for the ticket; nothing has to be ground twice.
 
-#### `ui/time.spec.ts` — 10/10
+#### `ui/navigation.spec.ts` — 13/13
 
 | | Test | Project | Time |
 |---|---|---|---:|
-| ✅ | the schedule over time › at opening, the page shows the schedule's share and epoch | ui | 4.3 s |
-| ✅ | the schedule over time › after one day, the page shows the schedule's share and epoch | ui | 1.5 s |
-| ✅ | the schedule over time › after seven days — one half-life, the page shows the schedule's share and epoch | ui | 1.5 s |
-| ✅ | the schedule over time › after fourteen days — two half-lives, the page shows the schedule's share and epoch | ui | 1.4 s |
-| ✅ | the schedule over time › on day twenty-one — three half-lives, the page shows the schedule's share and epoch | ui | 1.6 s |
-| ✅ | the schedule over time › after six weeks, the page shows the schedule's share and epoch | ui | 1.4 s |
-| ✅ | the schedule over time › each half-life halves what an epoch may mint | ui | 2.8 s |
-| ✅ | the schedule over time › the countdown to the epoch close tracks the chain | ui | 3.2 s |
-| ✅ | the schedule over time › a new block reaches an open page without a reload | ui | 17.1 s |
-| ✅ | the schedule over time › past the terminal block the whole supply has been offered and nothing more | ui | 0.9 s |
+| ✅ | navigation › renders / without errors | ui | 1.9 s |
+| ✅ | navigation › renders /create without errors | ui | 2.0 s |
+| ✅ | navigation › renders /market without errors | ui | 1.2 s |
+| ✅ | navigation › renders /activity without errors | ui | 2.6 s |
+| ✅ | navigation › renders /wallet without errors | ui | 1.7 s |
+| ✅ | navigation › renders /lab without errors | ui | 4.2 s |
+| ✅ | navigation › renders /proof without errors | ui | 4.2 s |
+| ✅ | navigation › the four main sections are in the header, in order | ui | 5.6 s |
+| ✅ | navigation › the chain tip shown in the header is the provider's | ui | 2.5 s |
+| ✅ | navigation › an empty catalogue says so and points at creation, with no invented launches | ui | 1.7 s |
+| ✅ | navigation › an unknown launch says so instead of rendering an empty page | ui | 1.4 s |
+| ✅ | navigation › an unknown route falls back to the front page | ui | 1.7 s |
+| ✅ | navigation › a provider outage degrades the header, not the app | ui | 4.4 s |
 
-> Epoch allowance on MESH: 86464.9031 at opening, 43232.4515 on day 7, 10808.1128 on day 21 — halving every week as specified.
+> With nothing announced the front page shows no sample launches, only the way to create the first.
 >
-> Beyond the terminal block the page shows 100% scheduled and a zero epoch allowance — issuance visibly over.
+> With the Bitcoin provider down every page still renders; the header waits for the tip.
+
+#### `ui/proof.spec.ts` — 3/3
+
+| | Test | Project | Time |
+|---|---|---|---:|
+| ✅ | proof › a real mint passes every check, recomputed from chain data | ui | 29.2 s |
+| ✅ | proof › a ticket is not a mint, and says why | ui | 24.4 s |
+| ✅ | proof › a malformed txid keeps Verify disabled | ui | 5.9 s |
+
+> The proof page recomputes commitment, ticket, work and amount; every line says what it checked.
+
+#### `ui/time.spec.ts` — 3/3
+
+| | Test | Project | Time |
+|---|---|---|---:|
+| ✅ | time › a day, a week and day 21: the rate halves by the week, shown before buying | ui | 21.3 s |
+| ✅ | time › a ticket keeps the rate it was bought at, even when minted after a halving | ui | 23.6 s |
+| ✅ | time › after the terminal halving a launch is spent and says so | ui | 8.8 s |
+
+> The rate halves exactly at each 1,008-block boundary and every screen agrees on it.
+>
+> Buying a ticket just before a halving locks the higher rate; the mint after the halving is accepted at that rate.
 
 #### `ui/wallet.spec.ts` — 7/7
 
 | | Test | Project | Time |
 |---|---|---|---:|
-| ✅ | wallet › a demo key yields a testnet address and an empty balance | ui | 1.5 s |
-| ✅ | wallet › funds arriving on chain show up without a reload | ui | 2.0 s |
-| ✅ | wallet › restoring the same secret twice yields the same wallet | ui | 3.2 s |
-| ✅ | wallet › the revealed secret round-trips to the same address | ui | 2.6 s |
-| ✅ | wallet › disconnecting forgets the wallet on reload | ui | 2.5 s |
-| ✅ | wallet › refuses bad secrets › too short keeps Restore disabled | ui | 1.5 s |
-| ✅ | wallet › refuses bad secrets › 64 characters that are not hex are rejected in words a person understands | ui | 1.8 s |
+| ✅ | wallet › a demo key yields a testnet address and an empty balance | ui | 6.9 s |
+| ✅ | wallet › funds arriving on chain show up without a reload | ui | 6.2 s |
+| ✅ | wallet › restoring the same secret twice yields the same wallet | ui | 12.1 s |
+| ✅ | wallet › the revealed secret round-trips to the same address | ui | 7.6 s |
+| ✅ | wallet › disconnecting forgets the wallet on reload | ui | 5.3 s |
+| ✅ | wallet › refuses bad secrets › too short keeps Restore disabled | ui | 2.1 s |
+| ✅ | wallet › refuses bad secrets › 64 characters that are not hex are rejected in words a person understands | ui | 2.9 s |
 
 > A malformed secret is refused with a readable message and no wallet is created.
 

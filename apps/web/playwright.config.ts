@@ -69,8 +69,10 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 960 } },
     },
   ],
+  // The production build, served statically: what ships, and fast enough that
+  // parallel workers never wait on a dev server compiling modules on demand.
   webServer: {
-    command: `npm run dev -- --port ${PORT} --strictPort`,
+    command: `npx vite build --logLevel error && npx vite preview --port ${PORT} --strictPort`,
     port: PORT,
     reuseExistingServer: true,
     timeout: 60_000,

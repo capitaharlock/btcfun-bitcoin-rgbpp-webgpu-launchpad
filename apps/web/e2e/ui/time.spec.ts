@@ -46,6 +46,7 @@ test.describe("time", () => {
     const mint = await mineUntilMintable(page);
     const label = await mint.innerText();
     await mint.click();
+    await expect(page.getByText(/^Minting /)).toBeVisible();
     await block(page, sim);
     const job = [...rgbpp.jobs.values()].at(-1)!;
     expect(job.state, job.failure ?? "").toBe("completed");
