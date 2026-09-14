@@ -1,18 +1,21 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Launches } from "./views/Launches";
 import { LaunchView } from "./views/Launch";
-import { Lab } from "./views/Lab";
-import { ProofView } from "./views/Proof";
-import { Holdings } from "./views/Holdings";
-import { WalletView } from "./views/Wallet";
-import { Market } from "./views/Market";
-import { Activity } from "./views/Activity";
-import { Create } from "./views/Create";
 import { NETWORK, WalletProvider, formatBtc, shortAddress, useWallet } from "./state/WalletProvider";
 import { LaunchesProvider } from "./state/LaunchesProvider";
 import { TokensProvider } from "./state/TokensProvider";
 import { group } from "./lib/format";
 import { Chip } from "./ui/primitives";
+
+// Sections a visitor may never open load on demand; the front page and a
+// launch page, where nearly everyone starts, ship with the first chunk.
+const Lab = lazy(() => import("./views/Lab").then((m) => ({ default: m.Lab })));
+const ProofView = lazy(() => import("./views/Proof").then((m) => ({ default: m.ProofView })));
+const Holdings = lazy(() => import("./views/Holdings").then((m) => ({ default: m.Holdings })));
+const WalletView = lazy(() => import("./views/Wallet").then((m) => ({ default: m.WalletView })));
+const Market = lazy(() => import("./views/Market").then((m) => ({ default: m.Market })));
+const Activity = lazy(() => import("./views/Activity").then((m) => ({ default: m.Activity })));
+const Create = lazy(() => import("./views/Create").then((m) => ({ default: m.Create })));
 
 type Route =
   | { name: "launches" }
@@ -126,6 +129,7 @@ function Shell() {
 
       <main className="main">
         <div className="wrap">
+          <Suspense fallback={<p className="faint">Loading…</p>}>
           {route.name === "launches" && <Launches />}
           {route.name === "launch" && <LaunchView id={route.id} />}
           {route.name === "proof" && <ProofView txid={route.txid} />}
@@ -135,6 +139,7 @@ function Shell() {
           {route.name === "holdings" && <Holdings />}
           {route.name === "market" && <Market />}
           {route.name === "wallet" && <WalletView />}
+          </Suspense>
         </div>
       </main>
 
