@@ -44,6 +44,7 @@ const CONFIG = {
 };
 export const PAYMASTER_ADDRESS = "tb1qt5r7g40j93s46c3mdnycc2qsz2t57xqfjddukj";
 export const PAYMASTER_FEE = 7000;
+export const PLATFORM_ADDRESS = "tb1q7hq7fdm88ewl4g6g7l865ltnau9f0ga76e6gye";
 const PAYMASTER_CELL = ccc.fixedPointFrom(316);
 const PLACEHOLDER = "0".repeat(64);
 const OWNER_BY_INPUT_TYPE = 0x8000_0000;
@@ -52,7 +53,9 @@ const OWNER_BY_INPUT_TYPE = 0x8000_0000;
 const UNIT = 100_000_000n;
 const HALVING = 1008;
 const MIN_CLZ = 16;
-const TICKET = 5000;
+const PROMOTER_SHARE = 9500;
+const PLATFORM_FEE = 500;
+const PLATFORM_SCRIPT = "0014f5c1e4b7673e5dfaa348f7cfaa7d73ef0a97a3be";
 const GRACE = 144;
 
 interface LiveCell {
@@ -350,10 +353,13 @@ export class RgbppSim {
         throw new Error("balance increased without a mint");
       }
     }
+    const paidTo = (script: string) => btc.outputs.filter((o) => o.script === script).reduce((n, o) => n + Number(o.amount), 0);
+    const allArmed = [...armedByPromoter.values()].reduce((n, c) => n + c, 0);
     for (const [promoter, count] of armedByPromoter) {
-      const paid = btc.outputs.filter((o) => o.script === promoter).reduce((n, o) => n + Number(o.amount), 0);
-      if (paid < count * TICKET) throw new Error("ticket unpaid");
+      const owed = count * PROMOTER_SHARE + (promoter === PLATFORM_SCRIPT ? allArmed * PLATFORM_FEE : 0);
+      if (paidTo(promoter) < owed) throw new Error("ticket unpaid");
     }
+    if (allArmed > 0 && paidTo(PLATFORM_SCRIPT) < allArmed * PLATFORM_FEE) throw new Error("platform fee unpaid");
     armedByPromoter = new Map();
   }
 

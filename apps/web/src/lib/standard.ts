@@ -17,8 +17,12 @@ export const UNIT = 10n ** BigInt(DECIMALS);
 export const HALVING_BLOCKS = 1008;
 /** Smallest mintable result. Below it a ticket mints nothing. */
 export const MIN_CLZ = 16;
-/** Price of one ticket, paid to the promoter inside the ticket transaction. */
-export const TICKET_SATS = 5_000;
+/** Price of one ticket, paid inside the ticket transaction. */
+export const TICKET_SATS = 10_000;
+/** The platform's 5 % of a ticket: large enough to be its own relayable output. */
+export const PLATFORM_FEE_SATS = TICKET_SATS / 20;
+/** What the promoter receives per ticket. */
+export const PROMOTER_SATS = TICKET_SATS - PLATFORM_FEE_SATS;
 /** SHA-256d has 256 output bits, so no hash has more leading zeros than this. */
 export const MAX_CLZ = 256;
 

@@ -28,6 +28,8 @@ export interface RgbppConfig {
   ckbRpc: string;
   /** Explorer page for a CKB transaction. */
   ckbExplorer: string;
+  /** Where every ticket's platform fee goes; the mint script holds the same script. */
+  platformAddress: string;
 }
 
 const RGBPP_DEPLOY_TX = "0x0d1567da0979f78b297d5311442669fbd1bd853c8be324c5ab6da41e7a1ed6e5";
@@ -60,6 +62,7 @@ export const TESTNET: RgbppConfig = {
   service: import.meta.env.VITE_RGBPP_SERVICE ?? "https://api.testnet.rgbpp.io",
   ckbRpc: import.meta.env.VITE_CKB_RPC ?? "https://testnet.ckb.dev/",
   ckbExplorer: "https://testnet.explorer.nervos.org/transaction/",
+  platformAddress: "tb1q7hq7fdm88ewl4g6g7l865ltnau9f0ga76e6gye",
 };
 
 export const ACTIVE_RGBPP = TESTNET;

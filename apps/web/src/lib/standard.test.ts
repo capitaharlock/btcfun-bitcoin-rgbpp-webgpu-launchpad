@@ -10,6 +10,8 @@ import {
   terminalHalving,
   ticketChallenge,
   UNIT,
+  TICKET_SATS,
+  PLATFORM_FEE_SATS,
 } from "./standard";
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
@@ -27,6 +29,8 @@ describe("standard reward", () => {
     expect(UNIT.toString()).toBe(vectors.constants.UNIT);
     expect(HALVING_BLOCKS).toBe(vectors.constants.HALVING_BLOCKS);
     expect(MIN_CLZ).toBe(vectors.constants.MIN_CLZ);
+    expect(TICKET_SATS).toBe(vectors.constants.TICKET_SATS);
+    expect(PLATFORM_FEE_SATS).toBe(vectors.constants.PLATFORM_FEE_SATS);
   });
 
   it("matches the worked values in PROTOCOL.md §4.1", () => {

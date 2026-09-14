@@ -16,7 +16,7 @@
 
 import { ccc } from "@ckb-ccc/core";
 
-import { TICKET_SATS } from "../standard";
+import { PLATFORM_FEE_SATS, PROMOTER_SATS } from "../standard";
 import { commitment, type VirtualTx } from "./commitment";
 import type { RgbppConfig } from "./config";
 import { mintScript, tokenScript, type LaunchTerms } from "./launch";
@@ -87,6 +87,7 @@ export interface MinerCell extends SealedCell {
 export type PlannedOutput =
   | { kind: "seal"; value: number }
   | { kind: "ticket"; script: Uint8Array; value: number }
+  | { kind: "fee"; address: string; value: number }
   | { kind: "paymaster"; address: string; value: number }
   | { kind: "payment"; address: string; value: number };
 
@@ -189,7 +190,8 @@ export function planTicket(config: RgbppConfig, terms: LaunchTerms, miner: Miner
     },
     btcOutputs: [
       { kind: "seal", value: SEAL_SATS },
-      { kind: "ticket", script: terms.promoterScript, value: TICKET_SATS },
+      { kind: "ticket", script: terms.promoterScript, value: PROMOTER_SATS },
+      { kind: "fee", address: config.platformAddress, value: PLATFORM_FEE_SATS },
     ],
     sealsSpent: [miner.seal],
     needPaymasterCell: false,

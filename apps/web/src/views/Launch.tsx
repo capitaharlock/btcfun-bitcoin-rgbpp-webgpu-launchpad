@@ -12,7 +12,7 @@ import { useChainSynced, useLaunch, useTip } from "../hooks/useLaunches";
 import { useLaunchStats } from "../hooks/useLaunchStats";
 import { addressUrl } from "../lib/bitcoin/network";
 import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
-import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, reward, TICKET_SATS } from "../lib/standard";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, TICKET_SATS } from "../lib/standard";
 import { MinerSteps } from "../components/mining/MinerSteps";
 import { useTokens } from "../state/TokensProvider";
 import { RewardChart } from "../ui/RewardChart";
@@ -91,7 +91,7 @@ function LaunchBody({ launch }: { launch: Launch }) {
         <Panel eyebrow="the standard" title="Same rules as every launch">
           <KV
             rows={[
-              ["Ticket", `${group(TICKET_SATS)} sats, to the promoter`],
+              ["Ticket", `${group(TICKET_SATS)} sats: ${group(PROMOTER_SATS)} to the promoter, ${group(PLATFORM_FEE_SATS)} platform fee`],
               ["Reward", `1 token × clz² ÷ 2^halvings (min ${MIN_CLZ} bits)`],
               ["Now, for a 24-bit hash", `${atoms(perTicket24, DECIMALS, 0)} ${launch.symbol}`],
               ["Halving", `every ${group(HALVING_BLOCKS)} blocks from block ${group(launch.h0)}`],

@@ -2,7 +2,7 @@
 
 import { test, expect } from "../support/fixtures";
 import { announce, block, buyTicket, fundedWallet, mineUntilMintable, mintOnce, openMiner } from "../support/flows";
-import { PAYMASTER_ADDRESS, PAYMASTER_FEE } from "../support/rgbpp";
+import { PAYMASTER_ADDRESS, PAYMASTER_FEE, PLATFORM_ADDRESS } from "../support/rgbpp";
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -18,10 +18,12 @@ test.describe("mining", () => {
     const opening = sim.broadcasts.at(-1)!;
     expect(opening.outputs.some((o) => o.address === PAYMASTER_ADDRESS && Number(o.amount) >= PAYMASTER_FEE)).toBe(true);
 
-    // Step 2: the ticket pays the promoter — here, the creator's own address.
+    // Step 2: the ticket pays the promoter — here, the creator's own address —
+    // and the platform its 5 %.
     await buyTicket(page);
     const ticket = sim.broadcasts.at(-1)!;
-    expect(ticket.outputs.filter((o) => Number(o.amount) === 5000)).toHaveLength(1);
+    expect(ticket.outputs.filter((o) => Number(o.amount) === 9500)).toHaveLength(1);
+    expect(ticket.outputs.filter((o) => o.address === PLATFORM_ADDRESS && Number(o.amount) === 500)).toHaveLength(1);
     await expect(page.getByText("Your ticket is landing")).toBeVisible();
 
     // Step 3: mining starts before the ticket settles; minting waits for it.

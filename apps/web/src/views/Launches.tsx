@@ -160,7 +160,7 @@ export function Launches() {
       <section className="split">
         <Panel eyebrow="the standard" title="One set of rules for every token">
           <p>
-            A ticket costs <b>{group(TICKET_SATS)} sats</b> and pays the launch's promoter. Its Bitcoin output
+            A ticket costs <b>{group(TICKET_SATS)} sats</b>: 95 % to the launch's promoter, 5 % to the platform. Its Bitcoin output
             is your mining challenge. A hash with <i>n</i> leading zero bits mints <b>n² tokens</b>, halved
             once for every {group(HALVING_BLOCKS)} blocks since the launch opened — the ticket fixes the rate.
             Below {MIN_CLZ} bits it mints nothing.
@@ -170,7 +170,7 @@ export function Launches() {
 
         <Panel eyebrow="before you spend anything" title="What is real here">
           <p>
-            Tickets are real {ACTIVE.label} transactions paid to the promoter. Mining is real proof of work on
+            Tickets are real {ACTIVE.label} transactions paid straight to the promoter, with the platform's fee in the same transaction. Mining is real proof of work on
             your own hardware. Minted tokens are RGB++ xUDT cells on CKB testnet, sealed to your Bitcoin
             outputs, and only the mint script can create them — it checks the ticket, the hash and the amount.
           </p>

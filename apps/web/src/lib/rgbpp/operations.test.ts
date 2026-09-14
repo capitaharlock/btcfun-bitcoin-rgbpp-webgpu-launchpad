@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ccc } from "@ckb-ccc/core";
 
-import { TICKET_SATS } from "../standard";
+import { PLATFORM_FEE_SATS, PROMOTER_SATS, TICKET_SATS } from "../standard";
 import { TESTNET } from "./config";
 import { decodeTerms, encodeTerms, metadataHash, mintScript, tokenId, tokenScript, type LaunchTerms } from "./launch";
 import {
@@ -101,9 +101,11 @@ describe("plans", () => {
     expect(plan.btcOutputs.map((o) => o.kind)).toEqual(["seal", "paymaster"]);
   });
 
-  it("a ticket pays the promoter the standard price, anchors at the tip, and spends only the fee", () => {
+  it("a ticket pays the promoter and the platform the standard price, anchors at the tip, and spends only the fee", () => {
     const plan = planTicket(TESTNET, terms, miner("idle", minerCap), terms.h0 + 50);
-    expect(plan.btcOutputs[1]).toMatchObject({ kind: "ticket", value: TICKET_SATS });
+    expect(plan.btcOutputs[1]).toMatchObject({ kind: "ticket", value: PROMOTER_SATS });
+    expect(plan.btcOutputs[2]).toEqual({ kind: "fee", address: TESTNET.platformAddress, value: PLATFORM_FEE_SATS });
+    expect(PROMOTER_SATS + PLATFORM_FEE_SATS).toBe(TICKET_SATS);
     expect(plan.sumInputsCapacity - sum(plan.virtualTx.outputs)).toBe(CKB_FEE);
     expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toMatchObject({ state: "armed", anchor: terms.h0 + 50 });
     expect(() => planTicket(TESTNET, terms, miner("armed", minerCap), terms.h0)).toThrow();

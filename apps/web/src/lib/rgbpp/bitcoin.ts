@@ -41,6 +41,7 @@ function scriptOf(output: PlannedOutput, key: WalletKey, network: NetworkConfig)
       return key.script;
     case "ticket":
       return output.script;
+    case "fee":
     case "paymaster":
     case "payment":
       return OutScript.encode(Address(network.params).decode(output.address));

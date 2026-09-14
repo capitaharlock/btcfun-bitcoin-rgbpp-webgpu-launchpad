@@ -18,7 +18,7 @@ import { useTip } from "../hooks/useLaunches";
 import { ACCENTS, commitmentFor, createLaunch, slugFor, validate, type DraftFaults, type LaunchDraft } from "../lib/launches/create";
 import { ACTIVE } from "../lib/bitcoin/network";
 import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
-import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, reward, TICKET_SATS } from "../lib/standard";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
 import { useWallet } from "../state/WalletProvider";
 import { Chip, Field, KV, Notice, Panel, Stat } from "../ui/primitives";
@@ -275,7 +275,7 @@ function Opening({ draft, faults, set }: StepProps) {
         <Panel tight eyebrow="the standard" title="What you do not choose">
           <KV
             rows={[
-              ["Ticket", `${group(TICKET_SATS)} sats, paid to your address`],
+              ["Ticket", `${group(TICKET_SATS)} sats: ${group(PROMOTER_SATS)} to your address, ${group(PLATFORM_FEE_SATS)} to the platform`],
               ["Reward", `1 token × clz² ÷ 2^halvings, from ${MIN_CLZ} bits`],
               ["First week, 24-bit hash", `${atoms(reward(24, 0, 0), DECIMALS, 0)} tokens`],
               ["Halving", `every ${group(HALVING_BLOCKS)} blocks (about a week)`],

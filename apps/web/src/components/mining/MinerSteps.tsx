@@ -21,7 +21,7 @@ import { recompute } from "../../lib/mining/verify";
 import { ACTIVE_RGBPP } from "../../lib/rgbpp/config";
 import { mintScript } from "../../lib/rgbpp/launch";
 import { planMint, planOpen, planTicket, SEAL_SATS, type MinerCell } from "../../lib/rgbpp/operations";
-import { DECIMALS, MIN_CLZ, reward, TICKET_SATS, ticketChallenge } from "../../lib/standard";
+import { DECIMALS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, TICKET_SATS, ticketChallenge } from "../../lib/standard";
 import { useTokens, type Operation } from "../../state/TokensProvider";
 import { useWallet } from "../../state/WalletProvider";
 import { Chip, Notice, Panel } from "../../ui/primitives";
@@ -167,7 +167,7 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
         ) : (
           <div className="stack-md">
             <p>
-              A ticket costs <b>{group(TICKET_SATS)} sats</b>, paid to the promoter. It fixes your rate at
+              A ticket costs <b>{group(TICKET_SATS)} sats</b>: {group(PROMOTER_SATS)} to the promoter, {group(PLATFORM_FEE_SATS)} to the platform. It fixes your rate at
               today's: a 24-bit hash would mint <b>{atoms(rateNow, DECIMALS, 0)} {launch.symbol}</b>.
             </p>
             <p className="tiny faint">

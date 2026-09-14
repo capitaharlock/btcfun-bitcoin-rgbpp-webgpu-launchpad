@@ -35,7 +35,7 @@ test.describe("create wizard", () => {
     await page.getByLabel("One sentence").fill("A community token for mesh relay operators.");
     await page.getByRole("button", { name: "Continue →" }).click();
     await expect(page.getByText("What you do not choose")).toBeVisible();
-    await expect(page.getByText("5,000 sats, paid to your address")).toBeVisible();
+    await expect(page.getByText("10,000 sats: 9,500 to your address, 500 to the platform")).toBeVisible();
   });
 
   test.describe("refuses what is not a launch", () => {
