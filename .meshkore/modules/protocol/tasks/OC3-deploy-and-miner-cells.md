@@ -1,13 +1,15 @@
 ---
 id: OC3
 title: "Deploy the mint script and open miner cells"
-status: in_progress
+status: done
 priority: high
 owner: rjj
 category: protocol
 initiative: onchain-tokens
 created: 2026-09-24
 updated: 2026-09-24
+completed_at: 2026-09-24T12:30:00Z
+commit_shas: [73af52d, 1299b37, 1df6a72]
 ---
 
 Deploy the mint script to CKB testnet with a recorded code hash, and decide who
@@ -35,3 +37,7 @@ provides the capacity that opening a miner cell needs.
   sats on testnet), sized at its occupied capacity plus 10 CKB for fees; a
   first mint borrows the token cell's capacity the same way. A person holding
   only Bitcoin can therefore mine.
+
+## Resolution
+
+Deployed to CKB testnet with `hash_type: data1` in an unspendable cell; the record, toolchain pin and superseded first deployment are in `contracts/deployments/testnet.json`. A miner cell is opened through the RGB++ paymaster (7,000 sats on testnet) at its occupied capacity plus 10 CKB for fees, and a first mint borrows the token cell's capacity the same way, so a person holding only Bitcoin can mine.

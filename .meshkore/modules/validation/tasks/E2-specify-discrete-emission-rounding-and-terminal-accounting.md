@@ -1,13 +1,14 @@
 ---
 id: E2
 title: "Specify discrete emission, rounding and terminal accounting"
-status: backlog
+status: cancelled
 priority: critical
 owner: rjj
 category: validation
 initiative: economic-validation
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
+completed_at: 2026-09-24T12:30:00Z
 ---
 
 Define cumulative integer-atom issuance and epoch differences, including the executable decay approximation and terminal cutoff. Keep expired allowance distinct from issued-token burns.
@@ -42,3 +43,7 @@ Partial, from the review pass in `SH8`, not enough to close this task.
 Still outstanding: error bounds stated as bounds rather than demonstrated by
 vectors; reserve decimals and `mul_div` widths; dust, final redemption and
 zero-liability states; expired allowance kept distinct from issued-token burns.
+
+## Resolution
+
+Superseded by the standard tokenomics ([decision](../../../context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md)): the emission is the standard reward, specified in PROTOCOL.md §4 and pinned by `contracts/vectors/reward.json`. Kept as history.

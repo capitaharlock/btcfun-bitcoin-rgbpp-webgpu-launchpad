@@ -1,7 +1,7 @@
 ---
 id: OC8
 title: "Live end-to-end run with three wallets"
-status: backlog
+status: pending-operator
 priority: high
 owner: rjj
 category: web
@@ -18,3 +18,7 @@ wallet buys it with the seller offline.
 
 - Every step is confirmed on-chain and linked from `TEST_RESULTS.md`.
 - The invalid-mint cases from `OC2` are attempted from the browser and rejected.
+
+## Blocked on
+
+Waiting on the same testnet3 funds as OC1. The deterministic browser suite already covers every step over simulated chains.

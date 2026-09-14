@@ -1,17 +1,19 @@
 ---
 id: economic-validation
 title: "Economic model validation"
-status: next
+status: cancelled
 priority: critical
 oneliner: "Turn the review counterexamples into executable economic rules before implementing contracts."
 modules:
   - validation
 target: "Phase 0 \u2014 Economic correction"
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 owner: rjj
 related: [security-hardening, validate-architecture, product-validation]
 ---
+
+> **Superseded by the [standard tokenomics](../../context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md).** The economic model is decided; E4 (incentive and unit-economics simulation) remains useful and stays open.
 
 # Economic model validation
 
