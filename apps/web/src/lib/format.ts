@@ -79,3 +79,8 @@ export function parseAmount(input: string, decimals: number): bigint | null {
   if (fraction.length > decimals) return null;
   return BigInt(whole || "0") * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
 }
+
+/** Sats per whole token: four decimals below one sat, whole sats from there up. */
+export function satsPerToken(value: number): string {
+  return value < 1 ? value.toFixed(4) : group(Math.round(value));
+}

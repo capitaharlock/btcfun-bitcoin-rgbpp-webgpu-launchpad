@@ -30,7 +30,12 @@
 
 export const ACTIVITY_VERSION = "btcfun/activity/1";
 
-export type ActivityKind = "launch" | "mint" | "offer" | "fill" | "transfer";
+/**
+ * `bid` is a buyer's signed intention to buy (`lib/market/bid.ts`) and
+ * `cancel` its author's withdrawal of one, naming it by `ref`. A listing needs
+ * no cancel event: spending its sealed output voids it on chain.
+ */
+export type ActivityKind = "launch" | "mint" | "offer" | "bid" | "cancel" | "fill" | "transfer";
 
 export interface ActivityBody {
   v: typeof ACTIVITY_VERSION;
@@ -51,9 +56,10 @@ export interface ActivityBody {
    * Canonical JSON payload, for events that *are* the record rather than
    * reporting one.
    *
-   * `launch` carries its announcement and `offer` its listing, whose
-   * seller-signed PSBT is what lets a buyer complete a sale alone. Neither has
-   * a prior record — the event is the record — so the payload travels inline,
+   * `launch` carries its announcement, `offer` its listing, whose
+   * seller-signed PSBT is what lets a buyer complete a sale alone, and `bid`
+   * the terms a buyer asks for. None has a prior record — the event is the
+   * record — so the payload travels inline,
    * signed with everything else. Other kinds point at chain transactions that
    * already exist, so restating them could only create a disagreement. Capped,
    * because the index should never become a general-purpose store.
@@ -96,6 +102,8 @@ export const KIND_LABEL: Record<ActivityKind, string> = {
   launch: "launched",
   mint: "mined",
   offer: "listed",
+  bid: "bid for",
+  cancel: "withdrew a bid",
   fill: "bought",
   transfer: "sent",
 };

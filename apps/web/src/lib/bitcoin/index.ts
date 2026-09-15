@@ -10,7 +10,7 @@ export {
   type NetworkId,
 } from "./network";
 
-export { deriveAddress, deriveKey, identityOf, signDigest, verifyDigest, type WalletKey } from "./keys";
+export { addressOfIdentity, deriveAddress, deriveKey, identityOf, signDigest, verifyDigest, type WalletKey } from "./keys";
 
 export {
   connectPasskey,
@@ -38,6 +38,7 @@ export {
   getTxStatus,
   getUtxos,
   type AddressBalance,
+  type ChainInput,
   type ChainOutput,
   type ChainTx,
   type TxStatus,

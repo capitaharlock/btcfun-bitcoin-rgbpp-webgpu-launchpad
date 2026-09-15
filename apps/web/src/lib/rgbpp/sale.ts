@@ -48,6 +48,12 @@ export interface Listing {
   seller: string;
   /** Base64 PSBT: one input, one output, the input signed under SINGLE|ANYONECANPAY. */
   psbt: string;
+  /**
+   * The bid this listing answers, by its activity id, when a holder signed it
+   * to meet one (`lib/market/bid.ts`). A label for the bidder to find it by,
+   * not a restriction: the PSBT does not know it, so anyone may still buy.
+   */
+  bid?: string;
 }
 
 /** Output index the buyer's tokens are sealed to: after the price and the commitment. */
@@ -59,7 +65,7 @@ export const BUYER_SEAL_VOUT = 2;
  */
 export function signListing(
   key: WalletKey,
-  meta: { launchId: string; tokenId: string },
+  meta: { launchId: string; tokenId: string; bid?: string },
   cell: TokenCell,
   sealValue: number,
   priceSats: number,

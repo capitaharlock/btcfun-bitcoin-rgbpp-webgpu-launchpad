@@ -26,6 +26,7 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: "all", label: "Everything" },
   { id: "mint", label: "Mints" },
   { id: "offer", label: "Listings" },
+  { id: "bid", label: "Bids" },
   { id: "fill", label: "Buys" },
   { id: "transfer", label: "Transfers" },
   { id: "launch", label: "New tokens" },

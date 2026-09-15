@@ -50,6 +50,7 @@ export class ChainSim {
   readonly broadcasts: Array<{
     txid: string;
     hex: string;
+    inputs: Array<{ txid: string; vout: number }>;
     outputs: Array<{ script: string; amount: bigint; address: string | null }>;
     confirmed: boolean;
   }> = [];
@@ -117,7 +118,11 @@ export class ChainSim {
       const script = hex.encode(out.script ?? new Uint8Array());
       outputs.push({ script, amount: out.amount ?? 0n, address: addressOf(script) });
     }
-    this.broadcasts.push({ txid, hex: raw.trim(), outputs, confirmed: false });
+    const spends = inputs.map((key) => {
+      const [txid, vout] = key.split(":");
+      return { txid, vout: Number(vout) };
+    });
+    this.broadcasts.push({ txid, hex: raw.trim(), inputs: spends, outputs, confirmed: false });
     for (const key of inputs) this.spent.add(key);
     for (const [address, list] of this.utxos) {
       this.utxos.set(address, list.filter((u) => !this.spent.has(`${u.txid}:${u.vout}`)));
@@ -213,6 +218,7 @@ export class ChainSim {
     return {
       txid: b.txid,
       status: { confirmed: b.confirmed, ...(b.confirmed ? { block_height: this.tip } : {}) },
+      vin: b.inputs.map((i) => ({ txid: i.txid, vout: i.vout })),
       vout: b.outputs.map((o) => ({
         scriptpubkey: o.script,
         scriptpubkey_type: o.script.startsWith("6a") ? "op_return" : "v0_p2wpkh",

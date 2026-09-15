@@ -6,9 +6,11 @@
  * client rather than a second implementation of it.
  */
 
+import { sha256 } from "@noble/hashes/sha2";
+
 import { canonicalDigest, canonicalId, IDENTITY_PATTERN, type Field } from "../canonical";
 import { verifySignature } from "../signatures";
-import { hexToBytes } from "../bytes";
+import { bytesToHex, hexToBytes } from "../bytes";
 import { ACTIVITY_VERSION, type ActivityBody, type SignedActivity } from "./types";
 
 function fieldsOf(body: ActivityBody): Field[] {
@@ -38,7 +40,10 @@ export function activityId(body: ActivityBody): string {
 const MAX_META = 1500;
 
 /** Kinds the index accepts. Anything else is rejected rather than stored. */
-const KINDS = new Set(["launch", "mint", "offer", "fill", "transfer"]);
+const KINDS = new Set(["launch", "mint", "offer", "bid", "cancel", "fill", "transfer"]);
+
+/** Kinds whose event is the record itself, so it travels inline. */
+const PAYLOAD_KINDS = new Set(["launch", "offer", "bid"]);
 
 /** Why an event is unacceptable, or null when it is well-formed and signed. */
 export function faultIn(signed: SignedActivity): string | null {
@@ -58,15 +63,24 @@ export function faultIn(signed: SignedActivity): string | null {
   if (typeof body.at !== "string" || body.at.length > 40) return "Malformed timestamp.";
   if (body.meta !== undefined) {
     if (typeof body.meta !== "string" || body.meta.length > MAX_META) return "Payload too large.";
-    // A launch carries its announcement; an offer carries its listing, whose
-    // seller-signed PSBT is what lets a buyer complete the sale alone.
-    if (body.kind !== "launch" && body.kind !== "offer") return "Only a launch or an offer may carry a payload.";
+    // A launch carries its announcement, an offer its listing — whose
+    // seller-signed PSBT is what lets a buyer complete the sale alone — and a
+    // bid its terms. Anything else would restate a chain transaction.
+    if (!PAYLOAD_KINDS.has(body.kind)) return "Only a launch, an offer or a bid may carry a payload.";
   }
   if (!/^[0-9a-f]{128}$/.test(signature)) return "Malformed signature.";
   if (!verifySignature(hexToBytes(body.actor), activityDigest(body), hexToBytes(signature))) {
     return "Signature does not verify against the stated actor.";
   }
   return null;
+}
+
+/**
+ * The reference an event carrying `meta` uses: the payload's own digest, so a
+ * holder of the payload can check the event is about exactly those bytes.
+ */
+export function payloadRef(meta: string): string {
+  return bytesToHex(sha256(new TextEncoder().encode(meta)));
 }
 
 export function isValid(signed: SignedActivity): boolean {

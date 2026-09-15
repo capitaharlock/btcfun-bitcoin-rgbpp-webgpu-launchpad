@@ -169,22 +169,36 @@ export interface ChainOutput {
   value: number;
 }
 
-/** A transaction as the market needs it: who was paid what, and whether it stuck. */
+/** An outpoint a transaction spends. */
+export interface ChainInput {
+  txid: string;
+  vout: number;
+}
+
+/** A transaction as the market needs it: what it spent, who was paid what, and whether it stuck. */
 export interface ChainTx {
   txid: string;
   confirmed: boolean;
+  inputs: ChainInput[];
   outputs: ChainOutput[];
 }
 
 function toChainTx(raw: unknown): ChainTx {
   const tx = raw as Record<string, unknown>;
   const status = (tx.status ?? {}) as Record<string, unknown>;
-  if (typeof tx.txid !== "string" || !/^[0-9a-f]{64}$/.test(tx.txid) || !Array.isArray(tx.vout)) {
+  if (typeof tx.txid !== "string" || !/^[0-9a-f]{64}$/.test(tx.txid) || !Array.isArray(tx.vout) || !Array.isArray(tx.vin)) {
     throw new ProviderError("Malformed transaction in provider response");
   }
   return {
     txid: tx.txid,
     confirmed: status.confirmed === true,
+    inputs: tx.vin.map((i) => {
+      const input = i as Record<string, unknown>;
+      if (typeof input.txid !== "string" || !Number.isInteger(input.vout)) {
+        throw new ProviderError("Malformed input in provider response");
+      }
+      return { txid: input.txid, vout: input.vout as number };
+    }),
     outputs: tx.vout.map((o) => {
       const out = o as Record<string, unknown>;
       const value = Number(out.value);

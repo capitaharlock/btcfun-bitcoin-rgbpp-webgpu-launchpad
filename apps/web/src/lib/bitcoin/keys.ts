@@ -25,7 +25,7 @@ import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { p2wpkh } from "@scure/btc-signer";
 
-import { bytesToHex } from "../bytes";
+import { bytesToHex, hexToBytes } from "../bytes";
 import { signDigestWith, verifySignature } from "../signatures";
 import { ACTIVE, type NetworkConfig } from "./network";
 
@@ -93,6 +93,19 @@ export function signDigest(key: WalletKey, digest: Uint8Array): Uint8Array {
 
 /** Verify a compact signature against a public key. Never throws on bad input. */
 export const verifyDigest = verifySignature;
+
+/**
+ * The address an identity's key receives at, or null if it is not a key.
+ * Links a signed event to the Bitcoin address it names: an order that pays or
+ * delivers anywhere else was not written by the owner of that address.
+ */
+export function addressOfIdentity(identity: string, network: NetworkConfig = ACTIVE): string | null {
+  try {
+    return p2wpkh(hexToBytes(identity), network.params).address ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** Public key as hex — the stable identity used by ledger records. */
 export function identityOf(key: WalletKey): string {

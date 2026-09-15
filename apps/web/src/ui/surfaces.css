@@ -235,6 +235,7 @@
 .feedrow .kind.fill { background: var(--magenta); color: var(--magenta); }
 .feedrow .kind.transfer { background: var(--cyan); color: var(--cyan); }
 .feedrow .kind.launch { background: var(--mint); color: var(--mint); }
+.feedrow .kind.bid { background: var(--cyan-deep); color: var(--cyan-deep); }
 
 .feedrow .what { color: var(--ink); }
 .feedrow .who { font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); }
@@ -307,3 +308,37 @@
 /* ---------- sparkline ---------- */
 
 .spark { display: block; width: 100%; height: 34px; overflow: visible; }
+
+/* ---------- market ---------- */
+
+/* Bids beside asks, each sorted best-first, stacked on narrow screens. Buy
+   interest is cyan and sell interest magenta, both from the neon range the
+   palette reserves for trading. */
+.book { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 720px) {
+  .book { grid-template-columns: minmax(0, 1fr); }
+}
+.book .table th, .book .table td { padding: 7px 10px; }
+.book .table th:not(:first-child), .book .table td:not(:first-child) { text-align: right; }
+.book .bids { --side: var(--cyan); }
+.book .asks { --side: var(--magenta); }
+.book .side { color: var(--side); }
+/* Depth as a bar behind the row, width set per row in --depth. An image, not
+   the background colour, so the table's hover colour still shows through. */
+.book .table tbody tr.level {
+  background-image: linear-gradient(to left, color-mix(in oklab, var(--side) 16%, transparent) var(--depth), transparent var(--depth));
+}
+.book .table td.px { color: var(--side); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.orders { display: grid; gap: 8px; }
+.order-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+}
+.order-row .what { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }

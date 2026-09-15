@@ -42,6 +42,15 @@ describe("listing", () => {
     expect(checkListing({ ...listing, psbt: "AAAA" }, TESTNET3)).toMatch(/parse/);
   });
 
+  it("carries the bid it answers without changing what the seller signs", () => {
+    const bid = "b1".repeat(32);
+    const tagged = signListing(seller, { ...meta, bid }, cell, 546, 30_000);
+    expect(tagged.bid).toBe(bid);
+    expect(checkListing(tagged, TESTNET3)).toBeNull();
+    expect(tagged.psbt).toBe(signListing(seller, meta, cell, 546, 30_000).psbt);
+    expect("bid" in JSON.parse(JSON.stringify(signListing(seller, meta, cell, 546, 30_000)))).toBe(false);
+  });
+
   it("refuses a price below dust", () => {
     expect(() => signListing(seller, meta, cell, 546, 100)).toThrow();
   });
