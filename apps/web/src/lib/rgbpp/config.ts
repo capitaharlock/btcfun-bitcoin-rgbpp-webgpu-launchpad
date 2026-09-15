@@ -18,6 +18,8 @@ export interface RgbppConfig {
   rgbppLock: ScriptIdentity;
   /** Code first, config second: the lock reads its config from the next cell. */
   rgbppLockDeps: ccc.CellDepLike[];
+  /** The secp256k1 lock the paymaster's cells use; the queue unlocks one with it. */
+  paymasterLockDep: ccc.CellDepLike;
   xudt: ScriptIdentity;
   xudtDep: ccc.CellDepLike;
   mint: ScriptIdentity;
@@ -43,6 +45,10 @@ export const TESTNET: RgbppConfig = {
     { outPoint: { txHash: RGBPP_DEPLOY_TX, index: 0 }, depType: "code" },
     { outPoint: { txHash: RGBPP_DEPLOY_TX, index: 1 }, depType: "code" },
   ],
+  paymasterLockDep: {
+    outPoint: { txHash: "0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37", index: 0 },
+    depType: "depGroup",
+  },
   xudt: {
     codeHash: "0x25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb",
     hashType: "type",

@@ -170,7 +170,7 @@ export function virtualResult(plan: Plan) {
       version: "0x0",
       cellDeps: plan.cellDeps.map((d) => {
         const dep = ccc.CellDep.from(d);
-        return { outPoint: { txHash: dep.outPoint.txHash, index: hex(dep.outPoint.index) }, depType: "code" };
+        return { outPoint: { txHash: dep.outPoint.txHash, index: hex(dep.outPoint.index) }, depType: dep.depType };
       }),
       headerDeps: [],
       inputs: plan.virtualTx.inputs.map((i) => {

@@ -139,7 +139,11 @@ function finish(
   config: RgbppConfig,
   parts: Omit<Plan, "commitment" | "cellDeps">,
 ): Plan {
-  return { ...parts, cellDeps: deps(config), commitment: commitment(parts.virtualTx) };
+  // The queue appends the paymaster's input but not the dependency its lock
+  // needs; without it CKB cannot find the script and the job fails after the
+  // Bitcoin side has already confirmed. Cell deps are outside the commitment.
+  const cellDeps = parts.needPaymasterCell ? [...deps(config), config.paymasterLockDep] : deps(config);
+  return { ...parts, cellDeps, commitment: commitment(parts.virtualTx) };
 }
 
 /**

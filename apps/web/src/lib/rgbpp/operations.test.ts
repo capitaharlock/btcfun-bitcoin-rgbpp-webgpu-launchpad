@@ -20,6 +20,7 @@ import {
   type TokenCell,
 } from "./operations";
 import { sealFromArgs, PLACEHOLDER_TXID } from "./seal";
+import { virtualResult } from "./service";
 
 const terms: LaunchTerms = {
   h0: 4_800_000,
@@ -96,6 +97,7 @@ describe("plans", () => {
     const plan = planOpen(TESTNET, terms, paymaster);
     expect(plan.needPaymasterCell).toBe(true);
     expect(PAYMASTER_CELL > sum(plan.virtualTx.outputs) + MIN_CHANGE).toBe(true);
+    expect(plan.cellDeps).toContainEqual(TESTNET.paymasterLockDep);
     const lock = ccc.CellOutput.from(plan.virtualTx.outputs[0]).lock;
     expect(sealFromArgs(lock.args)).toEqual({ txid: PLACEHOLDER_TXID, vout: 1 });
     expect(plan.btcOutputs.map((o) => o.kind)).toEqual(["seal", "paymaster"]);
@@ -108,6 +110,7 @@ describe("plans", () => {
     expect(PROMOTER_SATS + PLATFORM_FEE_SATS).toBe(TICKET_SATS);
     expect(plan.sumInputsCapacity - sum(plan.virtualTx.outputs)).toBe(CKB_FEE);
     expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toMatchObject({ state: "armed", anchor: terms.h0 + 50 });
+    expect(plan.cellDeps).not.toContainEqual(TESTNET.paymasterLockDep);
     expect(() => planTicket(TESTNET, terms, miner("armed", minerCap), terms.h0)).toThrow();
     expect(() => planTicket(TESTNET, terms, miner("idle", minerCap), terms.h0 - 1)).toThrow();
   });
@@ -163,5 +166,14 @@ describe("plans", () => {
     expect(whole.needPaymasterCell).toBe(false);
     expect(whole.sumInputsCapacity - sum(whole.virtualTx.outputs)).toBe(CKB_FEE);
     expect(() => planTransfer(TESTNET, terms, { from, amount: 1_001n, to: paymaster.address, paymaster })).toThrow();
+  });
+
+  it("sends the queue each dependency with its own type, the paymaster's lock group included", () => {
+    const deps = virtualResult(planOpen(TESTNET, terms, paymaster)).ckbRawTx.cellDeps;
+    expect(deps).toContainEqual({
+      outPoint: { txHash: TESTNET.paymasterLockDep.outPoint.txHash, index: "0x0" },
+      depType: "depGroup",
+    });
+    expect(deps.filter((d) => d.depType === "code")).toHaveLength(deps.length - 1);
   });
 });

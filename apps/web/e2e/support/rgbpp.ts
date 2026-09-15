@@ -44,6 +44,7 @@ const CONFIG = {
 };
 export const PAYMASTER_ADDRESS = "tb1qt5r7g40j93s46c3mdnycc2qsz2t57xqfjddukj";
 export const PAYMASTER_FEE = 7000;
+const SECP256K1_DEP_GROUP = "0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37";
 export const PLATFORM_ADDRESS = "tb1q7hq7fdm88ewl4g6g7l865ltnau9f0ga76e6gye";
 const PAYMASTER_CELL = ccc.fixedPointFrom(316);
 const PLACEHOLDER = "0".repeat(64);
@@ -77,6 +78,7 @@ interface Job {
 interface VirtualResult {
   ckbRawTx: {
     cellDeps: unknown[];
+    cellDeps: Array<{ outPoint: { txHash: string; index: string }; depType: string }>;
     inputs: Array<{ previousOutput: { txHash: string; index: string } }>;
     outputs: Array<{ capacity: string; lock: RpcScriptCamel; type?: RpcScriptCamel }>;
     outputsData: string[];
@@ -291,6 +293,10 @@ export class RgbppSim {
     if (outCapacity > inCapacity) throw new Error("outputs exceed inputs");
     if (job.virtual.needPaymasterCell && !btc.outputs.some((o) => o.address === PAYMASTER_ADDRESS && Number(o.amount) >= PAYMASTER_FEE)) {
       throw new Error("Paymaster receives UTXO not found");
+    }
+    // CKB fails a transaction whose paymaster input's secp256k1 lock has no dep.
+    if (job.virtual.needPaymasterCell && !raw.cellDeps.some((d) => d.outPoint.txHash === SECP256K1_DEP_GROUP && d.depType === "depGroup")) {
+      throw new Error("TransactionFailedToVerify: Inputs[0].Lock ScriptNotFound (secp256k1)");
     }
 
     this.checkMintRules(inputs, outputs, outputsData, btc);
