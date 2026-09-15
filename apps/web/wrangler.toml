@@ -8,7 +8,10 @@
 # 100k writes/day, and D1 scales to zero — there is no machine to keep warm and
 # no idle charge. See .meshkore/docs/deploy/hosting.md for why not Fly or Vercel.
 
+# The name fixes the public address: https://btcfun.<account>.workers.dev.
+# Renaming the Worker moves the site, so it stays "btcfun".
 name = "btcfun"
+workers_dev = true
 main = "worker/index.ts"
 compatibility_date = "2026-09-01"
 
@@ -22,8 +25,7 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "DB"
 database_name = "btcfun-activity"
-# Replace after `wrangler d1 create btcfun-activity`.
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "e8060ef1-9fd4-4145-884f-cdb692a85220"
 
 [observability]
 enabled = true
