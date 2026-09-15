@@ -195,6 +195,29 @@ transaction, so neither leg can happen without the other. Cancelling means
 spending the listed UTXO. A listing sells in full; partial sales are several
 listings.
 
+### 5.2 Bids
+
+The market is an order book between users: no pool, no automated market
+maker, no market maker, no custody. Every price in it is one a person signed.
+
+A resting bid that executes by itself is not possible without a custodian: the
+sale's commitment names the seller's cell, so only someone who knows that cell
+can finish it. A bid is therefore a signed intention, not escrow. The bidder
+publishes the token, the amount in atoms, the total price in sats and their own
+address, signed by the same identity whose address it names; nothing is locked.
+A holder meets it by signing an ordinary §5.1 listing for exactly those terms,
+labelled with the bid's id, and the bidder completes that listing as any buyer
+would. Until then either side can walk away, and anyone else may buy the
+listing, because the label is not part of what the seller signed. The bidder
+withdraws a bid with a signed `cancel` event that names it; only the author's
+withdrawal counts.
+
+The index stores bids and withdrawals as it stores every event — signature
+checked, nothing decided. A sale is counted as a trade only when its Bitcoin
+transaction spends the listed output first and pays the seller the listed
+price; a bid is filled only when that sale delivered to the bidder's address.
+See decision `2026-09-24-peer-to-peer-order-book`.
+
 ## 6. Transaction architecture and trust boundaries
 
 ### 6.1 Bitcoin clock and finality
