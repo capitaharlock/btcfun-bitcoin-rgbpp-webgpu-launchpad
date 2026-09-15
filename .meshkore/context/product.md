@@ -11,7 +11,7 @@ community-token distribution and a browser mining experience. Serious project
 fundraising is outside the first product.
 
 **Loop:** `TICKET → MINE → MINT → (TRANSFER | SELL) → VERIFY`. A ticket is a
-Bitcoin payment of 5,000 sats to the launch's promoter; its output is the mining
+Bitcoin payment of 10,000 sats, 9,500 to the launch's promoter and 500 to the platform; its output is the mining
 challenge. The miner sees live what the best hash is worth and mints exactly
 that into a Bitcoin output they control. A ticket has real cost and does not
 guarantee a result worth it.

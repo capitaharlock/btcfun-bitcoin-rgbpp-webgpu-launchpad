@@ -12,6 +12,7 @@ validation. Superseded records preserve history and must not guide implementatio
 | Record | Status | Effect |
 |---|---|---|
 | [Standard tokenomics and instant mint](2026-09-24-standard-tokenomics-and-instant-mint.md) | Adopted | One rule set for every launch; per-ticket mint `10^8·clz²/2^k`; weekly halving; no cap, no reserve; ticket income to the promoter |
+| [Platform fee per ticket](2026-09-24-platform-fee-per-ticket.md) | Adopted | Ticket 10,000 sats: 9,500 to the promoter, 500 (5 %) to a platform script fixed in the mint script; both enforced on chain |
 | [Review and validation gates](2026-09-23-review-and-validation-gates.md) | Partly superseded | Evidence gates and claim discipline stand; the 21M ceiling, epoch economics and reserve are replaced by the standard tokenomics |
 | [Testnet first](2026-09-22-testnet-first-no-mainnet.md) | Still applicable | Phase 4 review gate covers all real-fund flows |
 | [Reserve floor](2026-09-23-reserve-floor-and-redemption.md) | Superseded | Automatic monotonicity and cost recovery disproved |

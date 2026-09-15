@@ -11,7 +11,7 @@ status: draft
 | Standard | The one rule set every launch follows (`PROTOCOL.md` §4); compiled into the mint script, never a launch parameter |
 | Launch | A token identity (symbol, name, sentence, accent), a promoter address and an opening height `h0`; its terms are the mint script's args |
 | Promoter | The Bitcoin address that receives every ticket payment of a launch |
-| Ticket | A Bitcoin transaction paying 5,000 sats to the promoter and arming a miner cell; not a guaranteed return |
+| Ticket | A Bitcoin transaction paying 10,000 sats (9,500 to the promoter, 500 platform fee) and arming a miner cell; not a guaranteed return |
 | Challenge | `sha256(ticket_txid ‖ ticket_vout)` of the armed cell's Bitcoin output; cannot exist before the ticket is paid |
 | Anchor | The ticket's height, declared by the wallet and accepted only between `h0` and the ticket's SPV-proven confirming block, at most 144 blocks before it; fixes the ticket's rate |
 | Halving | Every 1008 Bitcoin blocks counted from `h0`; `k` is the number elapsed at the anchor |

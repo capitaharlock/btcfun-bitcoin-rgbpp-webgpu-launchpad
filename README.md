@@ -13,7 +13,7 @@ and anyone can recompute any mint from the two chains.
 ## How it works
 
 ```text
-TICKET   pay 5,000 sats to the launch's promoter; the ticket's Bitcoin output is the challenge
+TICKET   pay 10,000 sats: 9,500 to the launch's promoter, 500 to the platform; the ticket's Bitcoin output is the challenge
 MINE     search for a nonce in the browser; the reward for the best hash is shown live
 MINT     spend the ticket output; the tokens exist in that transaction's output
          → transfer, sell, verify, or buy the next ticket

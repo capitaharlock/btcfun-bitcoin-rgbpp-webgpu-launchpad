@@ -72,7 +72,9 @@ into the mint script; a launch cannot override them.
 | `UNIT` | 10^8 atoms | reward per `clz²` before halving (one whole token) |
 | `HALVING_BLOCKS` | 1008 | Bitcoin blocks between halvings (about one week) |
 | `MIN_CLZ` | 16 | smallest mintable result |
-| `TICKET_SATS` | 5,000 | price of one ticket, paid in the ticket's Bitcoin transaction |
+| `TICKET_SATS` | 10,000 | price of one ticket, paid in the ticket's Bitcoin transaction |
+| `PLATFORM_FEE_SATS` | 500 | the platform's 5 %, paid to the platform script fixed in the mint script |
+| `PROMOTER_SATS` | 9,500 | the promoter's 95 %, paid to the launch's promoter address |
 | `ANCHOR_GRACE_BLOCKS` | 144 | how far behind its confirming block a ticket's anchor may be |
 
 ### 4.1 Reward
@@ -124,7 +126,7 @@ mint script. It is `idle` or `armed`.
   miner already owns. It needs CKB capacity; whoever provides it (the miner, the
   promoter or a sponsor) gains no control over it.
 - **Ticket.** A Bitcoin transaction spends the idle cell's UTXO and pays at least
-  `TICKET_SATS` to the promoter's address. Its RGB++ commitment moves the cell to
+  `PROMOTER_SATS` to the promoter's address and `PLATFORM_FEE_SATS` to the platform. Its RGB++ commitment moves the cell to
   a new output of the same transaction and marks it armed. That output is the
   challenge: it does not exist before the ticket is paid, so work cannot be
   precomputed, and it can be spent once, so work cannot be reused.
@@ -160,8 +162,11 @@ between launches.
 
 ### 4.4 Revenue
 
-Each ticket pays `TICKET_SATS` to the promoter's Bitcoin address, inside the
-ticket transaction, and the mint script checks that output. The standard issues
+Each ticket pays `PROMOTER_SATS` to the promoter's Bitcoin address and
+`PLATFORM_FEE_SATS` to the platform, both inside the ticket transaction, and the
+mint script checks both outputs. The platform script is compiled into the mint
+script, so no launch can redirect the fee; a transaction arming several cells
+owes one fee per cell (decision `2026-09-24-platform-fee-per-ticket`). The standard issues
 no reserve, promises no floor and offers no redemption: a token is worth what
 someone will pay for it. The interface states this wherever a ticket is bought.
 
@@ -225,8 +230,9 @@ carry the launch terms: format version, `h0`, the promoter's Bitcoin
 transaction:
 
 - open: one idle miner cell created, no xUDT balance change;
-- ticket: idle in, armed out, the Bitcoin transaction pays the promoter one
-  `TICKET_SATS` for every miner cell it arms, the armed cell's anchor is valid,
+- ticket: idle in, armed out, the Bitcoin transaction pays the promoter
+  `PROMOTER_SATS` for every miner cell of theirs it arms and the platform
+  `PLATFORM_FEE_SATS` for every miner cell it arms, the armed cell's anchor is valid,
   no xUDT balance change;
 - mint: armed in, idle out carrying the nonce, the xUDT balance under this
   launch increases by exactly `reward` at the consumed ticket's anchor; a mint

@@ -125,7 +125,7 @@ The epoch model settled a ticket only after everyone else in its window had
 been counted, so a miner could not know what their work was worth until later,
 and a creator could make a token look scarce by choosing a small cap. The
 decision `2026-09-24-standard-tokenomics-and-instant-mint` replaced it: one
-standard for every launch, a fixed 5,000-sat ticket paid to the promoter, and a
+standard for every launch, a fixed ticket paid to the promoter (5,000 sats at first; 10,000 once the platform's 5 % fee was added), and a
 mint that settles one miner's result the moment it happens, at
 `floor(10^8 × clz² / 2^k)` with a halving every 1008 blocks from the launch's
 opening. The 21M cap, epoch budgets, pari-mutuel allocation, ticket-funded
