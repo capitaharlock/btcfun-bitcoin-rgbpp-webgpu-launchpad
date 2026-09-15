@@ -1,14 +1,14 @@
 ---
 id: graduation-protocol
 title: "Inactive launch exits and deferred market activation"
-status: backlog
+status: cancelled
 priority: medium
 oneliner: "Complete inactive-launch exits early; redesign market activation only after validation."
 modules:
   - graduation
 target: "Phase 2 \u2014 Dormancy; Phase 5 \u2014 Optional activation"
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 owner: rjj
 related: [emission-core, mining-engine, liquidity-integration, product-validation]
 ---
@@ -38,3 +38,7 @@ Gate order and shared evidence: [roadmap](../../docs/roadmap.md).
 - [`GR2` — Finalize launch and separately funded liquidity allocation](../../modules/graduation/tasks/GR2-close-mining-finalise-supply-deploy-rese.md)
 - [`GR3` — Activation adapter, atomicity and recovery](../../modules/graduation/tasks/GR3-graduation-adapter-interface-atomicity-a.md)
 - [`GR5` — Market activation indexing and rights display](../../modules/graduation/tasks/GR5-graduation-events-indexing-and-ui.md)
+
+## Outcome
+
+Cancelled by the [order-book decision](../../context/decisions/2026-09-24-peer-to-peer-order-book.md): the market is an order book between users, with no pool, AMM or market maker operated by the platform.

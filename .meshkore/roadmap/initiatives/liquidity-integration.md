@@ -1,14 +1,14 @@
 ---
 id: liquidity-integration
 title: "Early venue research and deferred integration"
-status: backlog
+status: cancelled
 priority: medium
 oneliner: "Check actual venue capabilities early and implement only a funded, justified market design."
 modules:
   - liquidity
 target: "Phase 1 \u2014 Feasibility; Phase 5 \u2014 Integration"
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 owner: rjj
 related: [validate-architecture, graduation-protocol, product-validation]
 ---
@@ -37,3 +37,7 @@ Gate order and shared evidence: [roadmap](../../docs/roadmap.md).
 - [`LQ2` — Implement the reviewed liquidity adapter](../../modules/liquidity/tasks/LQ2-implement-the-liquidityadapter.md)
 - [`LQ3` — Optional swaps, liquidity and actual fee capture](../../modules/liquidity/tasks/LQ3-route-post-graduation-quotes-and-swaps-i.md)
 - [`LQ4` — Market creation failure and independent exit verification](../../modules/liquidity/tasks/LQ4-handle-failed-market-creation-verify-per.md)
+
+## Outcome
+
+Cancelled by the [order-book decision](../../context/decisions/2026-09-24-peer-to-peer-order-book.md): the market is an order book between users, with no pool, AMM or market maker operated by the platform.
