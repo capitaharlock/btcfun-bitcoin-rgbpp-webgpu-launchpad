@@ -77,7 +77,6 @@ interface Job {
 
 interface VirtualResult {
   ckbRawTx: {
-    cellDeps: unknown[];
     cellDeps: Array<{ outPoint: { txHash: string; index: string }; depType: string }>;
     inputs: Array<{ previousOutput: { txHash: string; index: string } }>;
     outputs: Array<{ capacity: string; lock: RpcScriptCamel; type?: RpcScriptCamel }>;
