@@ -79,6 +79,42 @@
 
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Diagrams. A flowchart reads best on paper, so it sits on a white card in
+     every theme. Each tone is one of the signals above, softened three ways:
+     a wash for lanes, a pastel fill for shapes, and a stroke a step darker
+     than the fill. Text on any of them is --dg-ink, and every pair is checked
+     for WCAG AA contrast in the browser suite (e2e/ui/docs.spec.ts). The
+     meanings carry over: amber is Bitcoin and issuance, mint is CKB and
+     settlement, cyan is the RGB++ service and evidence, violet is the person
+     and their wallet, sun is a decision, rose is a rejection. */
+  --dg-canvas: #ffffff;
+  --dg-ink: color-mix(in oklab, var(--bg) 94%, var(--violet));
+  --dg-ink-dim: color-mix(in oklab, var(--bg) 66%, white);
+  --dg-line: color-mix(in oklab, var(--bg) 58%, white);
+  --dg-rule: color-mix(in oklab, var(--line-strong) 14%, white);
+
+  --dg-amber-wash: color-mix(in oklab, var(--amber) 6%, white);
+  --dg-amber-fill: color-mix(in oklab, var(--amber) 19%, white);
+  --dg-amber-stroke: color-mix(in oklab, var(--amber) 66%, var(--amber-deep) 10%);
+  --dg-cyan-wash: color-mix(in oklab, var(--cyan) 6%, white);
+  --dg-cyan-fill: color-mix(in oklab, var(--cyan) 17%, white);
+  --dg-cyan-stroke: color-mix(in oklab, var(--cyan-deep) 80%, white);
+  --dg-violet-wash: color-mix(in oklab, var(--violet) 7%, white);
+  --dg-violet-fill: color-mix(in oklab, var(--violet) 20%, white);
+  --dg-violet-stroke: color-mix(in oklab, var(--violet) 80%, var(--violet-deep));
+  --dg-mint-wash: color-mix(in oklab, var(--mint) 7%, white);
+  --dg-mint-fill: color-mix(in oklab, var(--mint) 20%, white);
+  --dg-mint-stroke: color-mix(in oklab, var(--mint) 70%, var(--bg) 18%);
+  --dg-rose-wash: color-mix(in oklab, var(--danger) 5%, white);
+  --dg-rose-fill: color-mix(in oklab, var(--danger) 15%, white);
+  --dg-rose-stroke: color-mix(in oklab, var(--danger) 82%, white);
+  --dg-sun-wash: color-mix(in oklab, var(--warn) 8%, white);
+  --dg-sun-fill: color-mix(in oklab, var(--warn) 30%, white);
+  --dg-sun-stroke: color-mix(in oklab, var(--warn) 70%, var(--amber-deep) 22%);
+  --dg-slate-wash: color-mix(in oklab, var(--ink-faint) 5%, white);
+  --dg-slate-fill: color-mix(in oklab, var(--ink-faint) 15%, white);
+  --dg-slate-stroke: color-mix(in oklab, var(--ink-faint) 72%, white);
 }
 
 * { box-sizing: border-box; }

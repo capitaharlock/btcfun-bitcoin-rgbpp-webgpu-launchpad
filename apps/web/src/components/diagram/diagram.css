@@ -1,0 +1,120 @@
+/* The flowchart kit. Colours are the --dg-* tokens in `ui/tokens.css`; this
+   file only says which token each part of a diagram takes. */
+
+.dg {
+  margin: 0;
+  background: var(--dg-canvas);
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--line-strong) 40%, white);
+  box-shadow: 0 18px 44px -28px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  color: var(--dg-ink);
+}
+
+.dg-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  padding: 14px 18px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--dg-ink);
+}
+
+/* Sideways scroll stays inside the card. The four backgrounds are the usual
+   scroll-shadow trick: white covers scroll into the edges while at rest, and
+   a soft shadow shows only when there is more to see in that direction. */
+.dg-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 2px 0 6px;
+  background:
+    linear-gradient(to right, var(--dg-canvas) 30%, transparent) left center / 36px 100% no-repeat local,
+    linear-gradient(to left, var(--dg-canvas) 30%, transparent) right center / 36px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(20, 20, 40, 0.16), transparent) left center / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(20, 20, 40, 0.16), transparent) right center / 14px 100% no-repeat scroll;
+}
+.dg-scroll:focus-visible { outline-offset: -3px; }
+
+.dg-scroll svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  font-family: var(--sans);
+  text-rendering: geometricPrecision;
+}
+
+/* ---------- tones ---------- */
+
+.dg-tone-amber  { --wash: var(--dg-amber-wash);  --fill: var(--dg-amber-fill);  --stroke: var(--dg-amber-stroke); }
+.dg-tone-cyan   { --wash: var(--dg-cyan-wash);   --fill: var(--dg-cyan-fill);   --stroke: var(--dg-cyan-stroke); }
+.dg-tone-violet { --wash: var(--dg-violet-wash); --fill: var(--dg-violet-fill); --stroke: var(--dg-violet-stroke); }
+.dg-tone-mint   { --wash: var(--dg-mint-wash);   --fill: var(--dg-mint-fill);   --stroke: var(--dg-mint-stroke); }
+.dg-tone-rose   { --wash: var(--dg-rose-wash);   --fill: var(--dg-rose-fill);   --stroke: var(--dg-rose-stroke); }
+.dg-tone-sun    { --wash: var(--dg-sun-wash);    --fill: var(--dg-sun-fill);    --stroke: var(--dg-sun-stroke); }
+.dg-tone-slate  { --wash: var(--dg-slate-wash);  --fill: var(--dg-slate-fill);  --stroke: var(--dg-slate-stroke); }
+
+/* ---------- lanes ---------- */
+
+.dg-lane-band { fill: var(--wash); }
+.dg-lane-rule { stroke: var(--dg-rule); stroke-width: 1; stroke-dasharray: 2 5; stroke-linecap: round; }
+.dg-lane-chip { fill: var(--fill); stroke: var(--stroke); stroke-width: 1; }
+.dg-lane-label { fill: var(--dg-ink); font-size: 12px; font-weight: 650; letter-spacing: 0.01em; }
+
+/* ---------- shapes ---------- */
+
+.dg-shape { fill: var(--fill); stroke: var(--stroke); stroke-width: 1.4; }
+.dg-fold { fill: none; stroke: var(--stroke); stroke-width: 1.2; stroke-linejoin: round; }
+.dg-paper, .dg-tx-body { fill: var(--wash); }
+.dg-head { fill: var(--fill); stroke: var(--stroke); stroke-width: 1.4; }
+.dg-item .dg-shape { fill: var(--dg-canvas); stroke-width: 1.2; }
+.dg-byte { fill: var(--fill); stroke: var(--stroke); stroke-width: 1; }
+
+/* ---------- text ---------- */
+
+.dg-text { fill: var(--dg-ink); font-size: 13px; }
+.dg-strong { font-weight: 600; letter-spacing: -0.01em; }
+.dg-dim { fill: var(--dg-ink-dim); font-size: 11.5px; }
+.dg-item-label { font-size: 12.5px; font-weight: 550; }
+.dg-item-detail { font-size: 11px; }
+.dg-key {
+  fill: var(--dg-ink-dim);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+.dg-mono, .dg-value {
+  fill: var(--dg-ink);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.dg-value { font-weight: 600; }
+.dg-byte-label { fill: var(--dg-ink); font-size: 11px; font-weight: 650; }
+.dg-byte-size { font-weight: 450; font-size: 10.5px; }
+
+/* ---------- connectors ---------- */
+
+.dg-edge { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.dg-arrow path { stroke: none; }
+
+.dg-edge-flow   { --edge: var(--dg-line);         --edge-fill: var(--dg-slate-fill); }
+.dg-edge-yes    { --edge: var(--dg-mint-stroke);  --edge-fill: var(--dg-mint-fill); }
+.dg-edge-no     { --edge: var(--dg-rose-stroke);  --edge-fill: var(--dg-rose-fill); }
+.dg-edge-seal   { --edge: var(--dg-violet-stroke); --edge-fill: var(--dg-violet-fill); }
+.dg-edge-commit { --edge: var(--dg-amber-stroke); --edge-fill: var(--dg-amber-fill); }
+
+path.dg-edge { stroke: var(--edge); }
+path.dg-edge-seal, path.dg-edge-commit { stroke-dasharray: 5 4; stroke-width: 1.5; }
+.dg-arrow { fill: var(--edge); }
+
+.dg-edge-label rect { fill: var(--edge-fill); stroke: var(--edge); stroke-width: 1; }
+.dg-edge-label text { fill: var(--dg-ink); font-size: 11.5px; font-weight: 600; }
+
+.dg-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-left: auto; font-weight: 500; color: var(--dg-ink-dim); font-size: 12px; }
+.dg-legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dg-legend-item svg { flex: none; }
+.dg-legend-item line { stroke: var(--edge); stroke-width: 1.8; stroke-dasharray: 5 4; }
