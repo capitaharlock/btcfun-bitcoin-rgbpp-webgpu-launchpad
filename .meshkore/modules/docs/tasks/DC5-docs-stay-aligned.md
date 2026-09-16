@@ -1,13 +1,14 @@
 ---
 id: DC5
 title: "Documentation stays aligned with the code"
-status: backlog
+status: done
 priority: high
 owner: rjj
 category: docs
 initiative: public-docs
 created: 2026-09-24
 updated: 2026-09-24
+completed_at: 2026-09-24T15:10:00Z
 ---
 
 Each docs page declares the source files it describes. A check compares the
@@ -19,3 +20,7 @@ same change.
 ## Done when
 
 - `npm run docs:check` exists, runs in the deploy script, and fails on a stale page.
+
+## Resolution
+
+`apps/web/src/docs/sources.json` declares each page's sources and also drives the docs navigation. `apps/web/scripts/docs-check.mjs` (logic in `scripts/docs-check/stale.mjs`, tested by `stale.test.mjs`) fails when a source was committed after its page, has uncommitted changes the page lacks, or no longer exists. `npm run docs:check` exists and `npm run deploy` runs it first. The rule is stated in the root `README.md`.

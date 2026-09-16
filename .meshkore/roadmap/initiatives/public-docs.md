@@ -53,8 +53,8 @@ for everyone.
 
 | ID | Title | Status |
 |---|---|---|
-| DC1 | Docs area in the portal, reached from the footer | backlog |
-| DC2 | Flowchart kit on the site's pastel palette | backlog |
-| DC3 | The mint circuit and its transaction anatomy | backlog |
-| DC4 | Transfer, ownership and the order-book circuits | backlog |
-| DC5 | Documentation stays aligned with the code | backlog |
+| DC1 | Docs area in the portal, reached from the footer | done |
+| DC2 | Flowchart kit on the site's pastel palette | done |
+| DC3 | The mint circuit and its transaction anatomy | done |
+| DC4 | Transfer, ownership and the order-book circuits | done |
+| DC5 | Documentation stays aligned with the code | done |
