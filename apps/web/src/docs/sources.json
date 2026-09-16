@@ -1,0 +1,100 @@
+{
+  "$comment": "Each docs page and the files whose behaviour it describes. Paths are relative to the repository root. `npm run docs:check` fails when a source changed after its page (scripts/docs-check.mjs); the docs view reads the same list for its navigation.",
+  "pages": [
+    {
+      "slug": "overview",
+      "title": "Overview & technologies",
+      "summary": "What btc.fun is and what it is built from.",
+      "page": "apps/web/src/docs/pages/overview",
+      "sources": [
+        "PROTOCOL.md",
+        "apps/web/src/lib/rgbpp/config.ts",
+        "apps/web/src/lib/rgbpp/service.ts",
+        "apps/web/src/lib/mining/session.ts",
+        "apps/web/src/lib/bitcoin/keys.ts",
+        "apps/web/worker/index.ts"
+      ]
+    },
+    {
+      "slug": "tokenomics",
+      "title": "Tokenomics",
+      "summary": "The ticket, the reward, the halving and the platform fee.",
+      "page": "apps/web/src/docs/pages/tokenomics",
+      "sources": [
+        "PROTOCOL.md",
+        ".meshkore/context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md",
+        ".meshkore/context/decisions/2026-09-24-platform-fee-per-ticket.md",
+        "apps/web/src/lib/standard.ts",
+        "contracts/mint-core/src/lib.rs"
+      ]
+    },
+    {
+      "slug": "mint",
+      "title": "The mint circuit",
+      "summary": "Open, ticket, mine, mint — and when the tokens arrive.",
+      "page": "apps/web/src/docs/pages/mint",
+      "sources": [
+        "apps/web/src/lib/rgbpp/operations.ts",
+        "apps/web/src/lib/rgbpp/bitcoin.ts",
+        "apps/web/src/lib/rgbpp/service.ts",
+        "apps/web/src/components/mining/MinerSteps.tsx",
+        "contracts/mint/src/main.rs"
+      ]
+    },
+    {
+      "slug": "ownership",
+      "title": "Where a token lives",
+      "summary": "A CKB cell sealed to a Bitcoin output, and who can move it.",
+      "page": "apps/web/src/docs/pages/ownership",
+      "sources": [
+        "apps/web/src/lib/rgbpp/seal.ts",
+        "apps/web/src/lib/rgbpp/commitment.ts",
+        "apps/web/src/lib/rgbpp/launch.ts"
+      ]
+    },
+    {
+      "slug": "transfers",
+      "title": "Transfers",
+      "summary": "Sending tokens is one Bitcoin transaction.",
+      "page": "apps/web/src/docs/pages/transfers",
+      "sources": [
+        "apps/web/src/lib/rgbpp/operations.ts",
+        "apps/web/src/lib/rgbpp/bitcoin.ts"
+      ]
+    },
+    {
+      "slug": "market",
+      "title": "The market",
+      "summary": "A peer-to-peer order book: asks, bids, nothing escrowed.",
+      "page": "apps/web/src/docs/pages/market",
+      "sources": [
+        "PROTOCOL.md",
+        ".meshkore/context/decisions/2026-09-24-peer-to-peer-order-book.md",
+        "apps/web/src/lib/rgbpp/sale.ts",
+        "apps/web/src/lib/market/bid.ts"
+      ]
+    },
+    {
+      "slug": "verification",
+      "title": "Verification",
+      "summary": "Recompute any mint from the two chains.",
+      "page": "apps/web/src/docs/pages/verification",
+      "sources": [
+        "apps/web/src/lib/rgbpp/verify.ts",
+        "apps/web/src/lib/mining/verify.ts",
+        "apps/web/src/views/Proof.tsx"
+      ]
+    },
+    {
+      "slug": "testnet",
+      "title": "Testnet & honesty",
+      "summary": "What is real, what is not, and why it is testnet only.",
+      "page": "apps/web/src/docs/pages/testnet",
+      "sources": [
+        "PROTOCOL.md",
+        ".meshkore/docs/capabilities.md",
+        "apps/web/src/lib/bitcoin/network.ts"
+      ]
+    }
+  ]
+}

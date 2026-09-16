@@ -53,7 +53,7 @@ export default defineConfig({
     {
       name: "mobile",
       testDir: "e2e/ui",
-      testMatch: /layout\.spec\.ts/,
+      testMatch: /(layout|docs)\.spec\.ts/,
       timeout: 60_000,
       use: { ...devices["Pixel 7"] },
     },

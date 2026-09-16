@@ -16,6 +16,7 @@ const WalletView = lazy(() => import("./views/Wallet").then((m) => ({ default: m
 const Market = lazy(() => import("./views/Market").then((m) => ({ default: m.Market })));
 const Activity = lazy(() => import("./views/Activity").then((m) => ({ default: m.Activity })));
 const Create = lazy(() => import("./views/Create").then((m) => ({ default: m.Create })));
+const Docs = lazy(() => import("./views/Docs").then((m) => ({ default: m.Docs })));
 
 type Route =
   | { name: "launches" }
@@ -26,7 +27,8 @@ type Route =
   | { name: "holdings" }
   | { name: "market" }
   | { name: "activity" }
-  | { name: "wallet" };
+  | { name: "wallet" }
+  | { name: "docs"; page?: string };
 
 function parse(hash: string): Route {
   const path = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
@@ -38,6 +40,7 @@ function parse(hash: string): Route {
   if (path[0] === "holdings") return { name: "holdings" };
   if (path[0] === "market") return { name: "market" };
   if (path[0] === "wallet") return { name: "wallet" };
+  if (path[0] === "docs") return { name: "docs", page: path[1] };
   return { name: "launches" };
 }
 
@@ -139,6 +142,7 @@ function Shell() {
           {route.name === "holdings" && <Holdings />}
           {route.name === "market" && <Market />}
           {route.name === "wallet" && <WalletView />}
+          {route.name === "docs" && <Docs slug={route.page} />}
           </Suspense>
         </div>
       </main>
@@ -150,6 +154,8 @@ function Shell() {
             CKB testnet. <a href="#/proof">Verify a mint</a>.
           </span>
           <span className="spacer" />
+          <a href="#/docs">Docs</a>
+          <span className="faint">·</span>
           <a href="https://meshkore.com/standard">MeshKore standard</a>
           <span className="faint">·</span>
           <span className="faint">PROTOCOL.md is canonical</span>

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import vectors from "../../../../contracts/vectors/reward.json";
 import { recompute } from "./mining/verify";
@@ -12,6 +13,7 @@ import {
   UNIT,
   TICKET_SATS,
   PLATFORM_FEE_SATS,
+  ANCHOR_GRACE_BLOCKS,
 } from "./standard";
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
@@ -31,6 +33,15 @@ describe("standard reward", () => {
     expect(MIN_CLZ).toBe(vectors.constants.MIN_CLZ);
     expect(TICKET_SATS).toBe(vectors.constants.TICKET_SATS);
     expect(PLATFORM_FEE_SATS).toBe(vectors.constants.PLATFORM_FEE_SATS);
+  });
+
+  it("shows the anchor window the mint script enforces", () => {
+    // Not in the shared vectors, so read from the script's own source: a
+    // docs page quoting a window the script does not use would mislead.
+    const rust = readFileSync(new URL("../../../../contracts/mint-core/src/lib.rs", import.meta.url), "utf8");
+    const declared = /pub const ANCHOR_GRACE_BLOCKS: u32 = (\d+);/.exec(rust);
+    expect(declared, "ANCHOR_GRACE_BLOCKS in contracts/mint-core").not.toBeNull();
+    expect(ANCHOR_GRACE_BLOCKS).toBe(Number(declared![1]));
   });
 
   it("matches the worked values in PROTOCOL.md §4.1", () => {

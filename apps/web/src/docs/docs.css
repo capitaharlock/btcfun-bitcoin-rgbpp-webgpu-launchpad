@@ -1,0 +1,151 @@
+/* The documentation area: a reading column beside a sticky contents list,
+   folded into a menu on phones. Prose is set wider-leaded and a size up from
+   the app's dense panels, because here people read rather than scan. */
+
+.docs {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 36px;
+  align-items: start;
+}
+
+.docs-side { position: sticky; top: 78px; }
+
+.docs-menu { display: none; }
+
+.docs-nav .eyebrow { padding: 0 12px 10px; }
+.docs-nav ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: doc; }
+.docs-nav li { counter-increment: doc; }
+.docs-nav a {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  color: var(--ink-dim);
+  font-size: 13.5px;
+}
+.docs-nav a::before {
+  content: counter(doc, decimal-leading-zero);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.docs-nav a:hover { color: var(--ink); background: var(--surface-1); text-decoration: none; }
+.docs-nav a[aria-current="page"] {
+  color: var(--ink);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-strong), inset 2px 0 0 var(--amber);
+}
+.docs-nav a[aria-current="page"]::before { color: var(--amber-soft); }
+
+.docs-article { max-width: 880px; min-width: 0; }
+
+.docs-head { margin-bottom: 28px; }
+.docs-head h1 { font-size: clamp(28px, 4vw, 40px); margin: 6px 0 12px; }
+.docs-summary { font-size: 16px; color: var(--ink-dim); max-width: 60ch; }
+
+.docs-article section { margin: 0 0 34px; }
+.docs-article h2 { font-size: 21px; margin: 0 0 12px; }
+.docs-article h3 { font-size: 15.5px; margin: 20px 0 8px; }
+.docs-article p,
+.docs-article li { font-size: 15px; line-height: 1.7; color: var(--ink-dim); max-width: 70ch; }
+.docs-article ul,
+.docs-article ol { padding-left: 20px; margin: 0 0 1em; }
+.docs-article li + li { margin-top: 4px; }
+.docs-article strong { color: var(--ink); font-weight: 600; }
+.docs-article code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.docs-article .dg { margin: 22px 0 26px; }
+
+/* A formula or constant table set apart from the prose. */
+.docs-formula {
+  margin: 14px 0 18px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--ink);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.docs-facts { margin: 14px 0 20px; max-width: 620px; }
+.docs-facts .kv dd { text-align: left; }
+
+/* The technical layer: folded under the plain explanation. */
+.docs-tech {
+  margin: 18px 0 8px;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--cyan) 4%, var(--surface-1));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cyan) 22%, var(--line));
+}
+.docs-tech > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.docs-tech > summary::-webkit-details-marker { display: none; }
+.docs-tech > summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.6px solid var(--cyan);
+  border-bottom: 1.6px solid var(--cyan);
+  transform: rotate(-45deg);
+  transition: transform 0.18s var(--ease);
+}
+.docs-tech[open] > summary::before { transform: rotate(45deg); }
+.docs-tech > summary .faint { font-weight: 400; }
+.docs-tech > div { padding: 0 16px 6px; }
+.docs-tech p, .docs-tech li { font-size: 14px; }
+
+.docs-foot { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--line); }
+.docs-foot code { font-size: 0.92em; }
+.docs-pager { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.docs-pager-link {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  min-width: 0;
+}
+.docs-pager-link.next { text-align: right; margin-left: auto; }
+.docs-pager-link:hover { text-decoration: none; box-shadow: inset 0 0 0 1px var(--line-strong); }
+
+@media (max-width: 900px) {
+  .docs { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .docs-side { position: relative; top: 0; z-index: 5; }
+  .docs-menu { display: flex; width: 100%; justify-content: flex-start; gap: 6px; }
+  .docs-caret { margin-left: auto; }
+  .docs-nav {
+    display: none;
+    position: absolute;
+    inset: calc(100% + 6px) 0 auto;
+    padding: 12px 6px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.8), inset 0 0 0 1px var(--line-strong);
+  }
+  .docs-nav.open { display: block; }
+  .docs-article p, .docs-article li { font-size: 14.5px; }
+}

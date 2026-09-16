@@ -23,6 +23,12 @@ export const TICKET_SATS = 10_000;
 export const PLATFORM_FEE_SATS = TICKET_SATS / 20;
 /** What the promoter receives per ticket. */
 export const PROMOTER_SATS = TICKET_SATS - PLATFORM_FEE_SATS;
+/**
+ * How far behind the block that confirms a ticket its declared anchor may be.
+ * The mint script holds the same constant (`contracts/mint-core`
+ * `ANCHOR_GRACE_BLOCKS`); here it is shown to people, never enforced.
+ */
+export const ANCHOR_GRACE_BLOCKS = 144;
 /** SHA-256d has 256 output bits, so no hash has more leading zeros than this. */
 export const MAX_CLZ = 256;
 
