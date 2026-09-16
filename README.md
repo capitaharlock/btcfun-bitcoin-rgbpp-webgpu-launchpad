@@ -68,6 +68,19 @@ been reviewed for real money, and nothing points at mainnet.
 [**`capabilities.md`**](.meshkore/docs/capabilities.md) splits every capability
 into implemented, pending and absent, with the task that unblocks each.
 
+## Documentation stays with the code
+
+The portal's docs (`#/docs`, linked from the footer) explain every circuit —
+the mint, delivery, ownership, transfers, the order book, verification — with
+flowcharts declared as data (`apps/web/src/components/diagram/`). Each page
+lists the files it describes in `apps/web/src/docs/sources.json`, and
+`npm run docs:check` fails when one of those files was committed after its
+page, or has uncommitted changes the page does not. `npm run deploy` runs it
+first, so a stale page stops the deploy.
+
+The rule: a change to a documented behaviour updates its page in the same
+change — even if only to confirm the page still holds.
+
 ## Engineering
 
 Quality is the deliverable here, ahead of scope. One concept, one
