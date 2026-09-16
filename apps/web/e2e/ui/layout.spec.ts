@@ -16,6 +16,18 @@ test.describe("layout", () => {
     });
   }
 
+  test("the top bar fits a phone with a wallet connected", async ({ page, app }) => {
+    await app.createDemoKey();
+    for (const route of ["/", "/market", "/activity"]) {
+      await app.goto(route);
+      await expect(page.locator("main")).toBeVisible();
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `${route} is wider than the viewport`).toBeLessThanOrEqual(1);
+    }
+  });
+
   test("the four sections stay reachable", async ({ page, app }) => {
     await app.goto("/");
     for (const label of ["Launches", "Create", "Market", "Activity"]) {

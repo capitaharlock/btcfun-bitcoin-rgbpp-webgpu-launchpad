@@ -141,7 +141,13 @@
 }
 @media (max-width: 720px) {
   .g2 { grid-template-columns: minmax(0, 1fr); }
-  .nav { overflow-x: auto; }
+  /* A phone keeps what identifies the wallet and drops what repeats elsewhere:
+     the tip is on every launch page and the balance on the wallet page. The
+     navigation scrolls inside the space that is left, never the page. */
+  .topbar { gap: 10px; }
+  .nav { overflow-x: auto; flex: 1 1 auto; min-width: 0; margin-left: 0; }
+  .topbar-right { flex: none; gap: 6px; }
+  .topbar-right .chip, .topbar-right .divider, .walletpill .bal { display: none; }
 }
 
 /* ---------- chips / badges ---------- */
