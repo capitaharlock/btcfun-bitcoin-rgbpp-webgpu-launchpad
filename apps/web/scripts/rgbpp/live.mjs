@@ -8,6 +8,8 @@
  *   mine       grind the armed ticket until the hash mints something
  *   mint       mint the result into Alice's token cell
  *   transfer   send part of Alice's balance to Bob
+ *   list       Bob signs a listing of his token cell (PRICE sats, default 20,000)
+ *   buy        Alice completes Bob's listing alone and broadcasts it
  *   status     show the queue and every cell of this launch, for both wallets
  *
  * Every Bitcoin transaction is built by `lib/rgbpp` exactly as the browser
@@ -27,7 +29,7 @@ import { close, loadAll } from "../e2e/load.mjs";
 const STATE = fileURLToPath(new URL("../../.e2e-runs/rgbpp-live.json", import.meta.url));
 const WALLET = fileURLToPath(new URL("../../.e2e-wallet.json", import.meta.url));
 
-const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal] = await loadAll(
+const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale] = await loadAll(
   "lib/bitcoin/network.ts",
   "lib/bitcoin/keys.ts",
   "lib/bitcoin/provider.ts",
@@ -39,6 +41,7 @@ const [network, keys, provider, standard, config, launch, ops, bitcoin, service,
   "lib/rgbpp/service.ts",
   "lib/mining/verify.ts",
   "lib/rgbpp/seal.ts",
+  "lib/rgbpp/sale.ts",
 );
 
 if (network.ACTIVE.id === "mainnet") throw new Error("the live RGB++ run is testnet-only");
@@ -204,6 +207,38 @@ const steps = {
     const amount = BigInt(process.env.AMOUNT ?? tokens[0].amount / 4n);
     const plan = ops.planTransfer(cfg, terms, { from: tokens, amount, to: bob.address, paymaster: await rgbpp.paymaster() });
     await submit("transfer", plan, alice);
+  },
+
+  // The seller only signs; nothing is broadcast and no satoshi leaves Bob.
+  async list() {
+    const terms = termsOf(state);
+    const { tokens } = await cellsOf(bob.address, terms);
+    if (tokens.length === 0) throw new Error("Bob holds none of this token yet: run `transfer` and wait for the queue");
+    const cell = tokens[0];
+    const [utxo] = await sealedUtxos(bob.address, [cell.seal]);
+    const priceSats = Number(process.env.PRICE ?? 20_000);
+    state.listing = sale.signListing(bob, { launchId: "live", tokenId: state.launch.tokenId }, cell, utxo.value, priceSats);
+    write(state);
+    console.log(`listed ${cell.amount} atoms for ${priceSats} sats: ${cell.seal.txid}:${cell.seal.vout}`);
+  },
+
+  // The buyer finishes the seller's half with its own inputs; Bob is not asked
+  // for anything.
+  async buy() {
+    if (!state.listing) throw new Error("run `list` first");
+    const listing = state.listing;
+    const terms = termsOf(state);
+    const { tokens } = await cellsOf(bob.address, terms);
+    const cell = tokens.find((c) => c.outPoint.txHash === listing.outPoint.txHash && c.outPoint.index === listing.outPoint.index);
+    if (!cell) throw new Error("the listed cell is no longer live");
+    const plan = sale.planPurchase(cfg, terms, cell);
+    const [free, feeRate] = await Promise.all([rgbpp.freeUtxos(alice.address), provider.getFeeRate(network.ACTIVE)]);
+    const signed = sale.completePurchase(alice, listing, plan, free.filter((u) => u.confirmed), Math.max(feeRate, 1));
+    const txid = await rgbpp.broadcast(signed.hex);
+    const queue = await rgbpp.enqueue(plan, txid);
+    state.steps.push({ step: "buy", btcTxid: txid, fee: signed.fee, vsize: signed.vsize, queue, at: new Date().toISOString() });
+    write(state);
+    console.log(`buy: ${network.txUrl(txid, network.ACTIVE)} (queue: ${queue})`);
   },
 
   async status() {
