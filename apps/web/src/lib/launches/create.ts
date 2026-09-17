@@ -12,6 +12,12 @@
  * sharing every term, and nobody can announce a launch whose id belongs to a
  * different token.
  *
+ * A launch may also carry project links and a short story — why it raises
+ * funds and what its community will do with them. Both are part of the
+ * creator-signed announcement and nothing else: they are not in the token's
+ * metadata hash, so they never change the token id, and nothing on chain
+ * enforces them. They say what the creator claims, under the creator's key.
+ *
  * Creating a launch costs nothing on chain: the mint script is already
  * deployed and permissionless, and the token comes into existence with its
  * first mint. What is published is a signed announcement to the index, so
@@ -40,6 +46,43 @@ export const ACCENTS = [
   "var(--warn)",
 ] as const;
 
+/** Where a project lives online. Every value is an https URL. */
+export interface LaunchLinks {
+  website?: string;
+  x?: string;
+  telegram?: string;
+  discord?: string;
+  github?: string;
+}
+
+export type LinkKind = keyof LaunchLinks;
+
+export const LINK_KINDS: readonly LinkKind[] = ["website", "x", "telegram", "discord", "github"];
+
+/** Why the launch raises funds, and what its community will do with them. */
+export interface LaunchStory {
+  why?: string;
+  plan?: string;
+}
+
+export type StoryPart = keyof LaunchStory;
+
+export const STORY_PARTS: readonly StoryPart[] = ["why", "plan"];
+
+export const MAX_LINK_LENGTH = 120;
+export const MAX_STORY_LENGTH = 400;
+
+/**
+ * Most characters the links and story may take once the announcement is
+ * encoded into an index event. The event travels as JSON inside JSON, so a
+ * quote costs four characters by the time it reaches the index, whose body
+ * limit is 4,096 characters (`worker/index.ts`); the fixed part of a launch
+ * event takes about 2,000 of those at worst. Sized so that five full links
+ * and two full paragraphs of ordinary prose fit; `create.test.ts` checks the
+ * worst case against both limits.
+ */
+export const EXTRAS_WIRE_BUDGET = 2_000;
+
 /** The signed announcement of a launch. */
 export interface LaunchCommitment {
   v: "btcfun/launch/2";
@@ -59,6 +102,10 @@ export interface LaunchCommitment {
   /** Identity of the announcer. */
   creator: string;
   at: string;
+  /** Signed by the creator, not enforced on chain. Absent when none were given. */
+  links?: LaunchLinks;
+  /** Signed by the creator, not enforced on chain. Absent when none was given. */
+  story?: LaunchStory;
 }
 
 export function metadataOf(c: Pick<LaunchCommitment, "name" | "symbol" | "blurb" | "imageHash">): TokenMetadata {
@@ -102,6 +149,13 @@ export function idMatches(c: LaunchCommitment, network: NetworkConfig = ACTIVE):
 }
 
 function fieldsOf(c: LaunchCommitment): Field[] {
+  // Links and story are appended only when present, so every announcement
+  // made before they existed keeps the digest it was published under. Each
+  // is tagged by its own label, so no field set can encode like another.
+  const extras: Field[] = [
+    ...LINK_KINDS.flatMap((kind): Field[] => (c.links?.[kind] ? [[`link.${kind}`, c.links[kind]]] : [])),
+    ...STORY_PARTS.flatMap((part): Field[] => (c.story?.[part] ? [[`story.${part}`, c.story[part]]] : [])),
+  ];
   return [
     ["v", c.v],
     ["id", c.id],
@@ -115,6 +169,7 @@ function fieldsOf(c: LaunchCommitment): Field[] {
     ["tokenId", c.tokenId],
     ["creator", c.creator],
     ["at", c.at],
+    ...extras,
   ];
 }
 
@@ -131,10 +186,127 @@ export interface LaunchDraft {
   promoter: string;
   /** Blocks from now until minting opens. At least one: a launch is announced before it opens. */
   opensInBlocks: number;
+  /** As typed; empty strings are "not given". Normalised by `linkFor`. */
+  links: Record<LinkKind, string>;
+  /** As typed; empty strings are "not given". */
+  story: Record<StoryPart, string>;
 }
 
+export const NO_LINKS: Record<LinkKind, string> = { website: "", x: "", telegram: "", discord: "", github: "" };
+export const NO_STORY: Record<StoryPart, string> = { why: "", plan: "" };
+
+/** A draft field a fault can be attached to. */
+export type DraftField =
+  | Exclude<keyof LaunchDraft, "links" | "story">
+  | `links.${LinkKind}`
+  | `story.${StoryPart}`
+  | "extras";
+
 /** Field-level problems, keyed by field, so a form can show them in place. */
-export type DraftFaults = Partial<Record<keyof LaunchDraft, string>>;
+export type DraftFaults = Partial<Record<DraftField, string>>;
+
+/** Hosts each kind of link may point at, so an icon never lies about where it goes. */
+const LINK_HOSTS: Record<Exclude<LinkKind, "website">, readonly string[]> = {
+  x: ["x.com", "twitter.com"],
+  telegram: ["t.me", "telegram.me"],
+  discord: ["discord.gg", "discord.com"],
+  github: ["github.com"],
+};
+
+/** What each kind of link must look like, in words a person can act on. */
+export const LINK_RULE: Record<LinkKind, string> = {
+  website: "An https:// address.",
+  x: "An x.com address or an @handle.",
+  telegram: "A t.me address.",
+  discord: "A discord.gg or discord.com address.",
+  github: "A github.com address.",
+};
+
+function httpsUrl(text: string): URL | null {
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:" || url.username || url.password || !url.hostname.includes(".")) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The canonical form of a link, or null when it is not an acceptable one.
+ *
+ * Only https, only the hosts a kind promises, and never longer than
+ * `MAX_LINK_LENGTH`. An X handle (`@name` or `name`) becomes its x.com URL.
+ * Used on what a creator types and again on what arrives from the index,
+ * which is untrusted: a signed `javascript:` link is still a `javascript:` link.
+ */
+export function linkFor(kind: LinkKind, input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const text = input.trim();
+  if (text === "" || text.length > MAX_LINK_LENGTH) return null;
+  if (kind === "x") {
+    const handle = /^@?([A-Za-z0-9_]{1,15})$/.exec(text);
+    if (handle) return `https://x.com/${handle[1]}`;
+  }
+  const url = httpsUrl(text);
+  if (!url) return null;
+  if (kind !== "website") {
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (!LINK_HOSTS[kind].includes(host)) return null;
+    if (url.pathname.length <= 1) return null;
+  }
+  const href = url.href;
+  return href.length <= MAX_LINK_LENGTH ? href : null;
+}
+
+/** A story paragraph as it will be published, or null when there is none or it is too long. */
+export function storyFor(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const text = input.trim();
+  return text !== "" && text.length <= MAX_STORY_LENGTH ? text : null;
+}
+
+/** The links and story of a draft, normalised, with empty parts left out. */
+export function extrasOf(draft: Pick<LaunchDraft, "links" | "story">): { links?: LaunchLinks; story?: LaunchStory } {
+  const links: LaunchLinks = {};
+  for (const kind of LINK_KINDS) {
+    const href = linkFor(kind, draft.links[kind]);
+    if (href) links[kind] = href;
+  }
+  const story: LaunchStory = {};
+  for (const part of STORY_PARTS) {
+    const text = storyFor(draft.story[part]);
+    if (text) story[part] = text;
+  }
+  return {
+    ...(Object.keys(links).length > 0 ? { links } : {}),
+    ...(Object.keys(story).length > 0 ? { story } : {}),
+  };
+}
+
+/**
+ * The links and story an announcement from anywhere may be shown with: each
+ * one re-checked, anything unacceptable dropped rather than the whole launch.
+ */
+export function publicExtras(c: Pick<LaunchCommitment, "links" | "story">): { links: LaunchLinks; story: LaunchStory } {
+  const links: LaunchLinks = {};
+  const story: LaunchStory = {};
+  const rawLinks: unknown = c.links;
+  const rawStory: unknown = c.story;
+  if (typeof rawLinks === "object" && rawLinks !== null) {
+    for (const kind of LINK_KINDS) {
+      const href = linkFor(kind, (rawLinks as Record<string, unknown>)[kind]);
+      if (href) links[kind] = href;
+    }
+  }
+  if (typeof rawStory === "object" && rawStory !== null) {
+    for (const part of STORY_PARTS) {
+      const text = storyFor((rawStory as Record<string, unknown>)[part]);
+      if (text) story[part] = text;
+    }
+  }
+  return { links, story };
+}
 
 export function validate(draft: LaunchDraft, network: NetworkConfig = ACTIVE): DraftFaults {
   const faults: DraftFaults = {};
@@ -156,6 +328,21 @@ export function validate(draft: LaunchDraft, network: NetworkConfig = ACTIVE): D
   // before anyone else can see it.
   if (!Number.isInteger(draft.opensInBlocks) || draft.opensInBlocks < 1 || draft.opensInBlocks > 1008) {
     faults.opensInBlocks = "Between 1 and 1,008 blocks from now.";
+  }
+  for (const kind of LINK_KINDS) {
+    const typed = draft.links[kind].trim();
+    if (typed && !linkFor(kind, typed)) {
+      faults[`links.${kind}`] = typed.length > MAX_LINK_LENGTH ? `At most ${MAX_LINK_LENGTH} characters.` : LINK_RULE[kind];
+    }
+  }
+  for (const part of STORY_PARTS) {
+    if (draft.story[part].trim().length > MAX_STORY_LENGTH) {
+      faults[`story.${part}`] = `At most ${MAX_STORY_LENGTH} characters.`;
+    }
+  }
+  // The wire size, as the index will measure it: JSON inside JSON.
+  if (JSON.stringify(JSON.stringify(extrasOf(draft))).length > EXTRAS_WIRE_BUDGET) {
+    faults.extras = "The links and story are too long together once encoded. Shorten the story.";
   }
   return faults;
 }
@@ -198,6 +385,7 @@ export function commitmentFor(
     tokenId: token,
     creator,
     at: new Date().toISOString(),
+    ...extrasOf(draft),
   };
 }
 

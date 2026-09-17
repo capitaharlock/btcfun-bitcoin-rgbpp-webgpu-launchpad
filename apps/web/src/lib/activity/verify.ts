@@ -36,8 +36,13 @@ export function activityId(body: ActivityBody): string {
   return canonicalId(fieldsOf(body));
 }
 
-/** Largest inline payload, in characters. A launch spec is a few hundred. */
-const MAX_META = 1500;
+/**
+ * Largest inline payload, in characters. A launch announcement is a few
+ * hundred, and up to about 3,000 with its optional links and story
+ * (`lib/launches/create.ts` bounds those so the whole event still fits the
+ * index's request limit).
+ */
+export const MAX_META = 3000;
 
 /** Kinds the index accepts. Anything else is rejected rather than stored. */
 const KINDS = new Set(["launch", "mint", "offer", "bid", "cancel", "fill", "transfer"]);
