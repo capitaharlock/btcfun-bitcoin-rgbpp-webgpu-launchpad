@@ -124,7 +124,21 @@ const steps = {
   async advance() {
     const tip = await provider.getTipHeight(network.ACTIVE);
     const cells = await rgbpp.cells(alice.address);
-    const free = (await rgbpp.freeUtxos(alice.address)).filter((u) => u.confirmed);
+    // Funding may chain on change that has not confirmed yet: the queue waits
+    // for each operation's own confirmation anyway, and one coin would
+    // otherwise allow one operation per block. Seals are never funding: they
+    // are the 546-sat outputs, and anything that small is left alone.
+    let last = null;
+    const funding = async () => {
+      // The next operation funds itself from the previous one's change, so wait
+      // until the service lists that change rather than racing it.
+      for (let i = 0; i < 20; i++) {
+        const coins = (await provider.getUtxos(alice.address, network.ACTIVE)).filter((u) => u.value > 2 * ops.SEAL_SATS);
+        if (!last || coins.some((u) => u.txid === last)) return coins;
+        await new Promise((r) => setTimeout(r, 3_000));
+      }
+      return (await provider.getUtxos(alice.address, network.ACTIVE)).filter((u) => u.value > 2 * ops.SEAL_SATS);
+    };
 
     for (const commitment of state.launches) {
       const id = commitment.id;
@@ -133,7 +147,7 @@ const steps = {
         const s = await rgbpp.status(pending.btcTxid);
         if (s.state === "completed") {
           delete state.pending[id];
-          if (pending.step === "mint") state.rounds[id] = (state.rounds[id] ?? 0) + 1;
+          if (pending.step.includes(" mint ")) state.rounds[id] = (state.rounds[id] ?? 0) + 1;
         } else if (s.state === "failed") {
           console.log(`${id}: ${pending.step} failed — ${s.failure}`);
           delete state.pending[id];
@@ -150,9 +164,9 @@ const steps = {
       const miner = miners[0];
       try {
         if (!miner) {
-          state.pending[id] = await submit(`${id} open`, ops.planOpen(cfg, terms, await rgbpp.paymaster()), alice, free);
+          state.pending[id] = await submit(`${id} open`, ops.planOpen(cfg, terms, await rgbpp.paymaster()), alice, await funding());
         } else if (miner.data?.state === "idle") {
-          state.pending[id] = await submit(`${id} ticket`, ops.planTicket(cfg, terms, miner, tip), alice, free);
+          state.pending[id] = await submit(`${id} ticket`, ops.planTicket(cfg, terms, miner, tip), alice, await funding());
         } else if (miner.data?.state === "armed") {
           // Varied targets make the catalogue look like people mining, and
           // stay under a minute of CPU each.
@@ -171,10 +185,11 @@ const steps = {
             reward: atoms,
             paymaster: tokens[0] ? null : await rgbpp.paymaster(),
           });
-          const step = await submit(`${id} mint ${best.clz} bits`, plan, alice, free);
+          const step = await submit(`${id} mint ${best.clz} bits`, plan, alice, await funding());
           state.pending[id] = step;
           await publish(alice, { kind: "mint", launch: id, amount: atoms, ref: step.btcTxid, txid: step.btcTxid });
         }
+        last = state.pending[id]?.btcTxid ?? last;
         write();
       } catch (err) {
         console.log(`${id}: ${err.message}`);
