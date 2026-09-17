@@ -19,107 +19,23 @@
  * side. Testnet only: the RGB++ configuration here is CKB testnet's.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { sha256 } from "@noble/hashes/sha2";
-import { mnemonicToEntropy } from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english";
-import { close, loadAll } from "../e2e/load.mjs";
+import {
+  alice, bob, cellsOf, cfg, close, launch, network, ops, provider, rgbpp, sale, sealedUtxos, savedTerms, standard,
+  stateFile, submit as send, termsFrom, verify,
+} from "./kit.mjs";
 
-const STATE = fileURLToPath(new URL("../../.e2e-runs/rgbpp-live.json", import.meta.url));
-const WALLET = fileURLToPath(new URL("../../.e2e-wallet.json", import.meta.url));
-
-const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale] = await loadAll(
-  "lib/bitcoin/network.ts",
-  "lib/bitcoin/keys.ts",
-  "lib/bitcoin/provider.ts",
-  "lib/standard.ts",
-  "lib/rgbpp/config.ts",
-  "lib/rgbpp/launch.ts",
-  "lib/rgbpp/operations.ts",
-  "lib/rgbpp/bitcoin.ts",
-  "lib/rgbpp/service.ts",
-  "lib/mining/verify.ts",
-  "lib/rgbpp/seal.ts",
-  "lib/rgbpp/sale.ts",
-);
-
-if (network.ACTIVE.id === "mainnet") throw new Error("the live RGB++ run is testnet-only");
-const cfg = config.ACTIVE_RGBPP;
-const rgbpp = new service.RgbppService(cfg, { origin: "https://btcfun.localhost" });
-
-// ─── keys ────────────────────────────────────────────────────────────────
-
-const mnemonic = process.env.E2E_MNEMONIC?.trim() || JSON.parse(readFileSync(WALLET, "utf8")).mnemonic;
-const aliceEntropy = mnemonicToEntropy(mnemonic, wordlist);
-/** Bob: a second wallet derived from Alice's secret, so the run needs one secret. */
-const bobEntropy = sha256(new Uint8Array([...aliceEntropy, ...new TextEncoder().encode("btcfun/bob")]));
-const alice = keys.deriveKey(aliceEntropy, network.ACTIVE);
-const bob = keys.deriveKey(bobEntropy, network.ACTIVE);
-
-// ─── state ───────────────────────────────────────────────────────────────
-
-const read = () => (existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : { steps: [] });
-function write(state) {
-  mkdirSync(fileURLToPath(new URL(".", `file://${STATE}`)), { recursive: true });
-  writeFileSync(STATE, JSON.stringify(state, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2) + "\n");
-}
-const state = read();
+const { state, write } = stateFile(fileURLToPath(new URL("../../.e2e-runs/rgbpp-live.json", import.meta.url)), { steps: [] });
 
 function termsOf(state) {
   if (!state.launch) throw new Error("run `launch` first");
-  const t = state.launch.terms;
-  return {
-    h0: t.h0,
-    metadataHash: Uint8Array.from(Buffer.from(t.metadataHash, "hex")),
-    promoterScript: Uint8Array.from(Buffer.from(t.promoterScript, "hex")),
-  };
-}
-
-// ─── reading the chain ───────────────────────────────────────────────────
-
-/** This launch's miner and token cells sealed to `address`. */
-async function cellsOf(address, terms) {
-  const mint = launch.mintScript(cfg, terms);
-  const token = launch.tokenScript(cfg, mint);
-  const cells = await rgbpp.cells(address);
-  const sealed = (c) => ({
-    outPoint: { txHash: c.outPoint.txHash, index: Number(c.outPoint.index) },
-    capacity: BigInt(c.cellOutput.capacity),
-    seal: seal.sealFromArgs(c.cellOutput.lock.args),
-  });
-  const typeHash = (c) => c.typeHash ?? null;
-  return {
-    miners: cells
-      .filter((c) => typeHash(c) === mint.hash())
-      .map((c) => ({ ...sealed(c), data: ops.decodeMinerCell(c.data) })),
-    tokens: cells.filter((c) => typeHash(c) === token.hash()).map((c) => ({ ...sealed(c), amount: ops.decodeAmount(c.data) })),
-  };
-}
-
-/** The UTXOs behind `seals`, with their values, from the address's unspent set. */
-async function sealedUtxos(address, seals) {
-  const utxos = await provider.getUtxos(address, network.ACTIVE);
-  return seals.map((s) => {
-    const found = utxos.find((u) => u.txid === s.txid && u.vout === s.vout);
-    if (!found) throw new Error(`sealed UTXO ${s.txid}:${s.vout} is not unspent yet`);
-    return found;
-  });
+  return termsFrom(state.launch.terms);
 }
 
 async function submit(name, plan, key) {
-  const [sealed, free, feeRate] = await Promise.all([
-    sealedUtxos(key.address, plan.sealsSpent),
-    rgbpp.freeUtxos(key.address),
-    provider.getFeeRate(network.ACTIVE),
-  ]);
-  const signed = bitcoin.signOperation(key, plan, sealed, free.filter((u) => u.confirmed), Math.max(feeRate, 1));
-  const txid = await rgbpp.broadcast(signed.hex);
-  const queue = await rgbpp.enqueue(plan, txid);
-  const step = { step: name, btcTxid: txid, fee: signed.fee, vsize: signed.vsize, queue, at: new Date().toISOString() };
+  const step = await send(name, plan, key);
   state.steps.push(step);
-  write(state);
-  console.log(`${name}: ${network.txUrl(txid, network.ACTIVE)} (queue: ${queue})`);
+  write();
   return step;
 }
 
@@ -136,17 +52,13 @@ const steps = {
     };
     state.launch = {
       meta,
-      terms: {
-        h0: terms.h0,
-        metadataHash: Buffer.from(terms.metadataHash).toString("hex"),
-        promoterScript: Buffer.from(terms.promoterScript).toString("hex"),
-      },
+      terms: savedTerms(terms),
       tokenId: launch.tokenId(cfg, terms),
       mintScript: launch.mintScript(cfg, terms).hash(),
       alice: alice.address,
       bob: bob.address,
     };
-    write(state);
+    write();
     console.log(state.launch);
   },
 
@@ -180,7 +92,7 @@ const steps = {
     }
     const atoms = standard.reward(best.clz, terms.h0, armed.data.anchor);
     state.mined = { seal: armed.seal, nonce: best.nonce, clz: best.clz, hash: best.hash, atoms, seconds: (Date.now() - started) / 1000 };
-    write(state);
+    write();
     console.log(state.mined);
   },
 
@@ -218,7 +130,7 @@ const steps = {
     const [utxo] = await sealedUtxos(bob.address, [cell.seal]);
     const priceSats = Number(process.env.PRICE ?? 20_000);
     state.listing = sale.signListing(bob, { launchId: "live", tokenId: state.launch.tokenId }, cell, utxo.value, priceSats);
-    write(state);
+    write();
     console.log(`listed ${cell.amount} atoms for ${priceSats} sats: ${cell.seal.txid}:${cell.seal.vout}`);
   },
 
@@ -237,7 +149,7 @@ const steps = {
     const txid = await rgbpp.broadcast(signed.hex);
     const queue = await rgbpp.enqueue(plan, txid);
     state.steps.push({ step: "buy", btcTxid: txid, fee: signed.fee, vsize: signed.vsize, queue, at: new Date().toISOString() });
-    write(state);
+    write();
     console.log(`buy: ${network.txUrl(txid, network.ACTIVE)} (queue: ${queue})`);
   },
 
@@ -247,7 +159,7 @@ const steps = {
       step.ckbTxHash = s.ckbTxHash;
       console.log(`${step.step.padEnd(9)} btc ${step.btcTxid.slice(0, 12)}…  queue ${s.state}${s.ckbTxHash ? `  ckb ${s.ckbTxHash}` : ""}${s.failure ? `  ! ${s.failure}` : ""}`);
     }
-    write(state);
+    write();
     if (state.launch) {
       const terms = termsOf(state);
       for (const [who, key] of [["alice", alice], ["bob", bob]]) {
