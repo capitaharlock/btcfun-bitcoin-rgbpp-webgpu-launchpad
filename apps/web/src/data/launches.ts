@@ -12,7 +12,7 @@
  */
 
 import { blocksToNextHalving, halvingsAt } from "../lib/standard";
-import { termsOf, type LaunchCommitment } from "../lib/launches/create";
+import { publicExtras, termsOf, type LaunchCommitment, type LaunchLinks, type LaunchStory } from "../lib/launches/create";
 import type { LaunchTerms } from "../lib/rgbpp/launch";
 
 /** A launch as announced. */
@@ -33,6 +33,10 @@ export interface LaunchSpec {
   /** Identity that announced it. */
   creator: string;
   announcedAt: string;
+  /** Project links, re-checked on arrival. Signed by the creator, not enforced on chain. */
+  links: LaunchLinks;
+  /** Why and what for, in the creator's words. Signed by the creator, not enforced on chain. */
+  story: LaunchStory;
 }
 
 export type LaunchPhase = "announced" | "minting" | "spent";
@@ -77,6 +81,7 @@ export function specFor(c: LaunchCommitment): LaunchSpec {
     terms: termsOf(c),
     creator: c.creator,
     announcedAt: c.at,
+    ...publicExtras(c),
   };
 }
 

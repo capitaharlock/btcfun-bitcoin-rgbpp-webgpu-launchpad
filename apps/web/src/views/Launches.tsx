@@ -1,129 +1,161 @@
-/* The front door.
+/* The front door: an arcade game-select screen.
  *
- * Someone arriving has one question — what is there, and what can I do with it
- * — so the page answers in that order: a hero that says what the place is, the
- * launches worth a look, then all of them filtered by what you can do.
+ * On top, the arcade stage — every launch an invader, Bitcoin the cannon — with
+ * a two-line headline and a HUD of real figures. Under it, the catalogue: one
+ * box per launch, sorted and filtered by what someone arriving wants to know,
+ * each with its own MINE button. There is no "start mining" without a token:
+ * you mine *a* launch, so the choice comes first.
  *
  * Everything listed is a real announcement whose id matches its token on CKB.
- * "Worth a look" is derived — the busiest in the public feed and the newest —
- * never hand-picked: a curated list on a permissionless launchpad would be a
- * lie about how it works.
+ * "Hot" is derived from the public feed, never hand-picked: a curated list on a
+ * permissionless launchpad would be a lie about how it works.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { navigate } from "../App";
+import type { Launch } from "../data/launches";
 import { useActivity, useLaunchActivity } from "../hooks/useActivity";
 import { useLaunches, useTip } from "../hooks/useLaunches";
-import { ACTIVE } from "../lib/bitcoin/network";
-import { atoms, group } from "../lib/format";
-import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, reward, TICKET_SATS } from "../lib/standard";
+import { useLaunchesStats } from "../hooks/useLaunchStats";
+import { compact, group } from "../lib/format";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
+import { ArcadeScene } from "../ui/arcade/ArcadeScene";
 import { RewardChart } from "../ui/RewardChart";
-import { Notice, Panel, Stat } from "../ui/primitives";
+import { More, Panel, SectionHead } from "../ui/primitives";
 import { actionFor, TokenCard, type CardAction } from "../ui/TokenCard";
 
+type Sort = "hot" | "new" | "halving";
 type Filter = "all" | CardAction;
 
+const SORTS: Array<{ id: Sort; label: string }> = [
+  { id: "hot", label: "Hot" },
+  { id: "new", label: "New" },
+  { id: "halving", label: "Halving soon" },
+];
+
 const FILTERS: Array<{ id: Filter; label: string }> = [
-  { id: "all", label: "Everything" },
+  { id: "all", label: "All" },
   { id: "mine", label: "Mining now" },
   { id: "soon", label: "Opening soon" },
   { id: "view", label: "Spent" },
 ];
 
+/** Minting launches first, soonest halving first; then those still to open; then the spent. */
+const PHASE_ORDER: Record<CardAction, number> = { mine: 0, soon: 1, view: 2 };
+
+function sorted(launches: Launch[], sort: Sort, heat: ReadonlyMap<string, number>): Launch[] {
+  const newest = (a: Launch, b: Launch) => b.announcedAt.localeCompare(a.announcedAt);
+  const list = [...launches];
+  switch (sort) {
+    case "hot":
+      return list.sort((a, b) => (heat.get(b.id) ?? 0) - (heat.get(a.id) ?? 0) || newest(a, b));
+    case "new":
+      return list.sort(newest);
+    case "halving":
+      return list.sort(
+        (a, b) =>
+          PHASE_ORDER[actionFor(a)] - PHASE_ORDER[actionFor(b)] || a.blocksToHalving - b.blocksToHalving || newest(a, b),
+      );
+  }
+}
+
 export function Launches() {
   const launches = useLaunches();
   const tip = useTip();
-  const { indexRead } = useLaunchRegistry();
+  const { indexRead, synced } = useLaunchRegistry();
   const activity = useActivity({ limit: 120 });
-  const byLaunch = useLaunchActivity(activity.entries);
+  const heat = useLaunchActivity(activity.entries);
+  const stats = useLaunchesStats(launches);
+  const [sort, setSort] = useState<Sort>("hot");
   const [filter, setFilter] = useState<Filter>("all");
-
-  const featured = useMemo(() => {
-    const live = launches.filter((l) => l.phase === "minting");
-    const busiest = [...live].sort((a, b) => (byLaunch.get(b.id) ?? 0) - (byLaunch.get(a.id) ?? 0))[0];
-    const newest = [...launches].sort((a, b) => b.announcedAt.localeCompare(a.announcedAt))[0];
-    return [busiest, newest].filter((l, i, all) => l && all.findIndex((x) => x?.id === l.id) === i);
-  }, [launches, byLaunch]);
+  const catalogue = useRef<HTMLElement>(null);
 
   const listed = useMemo(
-    () => launches.filter((l) => filter === "all" || actionFor(l) === filter),
-    [launches, filter],
+    () => sorted(launches.filter((l) => filter === "all" || actionFor(l) === filter), sort, heat),
+    [launches, filter, sort, heat],
   );
-  const mining = launches.filter((l) => l.phase === "minting");
-  const first = mining[0] ?? launches[0];
+  const hottest = useMemo(() => {
+    const [top] = sorted(launches, "hot", heat);
+    return top && (heat.get(top.id) ?? 0) > 0 ? top.id : null;
+  }, [launches, heat]);
+  const minted = useMemo(() => [...stats.values()].reduce((n, s) => n + s.supply, 0n), [stats]);
+  const mining = launches.filter((l) => l.phase === "minting").length;
+
+  const pick = useCallback((launch: Launch) => navigate(`/launch/${launch.id}`), []);
+  const insertCoin = () => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    catalogue.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    catalogue.current?.focus({ preventScroll: true });
+  };
 
   return (
     <div className="stack-lg">
-      <section className="hero">
-        <h1>
-          Tokens you <span className="grad-text">mine</span>,
-          <br />
-          on Bitcoin.
-        </h1>
-        <p>
-          Buy a ticket, grind a hash in your browser, and mint what it is worth into your own
-          Bitcoin output — a real RGB++ token on CKB. Every launch follows the same rules; the
-          reward halves every week.
-        </p>
+      <section className="stage" aria-labelledby="stage-title">
+        <div className="stage-body">
+          <ArcadeScene launches={launches} tip={tip} onPick={pick} />
 
-        <div className="row wrapped" style={{ marginTop: 22, gap: 10 }}>
-          <button
-            className="btn primary lg"
-            disabled={!first}
-            onClick={() => first && navigate(`/launch/${first.id}`)}
-          >
-            Start mining
-          </button>
-          <button className="btn lg ghost" onClick={() => navigate("/create")}>
-            Create your token
-          </button>
-        </div>
+          <dl className="stage-hud">
+            <div className="hud-level">
+              <dt>Level</dt>
+              <dd title="The Bitcoin block height: the clock every launch's halvings run on">
+                {synced ? `Block ${group(tip)}` : "Block …"}
+              </dd>
+            </div>
+            <div className="hud-score">
+              <dt>Hi-score</dt>
+              <dd title="Tokens minted across every launch, read from CKB">
+                {stats.size > 0 ? `${compact(minted, DECIMALS)} minted` : "—"}
+              </dd>
+            </div>
+            <div className="hud-credits">
+              <dt>Credits</dt>
+              <dd>1 ticket = {group(TICKET_SATS)} sats</dd>
+            </div>
+            <div className="hud-players">
+              <dt>Players</dt>
+              <dd>
+                {launches.length} token{launches.length === 1 ? "" : "s"} · {mining} live
+              </dd>
+            </div>
+          </dl>
 
-        <div className="hero-stats">
-          <Stat k="mining now" v={mining.length} tone="amber" />
-          <Stat k="launches" v={launches.length} tone="cyan" />
-          <Stat k="public events" v={group(activity.entries.length)} />
-          <Stat k="btc height" v={tip ? group(tip) : "—"} small />
+          <div className="stage-copy">
+            <h1 id="stage-title">
+              <span className="line">Mine tokens</span>
+              <span className="line">
+                on <span className="hl">Bitcoin</span>
+                <span className="cursor" aria-hidden="true" />
+              </span>
+            </h1>
+            <p className="lede">Every invader is a live launch. Pick one, buy a ticket, mine it in your browser.</p>
+            <div className="stage-actions">
+              <button type="button" className="btn play lg insert-coin" onClick={insertCoin}>
+                <span className="blinker" aria-hidden="true">▶</span> Insert coin
+              </button>
+              <a className="btn ghost lg" href="#/docs">
+                How it works
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 
-      {featured.length > 0 && (
-        <section className="stack-md">
-          <div className="row wrapped">
-            <h2>Worth a look</h2>
-            <span className="spacer" />
-            <span className="tiny faint">busiest and newest — derived from the feed, not picked</span>
-          </div>
-          <div className="cardgrid">
-            {featured.map((launch) => (
-              <TokenCard
-                key={launch!.id}
-                launch={launch!}
-                tip={tip}
-                featured
-                activity={byLaunch.get(launch!.id)}
-                onOpen={() => navigate(`/launch/${launch!.id}`)}
-              />
+      <section className="stack-md" ref={catalogue} tabIndex={-1} aria-labelledby="catalogue-title">
+        <div className="toolbar">
+          <SectionHead title="All launches" count={launches.length} id="catalogue-title" />
+          <span className="spacer" />
+          <div className="tabs" role="group" aria-label="Sort">
+            {SORTS.map((s) => (
+              <button key={s.id} type="button" className={sort === s.id ? "on" : ""} aria-pressed={sort === s.id} onClick={() => setSort(s.id)}>
+                {s.label}
+              </button>
             ))}
           </div>
-        </section>
-      )}
-
-      <section className="stack-md">
-        <div className="row wrapped">
-          <h2>All launches</h2>
-          <span className="spacer" />
-          <div className="tabs">
+          <div className="tabs cyan" role="group" aria-label="Show">
             {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={filter === f.id ? "on" : ""}
-                aria-pressed={filter === f.id}
-                onClick={() => setFilter(f.id)}
-              >
+              <button key={f.id} type="button" className={filter === f.id ? "on" : ""} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
                 {f.label}
               </button>
             ))}
@@ -132,7 +164,7 @@ export function Launches() {
 
         {listed.length === 0 ? (
           <Panel>
-            <p style={{ margin: 0 }}>
+            <p className="clamp">
               {launches.length === 0
                 ? indexRead
                   ? "No launches have been announced yet. "
@@ -145,44 +177,29 @@ export function Launches() {
         ) : (
           <div className="cardgrid">
             {listed.map((launch) => (
-              <TokenCard
-                key={launch.id}
-                launch={launch}
-                tip={tip}
-                activity={byLaunch.get(launch.id)}
-                onOpen={() => navigate(`/launch/${launch.id}`)}
-              />
+              <TokenCard key={launch.id} launch={launch} tip={tip} stats={stats.get(launch.id)} hot={launch.id === hottest} />
             ))}
           </div>
         )}
       </section>
 
-      <section className="split">
-        <Panel eyebrow="the standard" title="One set of rules for every token">
-          <p>
-            A ticket costs <b>{group(TICKET_SATS)} sats</b>: 95 % to the launch's promoter, 5 % to the platform. Its Bitcoin output
-            is your mining challenge. A hash with <i>n</i> leading zero bits mints <b>n² tokens</b>, halved
-            once for every {group(HALVING_BLOCKS)} blocks since the launch opened — the ticket fixes the rate.
-            Below {MIN_CLZ} bits it mints nothing.
-          </p>
-          <RewardChart h0={0} tip={null} symbol="tokens" height={130} />
-        </Panel>
+      <div className="pixel-rule" aria-hidden="true" />
 
-        <Panel eyebrow="before you spend anything" title="What is real here">
-          <p>
-            Tickets are real {ACTIVE.label} transactions paid straight to the promoter, with the platform's fee in the same transaction. Mining is real proof of work on
-            your own hardware. Minted tokens are RGB++ xUDT cells on CKB testnet, sealed to your Bitcoin
-            outputs, and only the mint script can create them — it checks the ticket, the hash and the amount.
-          </p>
-          <Notice tone="warn">
-            This is testnet. There is no reserve and no floor: a token is worth what someone will pay for it.
-            Settlement waits for Bitcoin confirmation, so a mint appears as landing for a few blocks first.
-          </Notice>
-          <p className="tiny faint" style={{ marginBottom: 0 }}>
-            A 24-bit hash mints {atoms(reward(24, 0, 0), DECIMALS, 0)} tokens in a launch's first week.
-          </p>
-        </Panel>
-      </section>
+      <More boxed summary="How it works">
+        <p>
+          A ticket costs <b>{group(TICKET_SATS)} sats</b>: {group(PROMOTER_SATS)} to the launch's promoter,{" "}
+          {group(PLATFORM_FEE_SATS)} to the platform. Its Bitcoin output is your mining challenge.
+        </p>
+        <p>
+          A hash with <i>n</i> leading zero bits mints <b>n² tokens</b>, halved every {group(HALVING_BLOCKS)} blocks
+          since the launch opened. Below {MIN_CLZ} bits it mints nothing. The ticket fixes the rate.
+        </p>
+        <p>
+          Testnet only. There is no reserve and no floor: a token is worth what someone will pay for it.{" "}
+          <a href="#/docs">Read the docs</a>.
+        </p>
+        <RewardChart h0={0} tip={null} symbol="tokens" height={120} />
+      </More>
     </div>
   );
 }

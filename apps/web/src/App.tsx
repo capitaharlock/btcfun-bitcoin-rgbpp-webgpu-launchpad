@@ -5,6 +5,8 @@ import { NETWORK, WalletProvider, formatBtc, shortAddress, useWallet } from "./s
 import { LaunchesProvider } from "./state/LaunchesProvider";
 import { TokensProvider } from "./state/TokensProvider";
 import { group } from "./lib/format";
+import { PixelBursts } from "./ui/PixelBursts";
+import { BitcoinMark } from "./ui/PixelIcon";
 import { Chip } from "./ui/primitives";
 
 // Sections a visitor may never open load on demand; the front page and a
@@ -20,7 +22,8 @@ const Docs = lazy(() => import("./views/Docs").then((m) => ({ default: m.Docs })
 
 type Route =
   | { name: "launches" }
-  | { name: "launch"; id: string }
+  /** `mine` when arrived at from a MINE button: the page opens on the miner. */
+  | { name: "launch"; id: string; mine: boolean }
   | { name: "proof"; txid?: string }
   | { name: "lab" }
   | { name: "create" }
@@ -32,7 +35,7 @@ type Route =
 
 function parse(hash: string): Route {
   const path = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-  if (path[0] === "launch" && path[1]) return { name: "launch", id: path[1] };
+  if (path[0] === "launch" && path[1]) return { name: "launch", id: path[1], mine: path[2] === "mine" };
   if (path[0] === "proof") return { name: "proof", txid: path[1] };
   if (path[0] === "lab") return { name: "lab" };
   if (path[0] === "create") return { name: "create" };
@@ -75,10 +78,14 @@ export default function App() {
 
 function Shell() {
   const [route, setRoute] = useState<Route>(() => parse(window.location.hash));
+  // Every arrival is a fresh page: following a link to the section you are
+  // already in (Create after announcing, say) must not show its old state.
+  const [visit, setVisit] = useState(0);
 
   useEffect(() => {
     const onHash = () => {
       setRoute(parse(window.location.hash));
+      setVisit((v) => v + 1);
       window.scrollTo({ top: 0 });
     };
     window.addEventListener("hashchange", onHash);
@@ -91,22 +98,15 @@ function Shell() {
 
   return (
     <div className="shell">
+      <PixelBursts />
       <header className="topbar">
-        <a className="brand" href="#/">
+        <a className="brand" href="#/" aria-label="btc.fun, all launches">
           <span className="brand-mark" aria-hidden="true">
-            {/* Drawn rather than typed: the ₿ glyph is missing from many
-                default font stacks and silently degrades to "B". */}
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none">
-              <path
-                d="M8.5 3.5v17M13 3.5v17M5 7h8.2a3.4 3.4 0 0 1 0 6.8H5M5 13.8h9a3.4 3.4 0 0 1 0 6.8H5M5 7v13.6"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <BitcoinMark />
           </span>
-          btc<em>.</em>fun
+          <span className="word">
+            btc<em>.</em>fun
+          </span>
         </a>
 
         {/* Four things you can do, on the left. What you own, on the right. */}
@@ -131,10 +131,10 @@ function Shell() {
       </header>
 
       <main className="main">
-        <div className="wrap">
+        <div className="wrap" key={visit}>
           <Suspense fallback={<p className="faint">Loading…</p>}>
           {route.name === "launches" && <Launches />}
-          {route.name === "launch" && <LaunchView id={route.id} />}
+          {route.name === "launch" && <LaunchView id={route.id} focusMiner={route.mine} />}
           {route.name === "proof" && <ProofView txid={route.txid} />}
           {route.name === "lab" && <Lab />}
           {route.name === "create" && <Create />}
@@ -148,17 +148,16 @@ function Shell() {
       </main>
 
       <footer className="footer">
-        <div className="wrap row wrapped" style={{ gap: 14 }}>
+        <div className="wrap row wrapped">
           <span>
-            Testnet: tickets, mints, transfers and sales are real RGB++ transactions on {NETWORK.label} and
-            CKB testnet. <a href="#/proof">Verify a mint</a>.
+            Testnet: every ticket, mint and sale is a real RGB++ transaction on {NETWORK.label} and CKB testnet.
           </span>
           <span className="spacer" />
+          <a href="#/proof">Verify a mint</a>
+          <span className="faint">·</span>
           <a href="#/docs">Docs</a>
           <span className="faint">·</span>
-          <a href="https://meshkore.com/standard">MeshKore standard</a>
-          <span className="faint">·</span>
-          <span className="faint">PROTOCOL.md is canonical</span>
+          <a href="#/lab">The standard</a>
         </div>
       </footer>
     </div>
@@ -186,7 +185,7 @@ function HoldingsPill({ active }: { active: boolean }) {
   if (!vault) return null;
   return (
     <button
-      className="btn ghost"
+      className="btn ghost holdings"
       aria-current={active ? "page" : undefined}
       onClick={() => navigate("/holdings")}
     >
