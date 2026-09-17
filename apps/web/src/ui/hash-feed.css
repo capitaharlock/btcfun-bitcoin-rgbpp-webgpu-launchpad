@@ -17,14 +17,14 @@
 
 .hashfeed {
   position: relative;
-  padding: 14px 16px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--line-strong);
+  padding: 16px 18px;
+  border: var(--border-w) solid var(--line-strong);
   background:
-    linear-gradient(180deg, color-mix(in oklab, var(--amber) 4%, transparent), transparent 70%),
-    var(--bg-deep);
+    radial-gradient(30rem 8rem at 0% 0%, color-mix(in oklab, var(--amber) 8%, transparent), transparent 70%),
+    var(--bg);
   overflow: hidden;
-  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
+  transition: border-color var(--dur-slow) var(--ease), box-shadow var(--dur-slow) var(--ease);
+  border-radius: var(--radius);
 }
 
 /* A slow sheen crossing the panel. Pure decoration, but it is what stops the
@@ -51,12 +51,12 @@
 .hashfeed .digest {
   position: relative;
   display: block;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "zero" 1;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.75;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   word-break: break-all;
   color: var(--ink-dim);
   /* Two lines of 64 hex characters at any width this box can take. Reserving
@@ -117,19 +117,22 @@
   gap: 2px;
   max-height: 230px;
   overflow-y: auto;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.7;
+  border: var(--border-w) solid var(--line);
+  background: var(--bg);
+  padding: 4px;
+  min-height: 64px;
 }
 
 .hashlog .entry {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 2px 8px;
-  border-radius: var(--r-sm);
+  padding: 3px 8px;
   color: var(--ink-faint);
-  border: 1px solid transparent;
+  border: var(--border-w) solid transparent;
 }
 
 .hashlog .entry:first-child {
@@ -146,7 +149,8 @@
 
 .hashlog .entry .clz {
   color: var(--amber);
-  font-weight: 700;
+  font-family: var(--font-numeric);
+  font-size: var(--text-2xs);
   min-width: 2.2ch;
   text-align: right;
 }

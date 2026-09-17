@@ -1,18 +1,21 @@
-/* A launch, as something to choose rather than something to read.
+/* A launch, as a box in the catalogue.
  *
- * The card leads with what you can *do* — mine it now, wait for it to open, or
- * look at a finished one — because that is the question someone arriving has.
- * The accent comes from the launch, so the grid is scannable by colour before
- * any word is read. Every figure is a protocol constant or a function of the
- * Bitcoin tip; supply lives on the launch page, where it is read from CKB.
+ * The box leads with what you can *do* — mine it now, wait for it to open, or
+ * look at a finished one — and the one button on it does that. Its frame is
+ * the launch's own accent, so the grid is scannable by colour before any word
+ * is read. The rate and the countdown are protocol arithmetic on the Bitcoin
+ * tip; supply and miner cells are read from CKB (`useLaunchesStats`) and show
+ * a dash until they arrive.
  */
 
 import { memo } from "react";
 
 import type { Launch } from "../data/launches";
-import { atoms, blocksAsTime, group } from "../lib/format";
-import { DECIMALS, reward } from "../lib/standard";
-import { Chip } from "./primitives";
+import type { LaunchStats } from "../hooks/useLaunchStats";
+import { atoms, blocksAsTime, compact, group, shortHash } from "../lib/format";
+import { DECIMALS, HALVING_BLOCKS, reward } from "../lib/standard";
+import { ProjectLinks } from "./PixelIcon";
+import { Chip, Meter } from "./primitives";
 import { Sigil } from "./Sigil";
 
 export type CardAction = "mine" | "soon" | "view";
@@ -27,11 +30,10 @@ export interface TokenCardProps {
   launch: Launch;
   /** Current chain height, for the rate and the countdowns. */
   tip: number;
-  /** Promote the card with a gradient edge. Use for the few, not the many. */
-  featured?: boolean;
-  /** Events in the public feed, as a crude interest signal. */
-  activity?: number;
-  onOpen: () => void;
+  /** What CKB says about it, once read. */
+  stats?: LaunchStats;
+  /** Top of the "hot" ordering: the busiest launch in the public feed. */
+  hot?: boolean;
 }
 
 export function actionFor(launch: Launch): CardAction {
@@ -40,76 +42,81 @@ export function actionFor(launch: Launch): CardAction {
   return "view";
 }
 
-export const TokenCard = memo(function TokenCard({ launch, tip, featured, activity, onOpen }: TokenCardProps) {
+export const TokenCard = memo(function TokenCard({ launch, tip, stats, hot }: TokenCardProps) {
   const action = actionFor(launch);
   const meta = ACTION[action];
   const rate24 = launch.open ? reward(24, launch.h0, tip) : reward(24, launch.h0, launch.h0);
+  const href = `#/launch/${launch.id}`;
+  // How far through the current halving the launch is: the bar empties toward
+  // the next halving the way a timer does in a round.
+  const epoch = action === "mine" ? launch.blocksToHalving / HALVING_BLOCKS : null;
 
   return (
-    <button
-      type="button"
-      className={`tokencard${featured ? " featured" : ""}`}
-      style={{ "--accent": launch.accent } as React.CSSProperties}
-      onClick={onOpen}
-    >
-      <div className="top">
-        <Sigil symbol={launch.symbol} accent={launch.accent} />
-        <div style={{ minWidth: 0 }}>
-          <div className="sym">{launch.symbol}</div>
-          <div className="name">{launch.name}</div>
+    <article className={`tokencard ${action}`} style={{ "--accent": launch.accent } as React.CSSProperties}>
+      <header className="tc-head">
+        <Sigil seed={launch.id} accent={launch.accent} size="lg" />
+        <div className="tc-id">
+          <h3 className="tc-sym">
+            <a className="tc-link" href={href}>{launch.symbol}</a>
+          </h3>
+          <div className="tc-name">{launch.name}</div>
         </div>
-        <span className="spacer" />
-        <Chip tone={meta.tone} live={action === "mine"}>{meta.label}</Chip>
-      </div>
+        <div className="tc-badges">
+          <Chip tone={meta.tone} live={action === "mine"}>{meta.label}</Chip>
+          {hot && <Chip tone="danger">hot</Chip>}
+        </div>
+      </header>
 
-      <p className="blurb" style={{ margin: 0 }}>{launch.blurb}</p>
+      <p className="tc-blurb" title={launch.blurb}>{launch.blurb}</p>
 
-      <div className="foot">
-        {action === "mine" && (
-          <>
-            <Metric k="24-bit hash" v={atoms(rate24, DECIMALS, 0)} accent />
-            <Metric k="halves in" v={`${group(launch.blocksToHalving)} blk`} />
-            <Metric k="which is" v={blocksAsTime(launch.blocksToHalving)} />
-          </>
+      <dl className="tc-stats">
+        <div>
+          <dt>24-bit hash</dt>
+          <dd className="big" title={`What a 24-bit hash mints on a ticket bought ${launch.open ? "now" : "at opening"}`}>
+            {atoms(rate24, DECIMALS, 0)}
+          </dd>
+        </div>
+        <div>
+          <dt>{action === "soon" ? "opens in" : action === "mine" ? "halves in" : "halvings"}</dt>
+          <dd>
+            {action === "view" ? String(launch.halvings ?? 0) : `${group(launch.blocksToHalving)} blk`}
+            {action !== "view" && <span className="u">{blocksAsTime(launch.blocksToHalving)}</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>minted</dt>
+          <dd title="Sum of every live cell of this token on CKB">
+            {stats ? compact(stats.supply, DECIMALS) : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt>miner cells</dt>
+          <dd title="Miner cells on CKB: cells, not people">{stats ? group(stats.minerCells) : "—"}</dd>
+        </div>
+      </dl>
+
+      {epoch !== null && (
+        <Meter value={epoch} color={launch.accent} label={`Blocks left until ${launch.symbol} halves`} />
+      )}
+
+      <footer className="tc-foot">
+        {Object.keys(launch.links).length > 0 ? (
+          <ProjectLinks links={launch.links} symbol={launch.symbol} small />
+        ) : (
+          <span className="promoter" title={`Promoter: ${launch.promoter}`}>
+            promoter {shortHash(launch.promoter, 6, 4)}
+          </span>
         )}
-        {action === "soon" && (
-          <>
-            <Metric k="opens in" v={`${group(launch.blocksToHalving)} blk`} accent />
-            <Metric k="which is" v={blocksAsTime(launch.blocksToHalving)} />
-            <Metric k="24-bit hash" v={atoms(rate24, DECIMALS, 0)} />
-          </>
+        {action === "mine" ? (
+          <a className="btn play" href={`${href}/mine`} aria-label={`Mine ${launch.symbol}`}>
+            ▶ Mine
+          </a>
+        ) : (
+          <a className="btn" href={href} aria-label={`View ${launch.symbol}`}>
+            {action === "soon" ? "Preview" : "View"}
+          </a>
         )}
-        {action === "view" && (
-          <>
-            <Metric k="halvings" v={String(launch.halvings ?? 0)} />
-            <Metric k="mints" v="nothing now" />
-          </>
-        )}
-        <span className="spacer" />
-        {activity !== undefined && activity > 0 && <Metric k="events" v={group(activity)} />}
-      </div>
-    </button>
+      </footer>
+    </article>
   );
 });
-
-function Metric({
-  k,
-  v,
-  unit,
-  accent,
-}: {
-  k: string;
-  v: string;
-  unit?: string;
-  accent?: boolean;
-}) {
-  return (
-    <span className="metric">
-      <span className="k">{k}</span>
-      <span className={`v${accent ? " accent" : ""}`}>
-        {v}
-        {unit && <span style={{ fontSize: 10, color: "var(--ink-faint)", marginLeft: 3 }}>{unit}</span>}
-      </span>
-    </span>
-  );
-}

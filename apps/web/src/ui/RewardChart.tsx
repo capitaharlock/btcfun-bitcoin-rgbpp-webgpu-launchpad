@@ -51,7 +51,7 @@ export function RewardChart({ h0, tip, symbol, height = 170 }: { h0: number; tip
         <path d={area} fill={`url(#reward-${uid})`} />
         <path d={path} fill="none" stroke="var(--amber)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
         {Array.from({ length: SPAN_HALVINGS }, (_, k) => (
-          <text key={k} x={xOf(k) + 6} y={H - 6} fill="var(--ink-faint)" fontSize="11" fontFamily="var(--mono)">
+          <text key={k} x={xOf(k) + 6} y={H - 6} fill="var(--ink-faint)" fontSize="11" fontFamily="var(--font-mono)">
             wk {k + 1}
           </text>
         ))}
@@ -68,7 +68,7 @@ export function RewardChart({ h0, tip, symbol, height = 170 }: { h0: number; tip
         )}
       </svg>
 
-      <div style={{ overflowX: "auto" }}>
+      <div className="scroll-x">
         <table className="table">
           <thead>
             <tr>
@@ -81,7 +81,7 @@ export function RewardChart({ h0, tip, symbol, height = 170 }: { h0: number; tip
           <tbody>
             {SHOWN_CLZ.map((clz) => (
               <tr key={clz}>
-                <td className="mono">{clz} bits · {group(2 ** Math.min(clz, 52))}+ tries</td>
+                <td className="mono" title={`${group(2 ** Math.min(clz, 52))}+ tries`}>{clz} bits</td>
                 {[0, 1, 2, 3].map((k) => (
                   <td key={k} className="mono">
                     {atoms(reward(clz, h0, h0 + (currentK + k) * HALVING_BLOCKS), DECIMALS, 0)} {symbol}

@@ -1,0 +1,167 @@
+/* Theme: arcade — the default look.
+ *
+ * THE THEME CONTRACT. Every visual decision in the app is one of the custom
+ * properties below; nothing outside a theme file names a font, a colour, a
+ * radius, a shadow or a duration. A theme is a file that sets these values —
+ * under `:root` for the default, under `:root[data-theme="<name>"]` for any
+ * other — and the app switches between them with the `data-theme` attribute
+ * on <html> (`ui/theme.ts`). Canvas and SVG art read the same properties at
+ * run time, so they follow the theme too.
+ *
+ *   type      --font-{display,heading,label,body,mono,numeric}   one per role
+ *             --weight-{display,heading,label}
+ *             --face-smoothing       how the pixel faces are rasterised
+ *             --{display,heading,label}-case, --*-tracking
+ *             --text-{2xs…3xl}, --text-title, --text-display     the scale
+ *             --leading-{tight,snug,body,loose}
+ *   colour    --bg, --surface-{1,2,3}, --line, --line-strong    surfaces
+ *             --ink, --ink-dim, --ink-faint, --on-accent         text
+ *             --amber --cyan --magenta --violet --lime --mint --warn --danger
+ *                                                               signals
+ *             --accent --positive --negative --focus --play --market --buy --sell
+ *                                                               roles
+ *             --shade                  what hard shadows are mixed toward
+ *             --paper                  diagram cards; highlights mix toward it
+ *   shape     --border-w, --frame-w, --focus-w, --radius, --radius-sm
+ *   depth     --shadow-{sm,md,lg} (offsets; the colour is the caller's),
+ *             --lift, --press, --press-lg, --glow
+ *   space     --space-{1…10}, --gut, --maxw, --topbar-h
+ *   motion    --dur-{fast,base,slow}, --ease, --ease-out, --ease-step, --blink
+ *   texture   --scanlines, --backdrop-grid (0 or 1: opacity multipliers)
+ *
+ * The six launch accents (`lib/launches/create.ts` ACCENTS) name
+ * --amber --cyan --magenta --violet --mint --warn inside signed
+ * announcements, so those six names are permanent; only their values belong
+ * to a theme.
+ *
+ * Arcade: a black cabinet, square geometry, hard offset shadows instead of
+ * blur, neon used as signal, pixel faces for everything that is a label or a
+ * score, a clean grotesk for the few sentences left, a mono for every figure.
+ */
+
+:root {
+  /* ---------- type ---------- */
+  --font-display: "Press Start 2P", ui-monospace, "SF Mono", monospace;
+  --font-heading: "Silkscreen", ui-monospace, "SF Mono", monospace;
+  --font-label: "Silkscreen", ui-monospace, "SF Mono", monospace;
+  --font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", monospace;
+  --font-numeric: "Press Start 2P", ui-monospace, "SF Mono", monospace;
+
+  --weight-display: 400;
+  --weight-heading: 400;
+  --weight-label: 400;
+  /* Pixel faces render at their design grid; smoothing turns a crisp glyph
+     into a soft blur, which is exactly the cheap look to avoid. */
+  --face-smoothing: none;
+
+  --display-case: uppercase;
+  --heading-case: uppercase;
+  --label-case: uppercase;
+  --display-tracking: 0;
+  --heading-tracking: 0.02em;
+  --label-tracking: 0.06em;
+
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+  --text-title: clamp(20px, 3vw, 32px);
+  --text-display: clamp(24px, 3.8vw, 48px);
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-body: 1.55;
+  --leading-loose: 1.7;
+
+  /* ---------- colour ---------- */
+  --bg: #000000;
+  --surface-1: #0a0a0d;
+  --surface-2: #121218;
+  --surface-3: #1b1b23;
+  --line: #25252e;
+  --line-strong: #3d3d4a;
+
+  --ink: #f5f2e9;
+  --ink-dim: #c2beb3;
+  --ink-faint: #8f8b84;
+  --on-accent: #000000;
+
+  --amber: #ff9f1a;
+  --amber-soft: #ffc861;
+  --amber-deep: #ff6a00;
+  --cyan: #2ee6ff;
+  --cyan-deep: #0aa3c2;
+  --violet: #a78bff;
+  --violet-deep: #6d3cff;
+  --magenta: #ff4fd3;
+  --lime: #b9ff3b;
+  --mint: #3dffa6;
+  --warn: #ffe14d;
+  --danger: #ff4d6d;
+
+  --accent: var(--amber);
+  --positive: var(--mint);
+  --negative: var(--danger);
+  --focus: var(--cyan);
+  --play: var(--lime);
+  --market: var(--violet);
+  --buy: var(--cyan);
+  --sell: var(--magenta);
+  --shade: #000000;
+  /* Paper: what diagrams are printed on, and what highlights are mixed toward. */
+  --paper: #ffffff;
+
+  /* ---------- shape ---------- */
+  --border-w: 1px;
+  --frame-w: 3px;
+  --focus-w: 2px;
+  --radius: 0;
+  --radius-sm: 0;
+
+  /* ---------- depth ---------- */
+  --shadow-sm: 3px 3px 0 0;
+  --shadow-md: 4px 4px 0 0;
+  --shadow-lg: 6px 6px 0 0;
+  --lift: translate(-3px, -3px);
+  --press: translate(3px, 3px);
+  --press-lg: translate(4px, 4px);
+  --glow: 0 0 18px;
+
+  /* ---------- space ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --gut: 24px;
+  --maxw: 1360px;
+  --topbar-h: 60px;
+
+  /* ---------- motion ---------- */
+  --dur-fast: 80ms;
+  --dur-base: 140ms;
+  --dur-slow: 450ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Movement snaps between two positions, like a sprite, instead of gliding. */
+  --ease-step: steps(2, end);
+  --blink: 1.1s;
+
+  /* ---------- texture ---------- */
+  --scanlines: 1;
+  --backdrop-grid: 1;
+}
+
+@media (max-width: 720px) {
+  :root { --gut: 16px; --topbar-h: 56px; }
+}

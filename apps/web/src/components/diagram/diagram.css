@@ -4,9 +4,10 @@
 .dg {
   margin: 0;
   background: var(--dg-canvas);
-  border-radius: var(--r-lg);
-  border: 1px solid color-mix(in oklab, var(--line-strong) 40%, white);
-  box-shadow: 0 18px 44px -28px rgba(0, 0, 0, 0.7);
+  border: var(--focus-w) solid var(--dg-canvas);
+  /* The card sits on black like a printed sheet pinned to the cabinet: square,
+     with the same hard offset shadow as every other raised surface. */
+  box-shadow: var(--shadow-lg) var(--surface-3);
   overflow: hidden;
   color: var(--dg-ink);
 }
@@ -33,8 +34,8 @@
   background:
     linear-gradient(to right, var(--dg-canvas) 30%, transparent) left center / 36px 100% no-repeat local,
     linear-gradient(to left, var(--dg-canvas) 30%, transparent) right center / 36px 100% no-repeat local,
-    radial-gradient(farthest-side at 0 50%, rgba(20, 20, 40, 0.16), transparent) left center / 14px 100% no-repeat scroll,
-    radial-gradient(farthest-side at 100% 50%, rgba(20, 20, 40, 0.16), transparent) right center / 14px 100% no-repeat scroll;
+    radial-gradient(farthest-side at 0 50%, color-mix(in oklab, var(--dg-ink) 16%, transparent), transparent) left center / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in oklab, var(--dg-ink) 16%, transparent), transparent) right center / 14px 100% no-repeat scroll;
 }
 .dg-scroll:focus-visible { outline-offset: -3px; }
 
@@ -43,7 +44,7 @@
   width: 100%;
   height: auto;
   margin: 0 auto;
-  font-family: var(--sans);
+  font-family: var(--dg-font);
   text-rendering: geometricPrecision;
 }
 
@@ -88,7 +89,7 @@
 }
 .dg-mono, .dg-value {
   fill: var(--dg-ink);
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }

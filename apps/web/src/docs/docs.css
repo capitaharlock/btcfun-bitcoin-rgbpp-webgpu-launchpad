@@ -1,78 +1,86 @@
 /* The documentation area: a reading column beside a sticky contents list,
-   folded into a menu on phones. Prose is set wider-leaded and a size up from
-   the app's dense panels, because here people read rather than scan. */
+   folded into a menu on phones. The chrome is the cabinet's — pixel labels,
+   square rules — but prose is set in the grotesk, wider-leaded and a size up
+   from the app's dense panels, because here people read rather than scan.
+   Diagrams keep their white cards (components/diagram). */
 
 .docs {
   display: grid;
-  grid-template-columns: 230px minmax(0, 1fr);
-  gap: 36px;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 40px;
   align-items: start;
 }
 
-.docs-side { position: sticky; top: 78px; }
+.docs-side { position: sticky; top: calc(var(--topbar-h) + 18px); }
 
 .docs-menu { display: none; }
 
-.docs-nav .eyebrow { padding: 0 12px 10px; }
-.docs-nav ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: doc; }
+.docs-nav { border: var(--border-w) solid var(--line-strong); border-radius: var(--radius); background: var(--surface-1); padding: 14px 0 8px; }
+.docs-nav .eyebrow { padding: 0 14px 8px; margin: 0; }
+.docs-nav ol { list-style: none; margin: 0; padding: 0; display: grid; counter-reset: doc; }
 .docs-nav li { counter-increment: doc; }
 .docs-nav a {
   display: flex;
   gap: 10px;
   align-items: baseline;
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
+  padding: 8px 14px;
+  border-left: var(--frame-w) solid transparent;
   color: var(--ink-dim);
   font-size: 13.5px;
 }
 .docs-nav a::before {
   content: counter(doc, decimal-leading-zero);
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--font-numeric);
+  font-size: 9px;
   color: var(--ink-faint);
+  -webkit-font-smoothing: var(--face-smoothing);
 }
-.docs-nav a:hover { color: var(--ink); background: var(--surface-1); text-decoration: none; }
+.docs-nav a:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
 .docs-nav a[aria-current="page"] {
   color: var(--ink);
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line-strong), inset 2px 0 0 var(--amber);
+  background: color-mix(in oklab, var(--amber) 8%, var(--bg));
+  border-left-color: var(--amber);
 }
-.docs-nav a[aria-current="page"]::before { color: var(--amber-soft); }
+.docs-nav a[aria-current="page"]::before { color: var(--amber); }
 
 .docs-article { max-width: 880px; min-width: 0; }
 
-.docs-head { margin-bottom: 28px; }
-.docs-head h1 { font-size: clamp(28px, 4vw, 40px); margin: 6px 0 12px; }
-.docs-summary { font-size: 16px; color: var(--ink-dim); max-width: 60ch; }
+.docs-head { margin-bottom: 30px; padding-bottom: 22px; border-bottom: var(--border-w) solid var(--line); }
+.docs-head h1 { font-size: clamp(20px, 3vw, 30px); margin: 4px 0 14px; text-transform: none; }
+.docs-summary { font-size: var(--text-lg); color: var(--ink-dim); max-width: 60ch; margin: 0; }
 
-.docs-article section { margin: 0 0 34px; }
-.docs-article h2 { font-size: 21px; margin: 0 0 12px; }
-.docs-article h3 { font-size: 15.5px; margin: 20px 0 8px; }
+.docs-article section { margin: 0 0 36px; }
+.docs-article h2 { font-size: var(--text-lg); margin: 0 0 14px; color: var(--ink); }
+.docs-article h2::before { content: "▸ "; color: var(--accent); }
+.docs-article h3 { font-size: var(--text-base); margin: 22px 0 8px; }
 .docs-article p,
 .docs-article li { font-size: 15px; line-height: 1.7; color: var(--ink-dim); max-width: 70ch; }
 .docs-article ul,
 .docs-article ol { padding-left: 20px; margin: 0 0 1em; }
 .docs-article li + li { margin-top: 4px; }
+.docs-article li::marker { color: var(--ink-faint); }
 .docs-article strong { color: var(--ink); font-weight: 600; }
 .docs-article code {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 0.86em;
   padding: 1px 5px;
-  border-radius: 5px;
   background: var(--surface-2);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-.docs-article .dg { margin: 22px 0 26px; }
+.docs-article .dg { margin: 24px 0 28px; }
 
-/* A formula or constant table set apart from the prose. */
+/* A formula or constant table set apart from the prose: a terminal readout. */
 .docs-formula {
   margin: 14px 0 18px;
   padding: 14px 16px;
-  border-radius: var(--r-md);
-  background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--line);
-  font-family: var(--mono);
+  background: var(--bg);
+  border: var(--border-w) solid var(--line-strong);
+  border-left: var(--frame-w) solid var(--accent);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.75;
   color: var(--ink);
@@ -86,9 +94,9 @@
 /* The technical layer: folded under the plain explanation. */
 .docs-tech {
   margin: 18px 0 8px;
-  border-radius: var(--r-md);
-  background: color-mix(in oklab, var(--cyan) 4%, var(--surface-1));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cyan) 22%, var(--line));
+  background: color-mix(in oklab, var(--cyan) 4%, var(--bg));
+  border: var(--border-w) solid color-mix(in oklab, var(--cyan) 30%, var(--line));
+  border-radius: var(--radius);
 }
 .docs-tech > summary {
   cursor: pointer;
@@ -97,54 +105,62 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  font-size: var(--text-md);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
   color: var(--ink);
+  -webkit-font-smoothing: var(--face-smoothing);
 }
 .docs-tech > summary::-webkit-details-marker { display: none; }
 .docs-tech > summary::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 1.6px solid var(--cyan);
-  border-bottom: 1.6px solid var(--cyan);
-  transform: rotate(-45deg);
-  transition: transform 0.18s var(--ease);
+  content: "+";
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: var(--border-w) solid var(--cyan);
+  border-radius: var(--radius-sm);
+  color: var(--cyan);
+  font-size: 12px;
+  line-height: 1;
 }
-.docs-tech[open] > summary::before { transform: rotate(45deg); }
-.docs-tech > summary .faint { font-weight: 400; }
+.docs-tech[open] > summary::before { content: "−"; }
+.docs-tech > summary .faint { text-transform: none; font-family: var(--font-body); letter-spacing: 0; -webkit-font-smoothing: antialiased; }
 .docs-tech > div { padding: 0 16px 6px; }
 .docs-tech p, .docs-tech li { font-size: 14px; }
 
-.docs-foot { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--line); }
+.docs-foot { margin-top: 48px; padding-top: 20px; border-top: var(--border-w) solid var(--line); }
 .docs-foot code { font-size: 0.92em; }
 .docs-pager { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
 .docs-pager-link {
   display: grid;
-  gap: 2px;
-  padding: 10px 14px;
-  border-radius: var(--r-md);
+  gap: 4px;
+  padding: 12px 16px;
   background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--line);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
   color: var(--ink);
   min-width: 0;
+  transition: transform var(--dur-fast) var(--ease-step), box-shadow var(--dur-fast) var(--ease-step);
 }
+.docs-pager-link .faint { font-family: var(--font-label); text-transform: var(--label-case); letter-spacing: var(--label-tracking); font-size: var(--text-xs); -webkit-font-smoothing: var(--face-smoothing); }
 .docs-pager-link.next { text-align: right; margin-left: auto; }
-.docs-pager-link:hover { text-decoration: none; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.docs-pager-link:hover { text-decoration: none; transform: var(--lift); box-shadow: var(--shadow-md) var(--line-strong); }
 
 @media (max-width: 900px) {
   .docs { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .docs-side { position: relative; top: 0; z-index: 5; }
-  .docs-menu { display: flex; width: 100%; justify-content: flex-start; gap: 6px; }
+  .docs-menu { display: flex; width: 100%; justify-content: flex-start; gap: 6px; box-shadow: none; }
   .docs-caret { margin-left: auto; }
   .docs-nav {
     display: none;
     position: absolute;
     inset: calc(100% + 6px) 0 auto;
-    padding: 12px 6px;
-    border-radius: var(--r-md);
     background: var(--surface-2);
-    box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.8), inset 0 0 0 1px var(--line-strong);
+    box-shadow: var(--shadow-lg) var(--shade);
   }
   .docs-nav.open { display: block; }
   .docs-article p, .docs-article li { font-size: 14.5px; }

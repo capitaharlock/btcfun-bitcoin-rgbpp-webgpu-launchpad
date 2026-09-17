@@ -1,4 +1,6 @@
-import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
+import { cloneElement, isValidElement, useId, useState, type ReactElement, type ReactNode } from "react";
+
+import { Sigil } from "./Sigil";
 
 export function Panel({
   children,
@@ -86,11 +88,33 @@ export function Chip({
   );
 }
 
-export function Meter({ value, tone }: { value: number; tone?: "burn" | "cyan" }) {
-  const pctWidth = `${Math.max(0, Math.min(1, value)) * 100}%`;
+export function Meter({
+  value,
+  tone,
+  color,
+  label,
+}: {
+  value: number;
+  tone?: "burn" | "cyan";
+  /** A colour of its own, such as a launch's accent; overrides the tone. */
+  color?: string;
+  /** What the bar measures, for assistive technology. */
+  label?: string;
+}) {
+  const share = Math.max(0, Math.min(1, value));
   return (
-    <div className="meter">
-      <i className={tone ?? ""} style={{ width: pctWidth }} />
+    <div
+      className="meter"
+      role={label ? "meter" : undefined}
+      aria-label={label}
+      aria-valuemin={label ? 0 : undefined}
+      aria-valuemax={label ? 100 : undefined}
+      aria-valuenow={label ? Math.round(share * 100) : undefined}
+    >
+      <i
+        className={tone ?? ""}
+        style={{ width: `${share * 100}%`, ...(color ? { "--meter": color } : {}) } as React.CSSProperties}
+      />
     </div>
   );
 }
@@ -103,6 +127,84 @@ export function Notice({
   tone?: "cyan" | "warn" | "danger";
 }) {
   return <div className={`notice ${tone ?? ""}`}>{children}</div>;
+}
+
+/**
+ * Everything a screen explains beyond its first line, folded.
+ *
+ * A native <details>: it opens from the keyboard, is announced as expandable,
+ * and keeps no state of its own. Folded content stays in the page, so a
+ * search or a screen reader can still reach it.
+ */
+export function More({
+  children,
+  summary = "More",
+  boxed,
+}: {
+  children: ReactNode;
+  summary?: string;
+  /** Draw it as a box of its own, for use outside a panel. */
+  boxed?: boolean;
+}) {
+  return (
+    <details className={`more${boxed ? " boxed" : ""}`}>
+      <summary>{summary}</summary>
+      <div className="more-body">{children}</div>
+    </details>
+  );
+}
+
+/** A page's title line: a pixel heading, at most one line under it, and the
+ *  page's status and actions on the right. */
+export function PageHead({
+  eyebrow,
+  title,
+  lede,
+  aside,
+}: {
+  eyebrow: string;
+  title: ReactNode;
+  lede?: ReactNode;
+  aside?: ReactNode;
+}) {
+  return (
+    <header className="pagehead">
+      <div style={{ minWidth: 0 }}>
+        <div className="eyebrow">{eyebrow}</div>
+        <h1>{title}</h1>
+        {lede && <p className="lede">{lede}</p>}
+      </div>
+      <span className="spacer" />
+      {aside && <div className="row wrapped">{aside}</div>}
+    </header>
+  );
+}
+
+/** A section's title, with a small invader beside it and an optional count. */
+export function SectionHead({ title, count, id }: { title: string; count?: number; id?: string }) {
+  return (
+    <div className="sectionhead">
+      <Sigil seed={`section:${title}`} accent="var(--play)" size="sm" still />
+      <h2 id={id}>{title}</h2>
+      {count !== undefined && <span className="count">{count}</span>}
+    </div>
+  );
+}
+
+/** Prose clamped to two lines, with a button to read the rest when there is more. */
+export function Clamp({ text, limit = 150 }: { text: string; limit?: number }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > limit;
+  return (
+    <>
+      <p className={`clamp${long && !open ? " shut" : ""}`}>{text}</p>
+      {long && (
+        <button type="button" className="linkbutton" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {open ? "Less" : "More"}
+        </button>
+      )}
+    </>
+  );
 }
 
 export function KV({ rows }: { rows: Array<[string, ReactNode]> }) {

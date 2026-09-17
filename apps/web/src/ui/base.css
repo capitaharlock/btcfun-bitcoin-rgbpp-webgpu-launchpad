@@ -1,0 +1,222 @@
+/* btc.fun — base layer: tokens derived from the theme, element defaults, and
+ * the typography roles every component uses.
+ *
+ * Nothing here chooses a value; it only combines the theme's tokens
+ * (`theme-arcade.css` holds the contract). Rules that are about legibility
+ * rather than taste, whatever the theme:
+ *   Numbers are always tabular. A figure is data, not prose.
+ *   Colour carries meaning; a screen with five accent colours has none.
+ *   Every animation, blink included, stops under prefers-reduced-motion.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Glows — only for live state and the mining strike. */
+  --amber-glow: color-mix(in oklab, var(--amber) 42%, transparent);
+  --cyan-glow: color-mix(in oklab, var(--cyan) 36%, transparent);
+  --violet-glow: color-mix(in oklab, var(--violet) 38%, transparent);
+
+  /* Diagrams. A flowchart reads best on paper, so it sits on a white card in
+     every theme. Each tone is one of the signals, softened three ways: a wash
+     for lanes, a pastel fill for shapes, and a stroke a step darker than the
+     fill. Text on any of them is --dg-ink, and every pair is checked for WCAG
+     AA contrast in the browser suite (e2e/ui/docs.spec.ts). The meanings carry
+     over: amber is Bitcoin and issuance, mint is CKB and settlement, cyan is
+     the RGB++ service and evidence, violet is the person and their wallet, sun
+     is a decision, rose is a rejection. The diagram face is the system
+     grotesk, because shape sizes are computed from text metrics measured
+     against it (`components/diagram/layout.ts`). */
+  --dg-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --dg-canvas: var(--paper);
+  --dg-ink: color-mix(in oklab, var(--shade) 94%, var(--violet));
+  --dg-ink-dim: color-mix(in oklab, var(--shade) 66%, var(--paper));
+  --dg-line: color-mix(in oklab, var(--shade) 58%, var(--paper));
+  --dg-rule: color-mix(in oklab, var(--line-strong) 14%, var(--paper));
+
+  --dg-amber-wash: color-mix(in oklab, var(--amber) 6%, var(--paper));
+  --dg-amber-fill: color-mix(in oklab, var(--amber) 19%, var(--paper));
+  --dg-amber-stroke: color-mix(in oklab, var(--amber) 66%, var(--amber-deep) 10%);
+  --dg-cyan-wash: color-mix(in oklab, var(--cyan) 6%, var(--paper));
+  --dg-cyan-fill: color-mix(in oklab, var(--cyan) 17%, var(--paper));
+  --dg-cyan-stroke: color-mix(in oklab, var(--cyan-deep) 80%, var(--paper));
+  --dg-violet-wash: color-mix(in oklab, var(--violet) 7%, var(--paper));
+  --dg-violet-fill: color-mix(in oklab, var(--violet) 20%, var(--paper));
+  --dg-violet-stroke: color-mix(in oklab, var(--violet) 80%, var(--violet-deep));
+  --dg-mint-wash: color-mix(in oklab, var(--mint) 7%, var(--paper));
+  --dg-mint-fill: color-mix(in oklab, var(--mint) 20%, var(--paper));
+  --dg-mint-stroke: color-mix(in oklab, var(--mint) 70%, var(--shade) 18%);
+  --dg-rose-wash: color-mix(in oklab, var(--danger) 5%, var(--paper));
+  --dg-rose-fill: color-mix(in oklab, var(--danger) 15%, var(--paper));
+  --dg-rose-stroke: color-mix(in oklab, var(--danger) 82%, var(--paper));
+  --dg-sun-wash: color-mix(in oklab, var(--warn) 8%, var(--paper));
+  --dg-sun-fill: color-mix(in oklab, var(--warn) 30%, var(--paper));
+  --dg-sun-stroke: color-mix(in oklab, var(--warn) 70%, var(--amber-deep) 22%);
+  --dg-slate-wash: color-mix(in oklab, var(--ink-faint) 5%, var(--paper));
+  --dg-slate-fill: color-mix(in oklab, var(--ink-faint) 15%, var(--paper));
+  --dg-slate-stroke: color-mix(in oklab, var(--ink-faint) 72%, var(--paper));
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+html { background: var(--bg); }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The cabinet: a faint grid that fades out below the fold, and one warm bloom
+   behind the top bar, as if the marquee were lit. Fixed, so it never scrolls
+   into a seam. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--backdrop-grid);
+  background:
+    radial-gradient(60rem 22rem at 50% -8rem, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%),
+    linear-gradient(color-mix(in oklab, var(--ink) 5%, transparent) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, color-mix(in oklab, var(--ink) 5%, transparent) 1px, transparent 1px) 0 0 / 32px 32px;
+  mask-image: linear-gradient(to bottom, var(--shade) 0, color-mix(in oklab, var(--shade) 55%, transparent) 40rem, color-mix(in oklab, var(--shade) 25%, transparent) 100%);
+}
+
+#root { position: relative; z-index: 1; }
+
+/* ---------- typography roles ---------- */
+
+.t-display, .t-title, .t-subtitle, .t-label, .t-num,
+h1, h2, h3, h4 {
+  -webkit-font-smoothing: var(--face-smoothing);
+}
+
+.t-display {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  font-size: var(--text-display);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--display-tracking);
+  text-transform: var(--display-case);
+}
+.t-title, h1 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  font-size: var(--text-title);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--display-tracking);
+  text-transform: var(--display-case);
+}
+.t-subtitle, h2 {
+  font-family: var(--font-heading);
+  font-weight: var(--weight-heading);
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--heading-tracking);
+  text-transform: var(--heading-case);
+}
+h3 {
+  font-family: var(--font-heading);
+  font-weight: var(--weight-heading);
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+  text-transform: var(--heading-case);
+}
+.t-label {
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  font-size: var(--text-xs);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+}
+.t-body { font-family: var(--font-body); font-size: var(--text-base); line-height: var(--leading-body); }
+.t-num {
+  font-family: var(--font-numeric);
+  font-weight: var(--weight-display);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+}
+
+h1, h2, h3, h4 { margin: 0; }
+
+/* Numbers are data: always tabular, always mono. */
+.num, .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+p { margin: 0 0 0.9em; color: var(--ink-dim); }
+
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+
+hr { border: 0; height: var(--border-w); background: var(--line); margin: var(--gut) 0; }
+
+:focus-visible {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: var(--focus-w);
+}
+
+::selection { background: var(--accent); color: var(--on-accent); }
+
+/* Accent words inside a heading. One colour, flat: a gradient on a pixel
+   glyph smears into mud. */
+.hl { color: var(--accent); }
+.hl.cyan { color: var(--cyan); }
+.hl.magenta { color: var(--magenta); }
+.hl.lime { color: var(--lime); }
+.hl.violet { color: var(--violet); }
+
+/* A block cursor after a heading — the cabinet waiting for input. */
+.cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.9em;
+  margin-left: 0.2em;
+  vertical-align: -0.05em;
+  background: var(--accent);
+  animation: blink var(--blink) steps(1, end) infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* Scanlines, for the few surfaces that are "screens". Never global — over
+   body text they only cost contrast. */
+.crt { position: relative; isolation: isolate; }
+.crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: var(--scanlines);
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, color-mix(in oklab, var(--shade) 30%, transparent) 2px 3px);
+}
+
+/* Scrollbars: square, quiet. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border: 2px solid var(--bg); border-radius: var(--radius); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .cursor, .dot.live, .sigil .frame { animation: none !important; }
+}

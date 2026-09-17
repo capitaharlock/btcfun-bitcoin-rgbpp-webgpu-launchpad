@@ -1,0 +1,55 @@
+/* Theme: clean — a plain, non-pixel alternative.
+ *
+ * Not offered in the interface; it exists to keep the theme contract honest
+ * (see the top of `theme-arcade.css`). Select it with `?theme=clean`, which is
+ * remembered, and go back with `?theme=arcade`. Everything below is a token
+ * value: if a change of look ever needs an edit outside a theme file, the
+ * contract has been broken somewhere.
+ */
+
+:root[data-theme="clean"] {
+  --font-display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-label: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-numeric: "Geist Mono", ui-monospace, "SF Mono", monospace;
+
+  --weight-display: 650;
+  --weight-heading: 600;
+  --weight-label: 500;
+  --face-smoothing: antialiased;
+
+  --display-case: none;
+  --heading-case: none;
+  --label-case: none;
+  --display-tracking: -0.03em;
+  --heading-tracking: -0.01em;
+  --label-tracking: 0;
+
+  --bg: #0c0d12;
+  --surface-1: #13141b;
+  --surface-2: #1a1b24;
+  --surface-3: #23242f;
+  --line: #262835;
+  --line-strong: #353849;
+  --ink: #f3f4f8;
+  --ink-dim: #bcc0d0;
+  --ink-faint: #858aa0;
+  --on-accent: #120a02;
+
+  --frame-w: 1px;
+  --radius: 6px;
+  --radius-sm: 4px;
+
+  --shadow-sm: 0 0 0 0;
+  --shadow-md: 0 0 0 0;
+  --shadow-lg: 0 12px 28px -18px;
+  --lift: translateY(-2px);
+  --press: translateY(1px);
+  --press-lg: translateY(1px);
+  --glow: 0 0 0;
+
+  --ease-step: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  --scanlines: 0;
+  --backdrop-grid: 0;
+}
