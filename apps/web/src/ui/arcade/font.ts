@@ -3,7 +3,8 @@
  * The scene draws its words — hashes in flight, "+441 PIZZA" — cell by cell
  * on the same grid as the sprites, so text is as crisp as everything else and
  * does not depend on a web font having loaded before the first frame. Only
- * the glyphs the scene uses: digits, letters, and a little punctuation.
+ * the glyphs the scene and the game's screens use: digits, letters, and a
+ * little punctuation.
  */
 
 import { fromBitmap, type PixelGrid } from "../pixels";
@@ -54,6 +55,12 @@ const RAW: Record<string, string> = {
   "-": "... ... ### ... ...",
   ".": "... ... ... ... .#.",
   ",": "... ... ... .#. #..",
+  "/": "..# ..# .#. #.. #..",
+  "!": ".#. .#. .#. ... .#.",
+  ":": "... .#. ... .#. ...",
+  "=": "... ### ... ### ...",
+  "<": "..# .#. #.. .#. ..#",
+  ">": "#.. .#. ..# .#. #..",
   " ": "... ... ... ... ...",
 };
 

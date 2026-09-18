@@ -1,60 +1,49 @@
-/* The front page's arcade scene: the rules in `scene.ts`, drawn by `draw.ts`,
- * run by the browser's frame clock.
+/* The front page's arcade: a scene that plays itself until someone picks up
+ * the controls, and then a game. The rules are `scene.ts` and `game.ts`, the
+ * pictures `draw.ts`, the clock and the input `cabinet.ts`; this component
+ * gives them the launches, the tip and the theme's colours, and prints what a
+ * canvas cannot say — the controls, the sound switch, and the score, as text
+ * a screen reader announces.
  *
- * Decoration with a job: it shows, at a glance, that every launch is a thing
- * you shoot hashes at and that a hit pays in that launch's token. Nothing only
- * lives here — the catalogue below has every launch and every figure — so the
- * canvas is one labelled image to assistive technology.
- *
- * It costs nothing when nobody is looking: the loop stops when the scene is
- * scrolled away or the tab is hidden, and under prefers-reduced-motion it
- * draws one composed still frame instead of running at all.
+ * Nothing only lives here: the catalogue below has every launch and every
+ * figure. The game is a way to meet them.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Launch } from "../../data/launches";
-import { atoms } from "../../lib/format";
-import { DECIMALS, reward } from "../../lib/standard";
+import { group } from "../../lib/format";
+import { reward, UNIT } from "../../lib/standard";
 import { pixelSigil } from "../pixelSigil";
-import { drawScene, type ScenePalette } from "./draw";
-import { createScene, invaderAt, seeded, stepScene, type InvaderSpec, type Scene } from "./scene";
+import "./arcade.css";
+import { ATTRACT_HUD, mountCabinet, type Cabinet, type Hud, type Roster } from "./cabinet";
+import type { ScenePalette } from "./draw";
+import { readSoundOn, writeSoundOn } from "./prefs";
+import type { InvaderSpec } from "./scene";
+import { createSound, type Sound } from "./sound";
 
-/** CSS pixels per scene cell: chunkier on a large screen, finer on a phone. */
-const CELL_CSS = { huge: 5, wide: 4, narrow: 3 } as const;
-/** Width from which the scene uses its largest cells. */
-const HUGE = 1200;
-/** Width from which the headline sits over the left of the scene. */
-const WIDE = 900;
-/** How far the headline reaches into the scene when it overlaps it, in CSS px. */
-const COPY_CSS = 640;
-/** Longest step the simulation takes, so a stalled tab does not teleport it. */
-const MAX_DT = 48;
-/** How much time the still frame shows having passed. */
-const STILL_MS = 2_600;
-
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
   useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const change = () => setReduced(query.matches);
-    query.addEventListener("change", change);
-    return () => query.removeEventListener("change", change);
-  }, []);
-  return reduced;
+    const list = window.matchMedia(query);
+    const change = () => setMatches(list.matches);
+    list.addEventListener("change", change);
+    return () => list.removeEventListener("change", change);
+  }, [query]);
+  return matches;
 }
 
 /**
- * Any CSS colour — a token reference, a color-mix — as an rgb() string the
- * canvas is sure to accept: the browser resolves it on an element, and a
- * one-pixel canvas turns whatever notation it chose into bytes.
+ * The theme's colours as rgb() strings the canvas is sure to accept: the
+ * browser resolves each — a token reference, a color-mix — on an element, and
+ * a one-pixel canvas turns whatever notation it chose into bytes.
  */
-function colourResolver(host: HTMLElement): (css: string) => string {
+function paletteFor(host: HTMLElement, launches: readonly Launch[]): ScenePalette {
   const probe = document.createElement("span");
   probe.style.display = "none";
   host.appendChild(probe);
   const pixel = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-  return (css) => {
+  const resolve = (css: string) => {
     probe.style.color = "";
     probe.style.color = css;
     const computed = getComputedStyle(probe).color;
@@ -65,24 +54,42 @@ function colourResolver(host: HTMLElement): (css: string) => string {
     const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data;
     return `rgb(${r} ${g} ${b})`;
   };
+  const token = (name: string) => resolve(`var(${name})`);
+  try {
+    return {
+      bg: token("--bg"),
+      ink: token("--ink"),
+      dim: token("--ink-dim"),
+      faint: token("--ink-faint"),
+      bitcoin: token("--amber"),
+      cover: token("--play"),
+      invaders: launches.map((l) => ({
+        base: resolve(l.accent),
+        hi: resolve(`color-mix(in oklab, ${l.accent} 45%, var(--paper))`),
+      })),
+    };
+  } finally {
+    probe.remove();
+  }
 }
 
-function paletteFor(host: HTMLElement, launches: readonly Launch[]): ScenePalette {
-  const resolve = colourResolver(host);
-  const token = (name: string) => resolve(`var(${name})`);
-  return {
-    bg: token("--bg"),
-    ink: token("--ink"),
-    dim: token("--ink-dim"),
-    faint: token("--ink-faint"),
-    bitcoin: token("--amber"),
-    cover: token("--play"),
-    invaders: launches.map((l) => ({
-      base: resolve(l.accent),
-      hi: resolve(`color-mix(in oklab, ${l.accent} 45%, var(--paper))`),
-    })),
-  };
+/** What the live region says: the score while playing, and each change of screen. */
+function announce(hud: Hud): string {
+  switch (hud.mode) {
+    case "attract":
+      return "";
+    case "ready":
+      return "Game ready. Press Space to start.";
+    case "playing":
+      return `Score ${group(hud.score)}. Lives ${hud.lives}. Wave ${hud.wave}.`;
+    case "paused":
+      return `Paused. Score ${group(hud.score)}. Hi-score ${group(hud.hi)}. Press P to resume.`;
+    case "over":
+      return `Game over. Score ${group(hud.score)}. Hi-score ${group(hud.hi)}. Press Enter to play again.`;
+  }
 }
+
+const IN_GAME: ReadonlySet<Hud["mode"]> = new Set(["playing", "paused", "over"]);
 
 export function ArcadeScene({
   launches,
@@ -96,153 +103,108 @@ export function ArcadeScene({
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const reduced = useReducedMotion();
-  // The loop reads the newest values without restarting on every block.
-  const latest = useRef({ launches, tip, onPick });
+  const cabinet = useRef<Cabinet | null>(null);
+  const sound = useRef<Sound | null>(null);
+  const reduced = useMedia("(prefers-reduced-motion: reduce)");
+  const touch = useMedia("(pointer: coarse)");
+  const [hud, setHud] = useState<Hud>(ATTRACT_HUD);
+  const [soundOn, setSoundOn] = useState(readSoundOn);
+
+  // The cabinet reads the newest values without being rebuilt on every block.
+  const latest = useRef({ launches, tip, onPick, reduced });
   useEffect(() => {
-    latest.current = { launches, tip, onPick };
-  }, [launches, tip, onPick]);
+    latest.current = { launches, tip, onPick, reduced };
+  }, [launches, tip, onPick, reduced]);
   const identity = launches.map((l) => l.id).join(",");
 
   useEffect(() => {
     const host = hostRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!host || !canvas || !ctx) return;
+    if (!host || !canvas) return;
+    const audio = createSound(readSoundOn());
+    sound.current = audio;
 
-    const roster = latest.current.launches;
-    const specs: InvaderSpec[] = roster.map((l) => ({
-      id: l.id,
-      symbol: l.symbol,
-      frames: pixelSigil(l.id).frames,
-      reward: (clz) => {
-        const now = latest.current.launches.find((x) => x.id === l.id) ?? l;
-        return atoms(reward(clz, now.h0, now.open ? latest.current.tip : now.h0), DECIMALS, 0);
+    const roster = (): Roster => {
+      const list = latest.current.launches;
+      const specs: InvaderSpec[] = list.map((l) => ({
+        id: l.id,
+        symbol: l.symbol,
+        frames: pixelSigil(l.id).frames,
+        reward: (clz) => {
+          const now = latest.current.launches.find((x) => x.id === l.id) ?? l;
+          return Number(reward(clz, now.h0, now.open ? latest.current.tip : now.h0) / UNIT);
+        },
+      }));
+      return { specs, palette: paletteFor(host, list) };
+    };
+
+    cabinet.current = mountCabinet({
+      host,
+      canvas,
+      reduced: latest.current.reduced,
+      roster,
+      nextBlock: () => latest.current.tip + 1,
+      pick: (spec) => {
+        const launch = latest.current.launches.find((l) => l.id === spec.id);
+        if (launch) latest.current.onPick(launch);
       },
-    }));
-    const palette = paletteFor(host, roster);
-
-    let scene: Scene | null = null;
-    let s = 1;
-    let hovered = -1;
-    let raf = 0;
-    let last = 0;
-    let onScreen = true;
-
-    const draw = () => scene && drawScene(ctx, scene, palette, s, hovered);
-
-    const layout = () => {
-      const { width, height } = host.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const wide = width >= WIDE;
-      const cell = width >= HUGE ? CELL_CSS.huge : wide ? CELL_CSS.wide : CELL_CSS.narrow;
-      s = Math.max(1, Math.round(cell * dpr));
-      canvas.width = Math.max(1, Math.floor(width * dpr));
-      canvas.height = Math.max(1, Math.floor(height * dpr));
-      const cols = Math.floor(canvas.width / s);
-      const rows = Math.floor(canvas.height / s);
-      const left = wide ? Math.ceil((Math.min(COPY_CSS, width * 0.5) * dpr) / s) : 4;
-      scene = createScene(specs, { width: cols, height: rows, left, right: cols - 4 }, seeded(7));
-      if (reduced) {
-        const still = seeded(11);
-        for (let t = 0; t < STILL_MS; t += 16) stepScene(scene, 16, still);
-      }
-      draw();
-    };
-
-    const frame = (now: number) => {
-      const dt = last ? Math.min(MAX_DT, now - last) : 16;
-      last = now;
-      if (scene) stepScene(scene, dt, Math.random);
-      draw();
-      raf = requestAnimationFrame(frame);
-    };
-    const running = () => raf !== 0;
-    const start = () => {
-      if (reduced || running() || !onScreen || document.hidden) return;
-      last = 0;
-      raf = requestAnimationFrame(frame);
-    };
-    const stop = () => {
-      cancelAnimationFrame(raf);
-      raf = 0;
-    };
-    const sync = () => (onScreen && !document.hidden ? start() : stop());
-
-    const resize = new ResizeObserver(layout);
-    resize.observe(host);
-    const seen = new IntersectionObserver(([entry]) => {
-      onScreen = entry.isIntersecting;
-      sync();
+      report: setHud,
+      sound: audio,
     });
-    seen.observe(host);
-    document.addEventListener("visibilitychange", sync);
-
-    // Pointing: the symbol under an invader on hover; a click opens it. On a
-    // touch screen the first tap names it and a second tap on it opens it.
-    const cellAt = (e: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      return [((e.clientX - rect.left) * dpr) / s, ((e.clientY - rect.top) * dpr) / s] as const;
-    };
-    const point = (e: PointerEvent) => {
-      if (!scene) return -1;
-      const [x, y] = cellAt(e);
-      return invaderAt(scene, x, y);
-    };
-    const move = (e: PointerEvent) => {
-      if (e.pointerType === "touch") return;
-      hovered = point(e);
-      canvas.classList.toggle("pointing", hovered >= 0);
-      if (!running()) draw();
-    };
-    const leave = () => {
-      hovered = -1;
-      canvas.classList.remove("pointing");
-      if (!running()) draw();
-    };
-    const tap = (e: PointerEvent) => {
-      const hit = point(e);
-      const launch = hit >= 0 ? latest.current.launches.find((l) => l.id === specs[scene!.invaders[hit].spec].id) : undefined;
-      if (launch && (e.pointerType !== "touch" || hovered === hit)) {
-        latest.current.onPick(launch);
-        return;
-      }
-      hovered = hit;
-      if (!running()) draw();
-    };
-    canvas.addEventListener("pointermove", move);
-    canvas.addEventListener("pointerleave", leave);
-    canvas.addEventListener("pointerup", tap);
-
-    layout();
-    sync();
-
     return () => {
-      stop();
-      resize.disconnect();
-      seen.disconnect();
-      document.removeEventListener("visibilitychange", sync);
-      canvas.removeEventListener("pointermove", move);
-      canvas.removeEventListener("pointerleave", leave);
-      canvas.removeEventListener("pointerup", tap);
-      host.replaceChildren(canvas);
+      cabinet.current?.dispose();
+      cabinet.current = null;
+      audio.dispose();
+      sound.current = null;
     };
-    // `identity` stands for the roster: a new block must not rebuild the scene.
-  }, [identity, reduced]);
+  }, []);
+
+  useEffect(() => cabinet.current?.recast(), [identity]);
+  useEffect(() => cabinet.current?.setReduced(reduced), [reduced]);
+
+  const toggleSound = useCallback(() => {
+    const on = !soundOn;
+    // Inside the click, so the browser lets the audio start.
+    sound.current?.setEnabled(on);
+    writeSoundOn(on);
+    setSoundOn(on);
+  }, [soundOn]);
 
   const count = launches.length;
+  const playing = IN_GAME.has(hud.mode);
+  const keysHint = touch ? "Drag to move · tap to fire" : "← → move · SPACE fire · P pause";
+  const label =
+    count === 0
+      ? "Arcade: waiting for the first launch."
+      : playing
+        ? `Space invaders game. ${touch ? "Drag to move the cannon and tap to fire." : "Left and right arrows move, Space fires, P pauses, Escape pauses too."} Each hit scores the tokens that hash would mint on that launch.`
+        : `Arcade: ${count} launch${count === 1 ? "" : "es"} as invaders and a Bitcoin cannon firing hashes. Press Space or Enter to play; click an invader to open its launch.`;
+
   return (
-    <div className="stage-screen crt" ref={hostRef}>
-      <canvas
-        ref={canvasRef}
-        role="img"
-        aria-label={
-          count === 0
-            ? "Arcade scene: a Bitcoin cannon waiting for the first launch."
-            : `Arcade scene: ${count} launch${count === 1 ? "" : "es"} as invaders, and a Bitcoin cannon firing hashes at them.`
-        }
-      />
+    <div className={`stage-screen crt arcade${playing ? " in-game" : ""}`} data-mode={hud.mode} ref={hostRef}>
+      <canvas ref={canvasRef} tabIndex={0} role="application" aria-label={label} aria-roledescription="game" />
+      <div className="arcade-bar">
+        {hud.mode === "attract" && count > 0 ? (
+          <button type="button" className="arcade-btn" onClick={() => canvasRef.current?.focus()}>
+            <span aria-hidden="true">▶ </span>Play
+          </button>
+        ) : null}
+        <span className="arcade-keys">{keysHint}</span>
+        <span className="arcade-note">Score = tokens your hashes mint</span>
+        <button
+          type="button"
+          className="arcade-btn"
+          aria-pressed={soundOn}
+          // Keep focus on the game: toggling sound mid-wave should not pause it.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={toggleSound}
+        >
+          <span aria-hidden="true">♪ </span>Sound {soundOn ? "on" : "off"}
+        </button>
+      </div>
+      <p className="arcade-live" role="status" aria-live="polite" data-score={hud.score}>
+        {announce(hud)}
+      </p>
     </div>
   );
 }

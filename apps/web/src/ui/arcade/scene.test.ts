@@ -14,8 +14,12 @@ import {
   invaderAt,
   invaderRect,
   seeded,
+  scour,
   shotHash,
   STEP_MS,
+  sweep,
+  drawClz,
+  CLZ_RANGE,
   STEP_X,
   STEP_Y,
   stepFormation,
@@ -29,7 +33,7 @@ const spec = (i: number): InvaderSpec => ({
   id: `l${i}`,
   symbol: `T${i}`,
   frames: pixelSigil(`l${i}`).frames,
-  reward: (clz) => String(clz * clz),
+  reward: (clz) => clz * clz,
 });
 
 const bounds = { width: 300, height: 160, left: 100, right: 296 };
@@ -91,6 +95,33 @@ describe("collision", () => {
     expect(invaderAt(s, r.x + 1, r.y + 1)).toBe(-1);
   });
 
+  it("bores into cover the way the projectile travels", () => {
+    const up = scene(2).bunkers[0];
+    erode(up, up.x + 2, up.y + 3, () => 0, -1);
+    expect(up.cells[2][2]).toBe(false); // above: the shot's way
+    expect(up.cells[4][2]).toBe(true);
+    const down = scene(2).bunkers[0];
+    erode(down, down.x + 2, down.y + 2, () => 0, 1);
+    expect(down.cells[3][2]).toBe(false); // below: the bomb's way
+    expect(down.cells[1][2]).toBe(true);
+  });
+
+  it("clears cover an invader marches through", () => {
+    const s = scene(2);
+    const b = s.bunkers[0];
+    scour(b, { x: b.x - 2, y: b.y - 4, w: 6, h: 6 });
+    expect(b.cells[0].slice(0, 4).some(Boolean)).toBe(false);
+    expect(b.cells[1][5]).toBe(true);
+  });
+
+  it("sweeps every row a fast projectile crosses, stopping at the first strike", () => {
+    const seen: number[] = [];
+    expect(sweep(10, 6.5, (y) => (seen.push(y), false))).toBeNull();
+    expect(seen).toEqual([10, 9, 8, 7, 6.5]);
+    expect(sweep(0, 5, (y) => y >= 3)).toBe(3);
+    expect(sweep(4, 4, (y) => y === 4)).toBe(4);
+  });
+
   it("wears a bunker away where it is hit, and only there", () => {
     const s = scene(2);
     const b = s.bunkers[0];
@@ -115,6 +146,20 @@ describe("shots and hits", () => {
     }
   });
 
+  it("draw hash strengths as mining does: each extra zero bit half as likely", () => {
+    const rand = seeded(5);
+    const counts = new Map<number, number>();
+    for (let i = 0; i < 20_000; i++) {
+      const clz = drawClz(rand);
+      expect(clz).toBeGreaterThanOrEqual(CLZ_RANGE.min);
+      expect(clz).toBeLessThanOrEqual(CLZ_RANGE.max);
+      counts.set(clz, (counts.get(clz) ?? 0) + 1);
+    }
+    const ratio = counts.get(CLZ_RANGE.min + 1)! / counts.get(CLZ_RANGE.min)!;
+    expect(ratio).toBeGreaterThan(0.45);
+    expect(ratio).toBeLessThan(0.55);
+  });
+
   it("score a hit with the launch's reward, and bring the invader back", () => {
     const s = scene(1, 4);
     let hitAt = -1;
@@ -124,7 +169,7 @@ describe("shots and hits", () => {
     }
     expect(hitAt).toBeGreaterThan(0);
     const popup = s.popups[0];
-    expect(popup.text).toMatch(/^\+\d+ T0$/);
+    expect(popup.text).toMatch(/^\+[\d,]+ T0$/);
     expect(s.particles.length).toBeGreaterThan(0);
     expect(invaderAt(s, invaderRect(s, s.invaders[0]).x + 5, invaderRect(s, s.invaders[0]).y + 4)).toBe(-1);
     for (let t = 0; t < TIMING.RESPAWN_MS + 100; t += 16) stepScene(s, 16, () => 0.99);
@@ -145,7 +190,7 @@ describe("shots and hits", () => {
 
 describe("font", () => {
   it("has a 3×5 glyph for everything a popup or a hash can say", () => {
-    for (const ch of "0123456789abcdefABCDEFGHIJKLMNOPQRSTUVWXYZ+-., ") {
+    for (const ch of "0123456789abcdefABCDEFGHIJKLMNOPQRSTUVWXYZ+-., /!:=<>") {
       expect(hasGlyph(ch), ch).toBe(true);
       const g = glyph(ch);
       expect(g).toHaveLength(GLYPH_H);
