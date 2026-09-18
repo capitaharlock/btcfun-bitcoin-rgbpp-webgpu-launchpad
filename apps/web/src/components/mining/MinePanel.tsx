@@ -13,7 +13,7 @@ import { bytesToHex } from "../../lib/bytes";
 import { atoms, duration, group, rate, shortHash } from "../../lib/format";
 import { DECIMALS, MIN_CLZ, reward } from "../../lib/standard";
 import { HashFeed, HashLog } from "../../ui/HashFeed";
-import { Chip, KV, Notice, Panel, Stat } from "../../ui/primitives";
+import { Chip, KV, More, Notice, Panel, Stat } from "../../ui/primitives";
 
 const CHOICES: Array<{ id: BackendChoice; label: string }> = [
   { id: "auto", label: "Auto" },
@@ -54,23 +54,23 @@ export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, acti
       eyebrow="proof of work"
       title="Mine"
       aside={
-        <div className="row">
+        <div className="row wrapped">
           <Chip tone={running ? "amber" : undefined} live={running}>
             {running ? `${sample.backend.toUpperCase()} · ${group(sample.lanes)} lanes` : "idle"}
           </Chip>
           {gpu && (
             <Chip tone={gpu.available ? "cyan" : undefined} title={gpu.detail}>
-              webgpu {gpu.available ? "ready" : "unavailable"}
+              webgpu {gpu.available ? "ready" : "off"}
             </Chip>
           )}
         </div>
       }
     >
-      <div className="split" style={{ alignItems: "start" }}>
+      <div className="miner">
         <div className="stack-md">
           <HashFeed current={sample.current} best={best} running={running} />
 
-          <div className="statrow">
+          <div className="scoreboard">
             <Stat
               k="mintable now"
               v={mintable > 0n ? atoms(mintable, DECIMALS, 2) : "—"}
@@ -87,7 +87,7 @@ export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, acti
             {running ? (
               <button className="btn lg" onClick={mining.stop}>Stop</button>
             ) : (
-              <button className="btn primary lg" onClick={mining.start} disabled={!challenge}>
+              <button className="btn play lg" onClick={mining.start} disabled={!challenge}>
                 {best ? "Keep mining" : "Mine"}
               </button>
             )}
@@ -111,22 +111,22 @@ export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, acti
           {mining.notice && <Notice tone="warn">{mining.notice}</Notice>}
           {action}
 
-          <Notice>
-            Each extra leading zero bit takes twice the work and adds a little
-            to the reward: {MIN_CLZ} bits mint {group(MIN_CLZ * MIN_CLZ)} tokens
-            before halvings, 32 bits mint {group(32 * 32)}. Every candidate is
-            re-hashed on the CPU before it is shown, so a GPU result is never
-            taken on the driver's word.
-          </Notice>
+          <More summary="How the reward works">
+            <p>
+              Each extra leading zero bit takes twice the work and adds a little to the reward: {MIN_CLZ} bits mint{" "}
+              {group(MIN_CLZ * MIN_CLZ)} tokens before halvings, 32 bits mint {group(32 * 32)}.
+            </p>
+            <p>Every candidate is re-hashed on the CPU before it is shown, so a GPU result is never taken on the driver's word.</p>
+          </More>
         </div>
 
         <div className="stack-md">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 6 }}>improvement log</div>
+            <div className="eyebrow">improvement log</div>
             <HashLog entries={mining.log} />
           </div>
           <div>
-            <div className="eyebrow" style={{ marginBottom: 6 }}>challenge</div>
+            <div className="eyebrow">challenge</div>
             {ticket && challenge ? (
               <KV
                 rows={[
@@ -137,11 +137,7 @@ export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, acti
                 ]}
               />
             ) : (
-              <p className="tiny faint">
-                The challenge is the hash of your ticket's Bitcoin output. It does
-                not exist until the ticket is paid, so no work can be done in
-                advance, and it can be spent once, so no work is reused.
-              </p>
+              <p className="tiny faint">The hash of your ticket's Bitcoin output. It exists once the ticket is paid.</p>
             )}
           </div>
         </div>

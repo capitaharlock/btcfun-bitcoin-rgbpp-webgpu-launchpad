@@ -36,7 +36,7 @@ test.describe("mining", () => {
 
     // Step 4: settled — a qualifying hash can be minted, for exactly what it showed.
     const mint = await mineUntilMintable(page);
-    const shown = (await mint.innerText()).replace(/^Mint /, "");
+    const shown = ((await mint.textContent()) ?? "").replace(/^Mint /, "");
     await mint.click();
     await expect(page.getByText(/^Minting /)).toBeVisible();
     await block(page, sim);
@@ -44,6 +44,9 @@ test.describe("mining", () => {
 
     // The balance is on chain: the simulated queue accepted the mint under the script's rules.
     expect([...rgbpp.jobs.values()].every((j) => j.state === "completed")).toBe(true);
+    // The mint is announced to the public feed, pointing at its transaction.
+    const minted = rgbpp.events.find((e) => e.signed.body.kind === "mint");
+    expect(minted?.signed.body.txid).toBe(sim.broadcasts.at(-1)!.txid);
     await expect(page.getByText("you hold").locator("..")).toContainText(shown.split(" ")[0]);
     await app.goto("/holdings");
     await expect(page.getByText(shown.split(" ")[0]).first()).toBeVisible();
@@ -60,7 +63,7 @@ test.describe("mining", () => {
     await buyTicket(page);
     await block(page, sim);
     const mint = await mineUntilMintable(page);
-    const second = (await mint.innerText()).replace(/^Mint /, "");
+    const second = ((await mint.textContent()) ?? "").replace(/^Mint /, "");
     await page.reload();
     // The kept hash is re-checked and offered again without re-mining.
     await expect(page.getByRole("button", { name: `Mint ${second}` })).toBeVisible({ timeout: 30_000 });

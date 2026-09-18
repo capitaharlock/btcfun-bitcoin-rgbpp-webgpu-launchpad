@@ -28,7 +28,8 @@ import type { Seal } from "../lib/rgbpp/seal";
 import { DECIMALS } from "../lib/standard";
 import { useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
-import { Chip, Field, Notice, Panel, Stat } from "../ui/primitives";
+import { Chip, Field, Notice, PageHead, Panel, Stat } from "../ui/primitives";
+import { Sigil } from "../ui/Sigil";
 
 const bidOrder = ({ bid }: PublishedBid): Order => ({ priceSats: bid.priceSats, amount: BigInt(bid.amount) });
 const sealKey = (seal: Seal) => `${seal.txid}:${seal.vout}`;
@@ -87,29 +88,34 @@ export function Market() {
 
   return (
     <div className="stack-lg">
-      <div className="row wrapped">
-        <div>
-          <div className="eyebrow">market</div>
-          <h1 style={{ fontSize: 30 }}>
-            Buy and sell, <span className="grad-text">no middleman</span>
-          </h1>
-        </div>
-        <span className="spacer" />
-        <Chip tone="cyan">{market.listings.length} asks · {liveBids.length} bids</Chip>
-      </div>
+      <PageHead
+        eyebrow="market"
+        title={
+          <>
+            Buy and sell, <span className="hl violet">no middleman</span>
+          </>
+        }
+        lede="Every price here is one a person signed. Nothing is escrowed."
+        aside={<Chip tone="cyan">{market.listings.length} asks · {liveBids.length} bids</Chip>}
+      />
 
       {lastOp && <OperationNotice op={lastOp} symbol={launchOf(lastOp.launchId)?.symbol ?? ""} />}
 
       {launch ? (
         <>
-          <div className="grid g4" style={{ alignItems: "end" }}>
-            <Field label="Token">
-              <select className="input" value={launch.tokenId} onChange={(e) => setPicked(e.target.value)}>
-                {launches.map((l) => (
-                  <option key={l.tokenId} value={l.tokenId}>{l.symbol} · {l.name}</option>
-                ))}
-              </select>
-            </Field>
+          <div className="ticker">
+            <div className="row">
+              <Sigil seed={launch.id} accent={launch.accent} size="md" />
+              <div className="grow">
+                <Field label="Token">
+                  <select className="input" value={launch.tokenId} onChange={(e) => setPicked(e.target.value)}>
+                    {launches.map((l) => (
+                      <option key={l.tokenId} value={l.tokenId}>{l.symbol} · {l.name}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            </div>
             <Stat k="last trade" v={last ? satsPerToken(unitPrice(last)) : "—"} unit={last ? "sats" : undefined} tone="violet" />
             <Stat k="best bid · best ask" v={`${bestBid ? satsPerToken(bestBid.unitPrice) : "—"} · ${bestAsk ? satsPerToken(bestAsk.unitPrice) : "—"}`} small />
             <Stat
@@ -131,7 +137,7 @@ export function Market() {
         </>
       ) : (
         <Panel eyebrow="order book" title="No tokens yet">
-          <p style={{ margin: 0 }}>No launch is known to this browser or the index. <a href="#/create">Create the first one</a>.</p>
+          <p className="clamp">No launch is known to this browser or the index. <a href="#/create">Create the first one</a>.</p>
         </Panel>
       )}
 
@@ -152,7 +158,7 @@ export function Market() {
 
 function OperationNotice({ op, symbol }: { op: Operation; symbol: string }) {
   const amount = `${atoms(BigInt(op.atoms ?? "0"), DECIMALS, 2)} ${symbol}`;
-  const link = <a href={txUrl(op.btcTxid)} target="_blank" rel="noreferrer">view the Bitcoin transaction</a>;
+  const link = <a href={txUrl(op.btcTxid)} target="_blank" rel="noopener noreferrer">view the Bitcoin transaction</a>;
   switch (op.kind) {
     case "buy":
       return (

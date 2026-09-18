@@ -10,7 +10,7 @@ import { txUrl } from "../../lib/bitcoin";
 import { atoms, group, satsPerToken } from "../../lib/format";
 import { unitPrice } from "../../lib/market/book";
 import { DECIMALS } from "../../lib/standard";
-import { Chip, Panel } from "../../ui/primitives";
+import { Chip, More, Panel } from "../../ui/primitives";
 
 const SHOWN = 12;
 
@@ -18,7 +18,7 @@ export function Trades({ trades, symbol }: { trades: MarketTrade[]; symbol: stri
   return (
     <Panel eyebrow="recent trades" title={`${symbol} sales`}>
       {trades.length === 0 ? (
-        <p className="faint" style={{ margin: 0 }}>No sales found yet.</p>
+        <p className="faint clamp">No sales found yet.</p>
       ) : (
         <table className="table" aria-label="Recent trades">
           <thead>
@@ -37,17 +37,19 @@ export function Trades({ trades, symbol }: { trades: MarketTrade[]; symbol: stri
                 <td className="mono">{group(trade.priceSats)} sats</td>
                 <td>
                   {!trade.confirmed && <Chip tone="warn">pending</Chip>}{" "}
-                  <a href={txUrl(trade.txid)} target="_blank" rel="noreferrer" className="tiny">tx ↗</a>
+                  <a href={txUrl(trade.txid)} target="_blank" rel="noopener noreferrer" className="tiny">tx ↗</a>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      <p className="tiny faint" style={{ marginBottom: 0 }}>
-        A sale is listed here only after its Bitcoin transaction is read and found to pay the seller the listed price
-        for the listed output. Sales nobody reported to the index are not found.
-      </p>
+      <More>
+        <p>
+          A sale is listed here only after its Bitcoin transaction is read and found to pay the seller the listed price for
+          the listed output. Sales nobody reported to the index are not found.
+        </p>
+      </More>
     </Panel>
   );
 }

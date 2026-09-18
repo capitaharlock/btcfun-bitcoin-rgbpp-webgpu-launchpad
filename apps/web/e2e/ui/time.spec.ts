@@ -44,7 +44,8 @@ test.describe("time", () => {
     await block(page, sim, 10); // now past the halving
     await expect(page.getByText("halving 1")).toBeVisible();
     const mint = await mineUntilMintable(page);
-    const label = await mint.innerText();
+    // DOM text, not rendered text: labels are upper-cased by the theme.
+    const label = (await mint.textContent()) ?? "";
     await mint.click();
     await expect(page.getByText(/^Minting /)).toBeVisible();
     await block(page, sim);

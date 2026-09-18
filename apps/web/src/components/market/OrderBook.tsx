@@ -10,7 +10,7 @@ import type { CSSProperties } from "react";
 import type { Book, Level } from "../../lib/market/book";
 import { atoms, group, satsPerToken } from "../../lib/format";
 import { DECIMALS } from "../../lib/standard";
-import { Panel } from "../../ui/primitives";
+import { More, Panel } from "../../ui/primitives";
 
 export function OrderBook({ book, symbol }: { book: Book; symbol: string }) {
   const deepest = [book.bids.at(-1)?.cumulative ?? 0n, book.asks.at(-1)?.cumulative ?? 0n].reduce((a, b) => (a > b ? a : b));
@@ -21,10 +21,12 @@ export function OrderBook({ book, symbol }: { book: Book; symbol: string }) {
         <Side side="bids" title="Bids · buying" levels={book.bids} deepest={deepest} empty="No bids." />
         <Side side="asks" title="Asks · selling" levels={book.asks} deepest={deepest} empty="No asks." />
       </div>
-      <p className="tiny faint" style={{ marginBottom: 0 }}>
-        Price per whole token in sats. Every order is all-or-nothing: a listing sells one whole cell, and a bid is met
-        only by a listing of exactly its size. Depth is cumulative from the best price.
-      </p>
+      <More>
+        <p>
+          Price per whole token in sats. Every order is all-or-nothing: a listing sells one whole cell, and a bid is met only
+          by a listing of exactly its size. Depth is cumulative from the best price.
+        </p>
+      </More>
     </Panel>
   );
 }

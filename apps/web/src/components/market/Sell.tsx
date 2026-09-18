@@ -16,7 +16,7 @@ import type { TokenCell } from "../../lib/rgbpp/operations";
 import { DECIMALS } from "../../lib/standard";
 import { useTokens } from "../../state/TokensProvider";
 import { useWallet } from "../../state/WalletProvider";
-import { Field, Notice, Panel } from "../../ui/primitives";
+import { Field, More, Notice, Panel } from "../../ui/primitives";
 
 export function Sell({ launches, actions, onListed }: { launches: Launch[]; actions: MarketActions; onListed: () => void }) {
   const wallet = useWallet();
@@ -40,14 +40,14 @@ export function Sell({ launches, actions, onListed }: { launches: Launch[]; acti
   if (!wallet.vault) {
     return (
       <Panel eyebrow="sell" title="List your tokens">
-        <p style={{ margin: 0 }}><a href="#/wallet">Connect a wallet</a> to list tokens you hold.</p>
+        <p className="clamp"><a href="#/wallet">Connect a wallet</a> to list tokens you hold.</p>
       </Panel>
     );
   }
   if (cells.length === 0) {
     return (
       <Panel eyebrow="sell" title="List your tokens">
-        <p style={{ margin: 0 }}>You hold no tokens this app knows. Mine some on a launch page first.</p>
+        <p className="clamp">You hold no tokens this app knows. Mine some on a launch page first.</p>
       </Panel>
     );
   }
@@ -78,7 +78,7 @@ export function Sell({ launches, actions, onListed }: { launches: Launch[]; acti
 
   return (
     <Panel eyebrow="sell" title="List your tokens">
-      <div className="split" style={{ alignItems: "start" }}>
+      <div className="split">
         <div className="stack-sm">
           <Field label="Cell to sell" hint="A listing sells one whole cell.">
             <select className="input" value={choice} onChange={(e) => setChoice(Number(e.target.value))}>
@@ -102,10 +102,12 @@ export function Sell({ launches, actions, onListed }: { launches: Launch[]; acti
             <input className="input" inputMode="decimal" placeholder="0.0" value={splitText} onChange={(e) => setSplitText(e.target.value)} />
           </Field>
           <button className="btn" disabled={!splitOk || busy} onClick={() => void splitCell()}>Split</button>
-          <Notice>
-            Signing a listing authorises exactly one thing: this cell's output, in exchange for your price paid to
-            your address. Cancel by moving the cell, which voids the signature.
-          </Notice>
+          <More>
+            <p>
+              Signing a listing authorises exactly one thing: this cell's output, in exchange for your price paid to your
+              address. Cancel by moving the cell, which voids the signature.
+            </p>
+          </More>
         </div>
       </div>
       {message && <Notice tone="cyan">{message}</Notice>}

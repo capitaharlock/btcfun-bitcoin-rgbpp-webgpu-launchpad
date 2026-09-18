@@ -23,6 +23,19 @@ export interface Draft {
   blurb?: string;
   promoter?: string;
   opensInBlocks?: number;
+  /** Project links by field label, e.g. `{ Website: "https://…", X: "@handle" }`. */
+  links?: Record<string, string>;
+  why?: string;
+  plan?: string;
+}
+
+/**
+ * A wizard field by its label. A label carries its hint after " · " (a
+ * character count, a fault), so match the name exactly up to there.
+ */
+export function field(page: Page, label: string) {
+  const name = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return page.getByLabel(new RegExp(`^${name}( ·|$)`));
 }
 
 /** Announce a launch through the wizard; returns its id from the URL it opens at. */
@@ -34,6 +47,11 @@ export async function announce(page: Page, draft: Draft): Promise<string> {
   await page.getByRole("button", { name: "Continue →" }).click();
   if (draft.promoter) await page.getByLabel("Ticket income to").fill(draft.promoter);
   await page.getByLabel("Opens in (blocks)").fill(String(draft.opensInBlocks ?? 1));
+  await page.getByRole("button", { name: "Continue →" }).click();
+  // Links and story: optional.
+  for (const [label, value] of Object.entries(draft.links ?? {})) await field(page, label).fill(value);
+  if (draft.why) await field(page, "Why").fill(draft.why);
+  if (draft.plan) await field(page, "The plan").fill(draft.plan);
   await page.getByRole("button", { name: "Continue →" }).click();
   await page.getByRole("button", { name: `Announce ${draft.symbol}` }).click();
   await page.getByRole("button", { name: `Open ${draft.symbol}` }).click();
@@ -76,11 +94,12 @@ export async function mintOnce(page: Page, sim: ChainSim): Promise<string> {
   // Wait for the page to have read the chain before deciding which step it is on.
   const step = page.getByRole("button", { name: /^(Open miner cell|Buy ticket)/ });
   await expect(step).toBeVisible({ timeout: 30_000 });
-  if ((await step.innerText()).startsWith("Open")) await openMiner(page, sim);
+  // DOM text, not rendered text: button labels are upper-cased by the theme.
+  if (((await step.textContent()) ?? "").startsWith("Open")) await openMiner(page, sim);
   await buyTicket(page);
   await block(page, sim);
   const mint = await mineUntilMintable(page);
-  const label = (await mint.innerText()).replace(/^Mint /, "").trim();
+  const label = ((await mint.textContent()) ?? "").replace(/^Mint /, "").trim();
   await mint.click();
   await expect(page.getByText(/^Minting /)).toBeVisible();
   await block(page, sim);

@@ -55,7 +55,8 @@ export default function VerificationPage() {
         <p>
           The <a href="#/proof">Proof page</a> takes a mint's Bitcoin transaction id and re-checks every rule the mint
           script enforced, using raw data from the two chains rather than anything btc.fun's index says. It shows each check
-          with the numbers behind it, so you can see <em>why</em> a mint is valid, not just that it is.
+          with the numbers behind it, so you can see <em>why</em> a mint is valid, not just that it is. It is linked from
+          the footer of every page as <em>Verify a mint</em>; what it relies on is folded under the verdict.
         </p>
         <Diagram spec={VERIFY} />
       </section>

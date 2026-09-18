@@ -48,9 +48,9 @@ export function MyOrders({
         </Notice>
       )}
       {listings.length === 0 && live.length === 0 && finished.length === 0 ? (
-        <p className="faint" style={{ margin: 0 }}>You have no open listings or bids.</p>
+        <p className="faint clamp">You have no open listings or bids.</p>
       ) : (
-        <div className="orders" style={{ marginTop: accepted.length > 0 ? 12 : 0 }}>
+        <div className={`orders${accepted.length > 0 ? " after-notice" : ""}`}>
           {[...accepted, ...live.filter((b) => b.status.state === "open"), ...finished].map((item) => (
             <BidOrder key={item.id} item={item} actions={actions} onDone={onDone} onPublished={onPublished} />
           ))}
@@ -111,7 +111,7 @@ function BidOrder({
       {(status.state === "open" || status.state === "accepted") && (
         <button className="btn ghost" disabled={busy} onClick={() => void withdraw()}>Withdraw bid</button>
       )}
-      {error && <div className="tiny" style={{ color: "var(--danger)", flexBasis: "100%" }}>{error}</div>}
+      {error && <div className="error-text full">{error}</div>}
     </div>
   );
 }
@@ -130,7 +130,7 @@ function AskOrder({ item, actions, onDone }: { item: OpenListing; actions: Marke
       <Terms side="ask" symbol={launch.symbol} amount={BigInt(listing.amount)} sats={listing.priceSats} />
       {listing.bid && <Chip tone="cyan">for a bid</Chip>}
       <button className="btn ghost" disabled={busy} onClick={() => void cancel()}>{busy ? "…" : "Cancel listing"}</button>
-      {error && <div className="tiny" style={{ color: "var(--danger)", flexBasis: "100%" }}>{error}</div>}
+      {error && <div className="error-text full">{error}</div>}
     </div>
   );
 }

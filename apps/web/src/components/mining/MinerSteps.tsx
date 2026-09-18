@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { Launch } from "../../data/launches";
+import { useAnnounce } from "../../hooks/useAnnounce";
 import { useMiningSession } from "../../hooks/useMiningSession";
 import { txUrl } from "../../lib/bitcoin/network";
 import { atoms, blocksAsTime, group } from "../../lib/format";
@@ -24,7 +25,7 @@ import { planMint, planOpen, planTicket, SEAL_SATS, type MinerCell } from "../..
 import { DECIMALS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, TICKET_SATS, ticketChallenge } from "../../lib/standard";
 import { useTokens, type Operation } from "../../state/TokensProvider";
 import { useWallet } from "../../state/WalletProvider";
-import { Chip, Notice, Panel } from "../../ui/primitives";
+import { Chip, More, Notice, Panel } from "../../ui/primitives";
 import { MinePanel, type TicketView } from "./MinePanel";
 
 const BEST_KEY = "btcfun:best:v1";
@@ -55,6 +56,7 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
 
   const challenge = useMemo(() => (ticket ? ticketChallenge(ticket.txid, ticket.vout) : null), [ticket]);
   const mining = useMiningSession(challenge);
+  const announce = useAnnounce();
   const best = useBestForTicket(ticket, challenge, mining.sample.best);
 
   async function run(action: () => Promise<Operation>) {
@@ -101,23 +103,27 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
         reward: amount,
         paymaster: holding ? null : await tokens.service.paymaster(),
       });
-      return tokens.submit(plan, { kind: "mint", launchId: launch.id, tokenId: launch.tokenId, atoms: amount.toString() });
+      const op = await tokens.submit(plan, { kind: "mint", launchId: launch.id, tokenId: launch.tokenId, atoms: amount.toString() });
+      // The public feed points at the transaction; anyone can check the mint
+      // against both chains on the proof page.
+      await announce({ kind: "mint", launch: launch.id, amount, ref: op.btcTxid, txid: op.btcTxid });
+      return op;
     });
 
   // ── which step ──────────────────────────────────────────────────────────
   if (!wallet.vault) {
     return (
       <Panel eyebrow="mine" title="Connect a wallet to mine">
-        <p>Tickets, mining and minted tokens all belong to a Bitcoin address. <a href="#/wallet">Open the wallet</a>.</p>
+        <p className="clamp">Tickets and tokens belong to a Bitcoin address. <a href="#/wallet">Open the wallet</a>.</p>
       </Panel>
     );
   }
   if (!launch.open) {
     return (
       <Panel eyebrow="mine" title="Not open yet">
-        <p>
-          Minting opens at block {group(launch.h0)}, in {group(launch.blocksToHalving)} blocks
-          (about {blocksAsTime(launch.blocksToHalving)}).
+        <p className="clamp">
+          Opens at block {group(launch.h0)}: in {group(launch.blocksToHalving)} blocks, about{" "}
+          {blocksAsTime(launch.blocksToHalving)}.
         </p>
       </Panel>
     );
@@ -125,7 +131,7 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
   if (tokens.holdings === null) {
     return (
       <Panel eyebrow="mine" title="Reading your cells…">
-        <p className="faint">Asking the RGB++ service which cells are sealed to your address.</p>
+        <p className="faint clamp">Asking the RGB++ service which cells are sealed to your address.</p>
         {tokens.error && <Notice tone="warn">{tokens.error}</Notice>}
       </Panel>
     );
@@ -141,17 +147,19 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
           progress
         ) : (
           <div className="stack-md">
-            <p>
-              Your miner cell is the CKB cell that holds your tickets for {launch.symbol}. You open it
-              once. The RGB++ paymaster provides its CKB capacity, so you only need Bitcoin.
-            </p>
-            <p className="tiny faint">
-              Cost: the paymaster's fee and a {SEAL_SATS}-sat output that stays yours, plus the network fee.
-            </p>
-            <button className="btn primary lg" disabled={busy} onClick={open}>
-              {busy ? "Signing…" : "Open miner cell"}
-            </button>
+            <p className="clamp">Once per launch: a CKB cell that holds your {launch.symbol} tickets. You only need Bitcoin.</p>
+            <div className="row wrapped">
+              <button className="btn primary lg" disabled={busy} onClick={open}>
+                {busy ? "Signing…" : "Open miner cell"}
+              </button>
+            </div>
             {problem}
+            <More>
+              <p>
+                The RGB++ paymaster provides the cell's CKB capacity. Cost: the paymaster's fee and a {SEAL_SATS}-sat output
+                that stays yours, plus the network fee.
+              </p>
+            </More>
           </div>
         )}
       </Panel>
@@ -166,22 +174,23 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
           progress
         ) : (
           <div className="stack-md">
-            <p>
-              A ticket costs <b>{group(TICKET_SATS)} sats</b>: {group(PROMOTER_SATS)} to the promoter, {group(PLATFORM_FEE_SATS)} to the platform. It fixes your rate at
-              today's: a 24-bit hash would mint <b>{atoms(rateNow, DECIMALS, 0)} {launch.symbol}</b>.
+            <p className="clamp">
+              Locks today's rate: a 24-bit hash mints <b>{atoms(rateNow, DECIMALS, 0)} {launch.symbol}</b>.
             </p>
-            <p className="tiny faint">
-              The rate halves in {group(launch.blocksToHalving)} blocks (about {blocksAsTime(launch.blocksToHalving)}).
-              A ticket keeps the rate of the block it is bought at, however long you mine.
-            </p>
-            <button className="btn primary lg" disabled={busy} onClick={() => buyTicket(idle)}>
-              {busy ? "Signing…" : `Buy ticket · ${group(TICKET_SATS)} sats`}
-            </button>
-            <Notice>
-              Ticket income goes to the promoter. There is no reserve and no floor: a token is worth what
-              someone will pay for it.
-            </Notice>
+            <div className="row wrapped">
+              <button className="btn primary lg" disabled={busy} onClick={() => buyTicket(idle)}>
+                {busy ? "Signing…" : `Buy ticket · ${group(TICKET_SATS)} sats`}
+              </button>
+            </div>
             {problem}
+            <More>
+              <p>
+                {group(PROMOTER_SATS)} sats go to the promoter and {group(PLATFORM_FEE_SATS)} to the platform. The rate halves
+                in {group(launch.blocksToHalving)} blocks (about {blocksAsTime(launch.blocksToHalving)}); a ticket keeps the
+                rate of the block it is bought at, however long you mine.
+              </p>
+              <p>There is no reserve and no floor: a token is worth what someone will pay for it.</p>
+            </More>
           </div>
         )}
       </Panel>
@@ -204,7 +213,7 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
             ? "Signing…"
             : `Mint ${atoms(reward(best.clz, launch.h0, armed.data.anchor), DECIMALS, 2)} ${launch.symbol}`}
         </button>
-        <span className="tiny faint">You can keep mining for a better hash first; the rate will not change.</span>
+        <span className="tiny faint">Or keep mining for a better hash: the rate is locked.</span>
       </div>
     ) : null;
 
@@ -255,11 +264,11 @@ function Landing({ op, symbol }: { op: Operation; symbol: string }) {
         <span className="tiny">{stage[op.stage]}</span>
       </div>
       <div className="tiny faint">
-        Bitcoin: <a href={txUrl(op.btcTxid)} target="_blank" rel="noreferrer">{op.btcTxid.slice(0, 16)}…</a>
+        Bitcoin: <a href={txUrl(op.btcTxid)} target="_blank" rel="noopener noreferrer">{op.btcTxid.slice(0, 16)}…</a>
         {op.ckbTxHash && (
           <>
             {" · "}CKB:{" "}
-            <a href={`${ACTIVE_RGBPP.ckbExplorer}${op.ckbTxHash}`} target="_blank" rel="noreferrer">
+            <a href={`${ACTIVE_RGBPP.ckbExplorer}${op.ckbTxHash}`} target="_blank" rel="noopener noreferrer">
               {op.ckbTxHash.slice(0, 18)}…
             </a>
           </>

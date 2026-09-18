@@ -19,7 +19,7 @@ import { ckbClient } from "../lib/rgbpp/ckb";
 import { verifyMint, type MintVerdict } from "../lib/rgbpp/verify";
 import { DECIMALS } from "../lib/standard";
 import { useTokens } from "../state/TokensProvider";
-import { Chip, Field, Notice, Panel } from "../ui/primitives";
+import { Chip, Field, More, Notice, PageHead, Panel } from "../ui/primitives";
 
 
 type State =
@@ -74,16 +74,19 @@ export function ProofView({ txid }: { txid?: string }) {
 
   return (
     <div className="stack-lg">
-      <div>
-        <div className="eyebrow">proof</div>
-        <h1 style={{ fontSize: 30 }}>
-          Verify a <span className="grad-text">mint</span>
-        </h1>
-      </div>
+      <PageHead
+        eyebrow="proof"
+        title={
+          <>
+            Verify a <span className="hl cyan">mint</span>
+          </>
+        }
+        lede="Paste a mint's Bitcoin txid. Every rule is recomputed from the two chains."
+      />
 
       <Panel eyebrow="input" title="The mint's Bitcoin transaction">
-        <div className="row wrapped" style={{ alignItems: "flex-end" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="row wrapped align-end">
+          <div className="grow">
             <Field label="Bitcoin txid" hint={input && !valid ? "64 lowercase hexadecimal characters." : "From the operations list, or any explorer."}>
               <input className="input mono" spellCheck={false} value={input} onChange={(e) => setInput(e.target.value.trim().toLowerCase())} />
             </Field>
@@ -92,7 +95,7 @@ export function ProofView({ txid }: { txid?: string }) {
         </div>
       </Panel>
 
-      {state.kind === "reading" && <Panel><p className="faint" style={{ margin: 0 }}>Reading both chains…</p></Panel>}
+      {state.kind === "reading" && <Panel><p className="faint clamp">Reading both chains…</p></Panel>}
       {state.kind === "pending" && <Notice tone="cyan">{state.detail}</Notice>}
       {state.kind === "error" && <Notice tone="danger">{state.message}</Notice>}
       {state.kind === "done" && txid && (
@@ -103,32 +106,32 @@ export function ProofView({ txid }: { txid?: string }) {
         >
           <div className="stack-sm">
             {state.verdict.checks.map((check) => (
-              <div key={check.label} className="row" style={{ alignItems: "flex-start", gap: 10 }}>
+              <div key={check.label} className="check">
                 <Chip tone={check.ok ? "cyan" : "danger"}>{check.ok ? "✓" : "✗"} {check.label}</Chip>
-                <span className="tiny" style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{check.detail}</span>
+                <span className="tiny">{check.detail}</span>
               </div>
             ))}
           </div>
           {state.verdict.minted !== null && state.verdict.valid && (
-            <p style={{ marginBottom: 0 }}>Minted <b>{atoms(state.verdict.minted, DECIMALS, 2)}</b> tokens.</p>
+            <p className="minted">Minted <b>{atoms(state.verdict.minted, DECIMALS, 2)}</b> tokens.</p>
           )}
           <div className="rule" />
-          <div className="tiny faint" style={{ overflowWrap: "anywhere" }}>
-            Bitcoin <a href={txUrl(txid)} target="_blank" rel="noreferrer">{txid}</a>
+          <div className="tiny faint anywhere">
+            Bitcoin <a href={txUrl(txid)} target="_blank" rel="noopener noreferrer">{txid}</a>
             <br />
-            CKB <a href={`${ACTIVE_RGBPP.ckbExplorer}${state.ckbTxHash}`} target="_blank" rel="noreferrer">{state.ckbTxHash}</a>
+            CKB <a href={`${ACTIVE_RGBPP.ckbExplorer}${state.ckbTxHash}`} target="_blank" rel="noopener noreferrer">{state.ckbTxHash}</a>
           </div>
         </Panel>
       )}
 
-      <Panel eyebrow="what this checks" title="And what it relies on">
-        <p className="tiny">
-          The commitment, the ticket, the proof of work and the amount are recomputed here from raw chain data with
-          the same functions the mint script's vectors pin. What is relied on: that the Bitcoin provider and the CKB
-          node report the chains honestly, and that the Bitcoin transaction is confirmed — the RGB++ lock checked
-          that with an SPV proof when CKB accepted it.
+      <More boxed summary="What this checks, and what it relies on">
+        <p>
+          The commitment, the ticket, the proof of work and the amount are recomputed here from raw chain data with the same
+          functions the mint script's vectors pin. What is relied on: that the Bitcoin provider and the CKB node report the
+          chains honestly, and that the Bitcoin transaction is confirmed — the RGB++ lock checked that with an SPV proof when
+          CKB accepted it.
         </p>
-      </Panel>
+      </More>
     </div>
   );
 }

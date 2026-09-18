@@ -20,7 +20,7 @@ import { unitPrice } from "../../lib/market/book";
 import type { TokenCell } from "../../lib/rgbpp/operations";
 import { DECIMALS } from "../../lib/standard";
 import type { Operation } from "../../state/TokensProvider";
-import { Chip, Field, Notice, Panel } from "../../ui/primitives";
+import { Chip, Field, More, Notice, Panel } from "../../ui/primitives";
 
 interface Props {
   launch: Launch;
@@ -39,9 +39,9 @@ export function Bids({ launch, bids, me, cells, actions, onDone, onPublished }: 
   return (
     <Panel eyebrow="bids" title={`Sell ${launch.symbol} to a bid`}>
       {bids.length === 0 ? (
-        <p className="faint" style={{ margin: 0 }}>No bids for {launch.symbol}.</p>
+        <p className="faint clamp">No bids for {launch.symbol}.</p>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div className="scroll-x">
           <table className="table" aria-label="Bids">
             <thead>
               <tr>
@@ -124,7 +124,7 @@ function BidRow({
       <td className="mono">{shortHash(bid.bidder, 8, 4)}</td>
       <td>
         {action}
-        {error && <div className="tiny" style={{ color: "var(--danger)", maxWidth: 260 }}>{error}</div>}
+        {error && <div className="error-text">{error}</div>}
       </td>
     </tr>
   );
@@ -153,9 +153,9 @@ function PlaceBid({ launch, actions, onPublished }: { launch: Launch; actions: M
   };
 
   return (
-    <div className="stack-sm" style={{ marginTop: 16 }}>
+    <div className="stack-sm placebid">
       <div className="eyebrow">place a bid</div>
-      <div className="grid g3" style={{ alignItems: "end" }}>
+      <div className="grid g3 align-end">
         <Field label="Amount (tokens)" hint={amountText && !amountOk ? "A positive amount." : undefined}>
           <input className="input" inputMode="decimal" placeholder="0.0" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
         </Field>
@@ -167,15 +167,18 @@ function PlaceBid({ launch, actions, onPublished }: { launch: Launch; actions: M
         </button>
       </div>
       {amountOk && priceOk && (
-        <p className="tiny faint" style={{ margin: 0 }}>
+        <p className="tiny faint clamp">
           {satsPerToken(unitPrice({ priceSats: price, amount }))} sats per {launch.symbol}.
         </p>
       )}
-      <Notice tone="warn">
-        A bid is a signed intention, not escrow. Nothing is locked and no sats leave your wallet when you place it. A
-        holder who accepts signs a listing for exactly this amount and price; the trade happens only when you complete
-        that purchase, and until then anyone could buy the listing first. Keep the sats in your wallet to complete it.
-      </Notice>
+      <p className="tiny faint clamp">A bid locks nothing. Keep the sats in your wallet to complete it.</p>
+      <More>
+        <p>
+          A bid is a signed intention, not escrow: no sats leave your wallet when you place it. A holder who accepts signs a
+          listing for exactly this amount and price; the trade happens only when you complete that purchase, and until then
+          anyone could buy the listing first.
+        </p>
+      </More>
       {placed && <Notice tone="cyan">Bid published. It appears under My orders; complete it there once a holder accepts.</Notice>}
       {error && <Notice tone="danger">{error}</Notice>}
     </div>

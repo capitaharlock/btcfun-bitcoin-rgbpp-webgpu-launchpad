@@ -3,7 +3,7 @@
 import { test, expect } from "../support/fixtures";
 
 const SECTIONS = [
-  { route: "/", heading: /Tokens you/i },
+  { route: "/", heading: /Mine tokens/i },
   { route: "/create", heading: /Launch your own/i },
   { route: "/market", heading: /Buy and sell/i },
   { route: "/activity", heading: /What people are/i },
@@ -23,7 +23,7 @@ test.describe("navigation", () => {
   test("the four main sections are in the header, in order", async ({ page, app }) => {
     await app.goto("/");
     const nav = page.getByRole("navigation").first();
-    const labels = (await nav.getByRole("link").allInnerTexts()).map((t) => t.trim());
+    const labels = (await nav.getByRole("link").allTextContents()).map((t) => t.trim());
     expect(labels.slice(0, 4)).toEqual(["Launches", "Create", "Market", "Activity"]);
   });
 

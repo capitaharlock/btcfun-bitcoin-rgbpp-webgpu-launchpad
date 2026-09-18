@@ -12,7 +12,7 @@ import { atoms, group, satsPerToken, shortHash } from "../../lib/format";
 import { unitPrice } from "../../lib/market/book";
 import { DECIMALS } from "../../lib/standard";
 import type { Operation } from "../../state/TokensProvider";
-import { Chip, Panel } from "../../ui/primitives";
+import { Chip, More, Panel } from "../../ui/primitives";
 import { Sigil } from "../../ui/Sigil";
 
 export function Listings({
@@ -32,11 +32,11 @@ export function Listings({
   return (
     <Panel eyebrow="open listings" title="Buy">
       {loading ? (
-        <p className="faint" style={{ margin: 0 }}>Reading listings and checking each against the chain…</p>
+        <p className="faint clamp">Reading listings and checking each against the chain…</p>
       ) : listings.length === 0 ? (
-        <p style={{ margin: 0 }}>No open listings. Every listing here has been checked live on CKB and Bitcoin.</p>
+        <p className="clamp">No open listings. Every listing here has been checked live on CKB and Bitcoin.</p>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div className="scroll-x">
           <table className="table">
             <thead>
               <tr>
@@ -62,10 +62,12 @@ export function Listings({
           </table>
         </div>
       )}
-      <p className="tiny faint" style={{ marginBottom: 0 }}>
-        Buying signs one Bitcoin transaction that pays the seller and moves the tokens to you. If someone buys
-        first, your transaction is simply rejected and costs nothing.
-      </p>
+      <More>
+        <p>
+          Buying signs one Bitcoin transaction that pays the seller and moves the tokens to you. If someone buys first, your
+          transaction is simply rejected and costs nothing.
+        </p>
+      </More>
     </Panel>
   );
 }
@@ -92,8 +94,8 @@ function ListingRow({
   return (
     <tr>
       <td>
-        <span className="row" style={{ gap: 8 }}>
-          <Sigil symbol={launch.symbol} accent={launch.accent} size="sm" />
+        <span className="row">
+          <Sigil seed={launch.id} accent={launch.accent} size="sm" still />
           <a href={`#/launch/${launch.id}`}>{launch.symbol}</a>
           {listing.bid && <Chip tone="cyan">for a bid</Chip>}
         </span>
@@ -112,7 +114,7 @@ function ListingRow({
             {busy ? "Signing…" : "Buy"}
           </button>
         )}
-        {error && <div className="tiny" style={{ color: "var(--danger)", maxWidth: 260 }}>{error}</div>}
+        {error && <div className="error-text">{error}</div>}
       </td>
     </tr>
   );

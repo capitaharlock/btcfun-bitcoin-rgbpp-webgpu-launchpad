@@ -31,6 +31,12 @@ export default function MintPage() {
             created in an output of that transaction, which you control. The next ticket is a new transaction.
           </li>
         </ol>
+        <p>
+          On a launch page the step you are on is decided by the chain, not by the page: reload it, open it in another tab
+          or mint elsewhere, and it shows the same step. Each step is one line and one button; what it costs and why is
+          folded under <em>More</em>. The <strong>Mine</strong> button on a launch's box in the catalogue opens its page on
+          this panel.
+        </p>
         <Diagram spec={CIRCUIT} />
         <p>
           The diamonds are the checks the mint script makes on CKB. The app runs the same arithmetic to show you the

@@ -16,7 +16,7 @@ import { useMemo, useState } from "react";
 import { atoms, group } from "../lib/format";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, terminalHalving, TICKET_SATS } from "../lib/standard";
 import { RewardChart } from "../ui/RewardChart";
-import { Field, KV, Notice, Panel, Stat } from "../ui/primitives";
+import { Field, KV, More, PageHead, Panel, Stat } from "../ui/primitives";
 
 const DEVICES = [
   { id: "phone", label: "Phone CPU", rate: 1e6 },
@@ -50,12 +50,15 @@ export function Lab() {
 
   return (
     <div className="stack-lg">
-      <div>
-        <div className="eyebrow">the standard</div>
-        <h1 style={{ fontSize: 30 }}>
-          One set of rules, <span className="grad-text">every token</span>
-        </h1>
-      </div>
+      <PageHead
+        eyebrow="the standard"
+        title={
+          <>
+            One set of rules, <span className="hl">every token</span>
+          </>
+        }
+        lede="The creator picks a name and an income address — nothing economic."
+      />
 
       <section className="split">
         <Panel eyebrow="rules" title="What every launch shares">
@@ -70,34 +73,42 @@ export function Lab() {
               ["Decimals", String(DECIMALS)],
             ]}
           />
-          <div className="rule" />
-          <Notice>
-            The creator picks a name and an income address — nothing economic. So the supply of any token is simply
-            what its tickets minted, and two tokens' numbers mean the same thing.
-          </Notice>
+          <More>
+            <p>So the supply of any token is simply what its tickets minted, and two tokens' numbers mean the same thing.</p>
+          </More>
         </Panel>
         <Panel eyebrow="why these rules" title="What they are for">
-          <p className="tiny">
-            <b>Immediacy.</b> A miner sees what the best hash is worth while mining and mints exactly that; nobody else's
-            turnout changes it.
-          </p>
-          <p className="tiny">
-            <b>Bounded without a cap.</b> The ticket costs the same while its reward halves weekly, so the cost of making
-            one token doubles every week. Mining stops paying long before the arithmetic stops minting.
-          </p>
-          <p className="tiny">
-            <b>Hardware matters, but slowly.</b> 1,000× the hash rate buys about 10 more leading zero bits: roughly
-            twice the tokens, not a thousand times.
-          </p>
-          <p className="tiny" style={{ marginBottom: 0 }}>
-            <b>Enforced on chain.</b> A CKB script checks the ticket payment, the hash and the amount. The client only
-            shows the same arithmetic.
-          </p>
+          <KV
+            rows={[
+              ["Immediacy", "you mint what your hash shows"],
+              ["Bounded", "cost per token doubles weekly"],
+              ["Fair-ish", "1,000× hash rate ≈ 2× tokens"],
+              ["Enforced", "by a script on CKB"],
+            ]}
+          />
+          <More>
+            <p>
+              <b>Immediacy.</b> A miner sees what the best hash is worth while mining and mints exactly that; nobody else's
+              turnout changes it.
+            </p>
+            <p>
+              <b>Bounded without a cap.</b> The ticket costs the same while its reward halves weekly, so the cost of making
+              one token doubles every week. Mining stops paying long before the arithmetic stops minting.
+            </p>
+            <p>
+              <b>Hardware matters, but slowly.</b> 1,000× the hash rate buys about 10 more leading zero bits: roughly twice
+              the tokens, not a thousand times.
+            </p>
+            <p>
+              <b>Enforced on chain.</b> A CKB script checks the ticket payment, the hash and the amount. The client only
+              shows the same arithmetic.
+            </p>
+          </More>
         </Panel>
       </section>
 
       <Panel eyebrow="simulate" title="Tickets, effort and what gets issued">
-        <div className="split" style={{ alignItems: "start" }}>
+        <div className="split">
           <div className="stack-sm">
             <Field label={`Tickets in week 1 — ${group(tickets)}`}>
               <input type="range" min={10} max={5000} step={10} value={tickets} onChange={(e) => setTickets(Number(e.target.value))} />
@@ -119,11 +130,11 @@ export function Lab() {
             </Field>
           </div>
           <div className="stack-md">
-            <div className="statrow">
+            <div className="scoreboard">
               <Stat k={`issued in ${WEEKS} weeks`} v={atoms(supply, DECIMALS, 0)} tone="amber" />
               <Stat k="promoter income" v={group(revenue)} unit="sats" tone="cyan" />
             </div>
-            <div style={{ overflowX: "auto" }}>
+            <div className="scroll-x">
               <table className="table">
                 <thead>
                   <tr>
@@ -149,10 +160,12 @@ export function Lab() {
                 </tbody>
               </table>
             </div>
-            <p className="tiny faint" style={{ margin: 0 }}>
-              "Sats per token" is what the ticket costs divided by what it mints: the production cost, which doubles
-              every halving. It is not a price — a token is worth what someone pays for it.
-            </p>
+            <More summary="What “sats per token” means">
+              <p>
+                What the ticket costs divided by what it mints: the production cost, which doubles every halving. It is not a
+                price — a token is worth what someone pays for it.
+              </p>
+            </More>
           </div>
         </div>
       </Panel>

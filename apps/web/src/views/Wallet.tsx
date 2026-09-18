@@ -13,7 +13,7 @@ import { NETWORK, formatBtc, shortAddress, useWallet } from "../state/WalletProv
 import { addressUrl, exportLocalSecret } from "../lib/bitcoin";
 import { bytesToHex, hexToBytes } from "../lib/bytes";
 import { group } from "../lib/format";
-import { Chip, KV, Notice, Panel, Stat } from "../ui/primitives";
+import { Chip, KV, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { Copyable } from "../ui/Copyable";
 
 export function WalletView() {
@@ -21,15 +21,21 @@ export function WalletView() {
 
   return (
     <div className="stack-lg">
-      <div className="row wrapped">
-        <div>
-          <div className="eyebrow">wallet</div>
-          <h1>Your keys on {NETWORK.label}</h1>
-        </div>
-        <span className="spacer" />
-        <Chip tone="cyan">{NETWORK.label}</Chip>
-        {wallet.tipHeight && <Chip tone="amber" live>btc {group(wallet.tipHeight)}</Chip>}
-      </div>
+      <PageHead
+        eyebrow="wallet"
+        title={
+          <>
+            Your keys on <span className="hl cyan">{NETWORK.label}</span>
+          </>
+        }
+        lede="A standard BIP84 address. Anything here can be checked on an explorer."
+        aside={
+          <>
+            <Chip tone="cyan">{NETWORK.label}</Chip>
+            {wallet.tipHeight && <Chip tone="amber" live>btc {group(wallet.tipHeight)}</Chip>}
+          </>
+        }
+      />
 
       {wallet.vault ? <Connected /> : <Disconnected />}
 
@@ -65,19 +71,7 @@ function Disconnected() {
   return (
     <section className="split">
       <Panel eyebrow="recommended" title="Passkey wallet">
-        <p>
-          Your key is derived from your device's authenticator — Touch&nbsp;ID,
-          Face&nbsp;ID or Windows&nbsp;Hello — every time it is needed, and wiped
-          straight after. There is no seed phrase to store and no private key on
-          disk.
-        </p>
-        <KV
-          rows={[
-            ["Derivation", "WebAuthn PRF → BIP39 → BIP84"],
-            ["Path", NETWORK.bip84Path],
-            ["Stored here", "credential id only"],
-          ]}
-        />
+        <p className="clamp">Touch&nbsp;ID, Face&nbsp;ID or Windows&nbsp;Hello. No seed phrase, no key on disk.</p>
         <div className="rule" />
         <button
           className="btn primary lg"
@@ -87,20 +81,24 @@ function Disconnected() {
           {wallet.busy ? "Waiting for your device…" : "Connect with a passkey"}
         </button>
         {!wallet.passkeySupported && (
-          <Notice tone="warn">
-            This browser does not expose WebAuthn, so the passkey path is
-            unavailable here. The demo key below works anywhere.
-          </Notice>
+          <Notice tone="warn">This browser has no WebAuthn. The demo key works anywhere.</Notice>
         )}
+        <div className="rule" />
+        <More>
+          <p>Your key is derived from your device's authenticator every time it is needed, and wiped straight after.</p>
+          <KV
+            rows={[
+              ["Derivation", "WebAuthn PRF → BIP39 → BIP84"],
+              ["Path", NETWORK.bip84Path],
+              ["Stored here", "credential id only"],
+            ]}
+          />
+        </More>
       </Panel>
 
       <Panel eyebrow="fallback" title="Demo key">
-        <p>
-          A random key kept in this browser's storage. Weaker than a passkey by
-          construction — anything with access to this origin's storage can read
-          it — and offered only so the demo runs where no authenticator exists.
-          Put nothing on it you would mind losing.
-        </p>
+        <p className="clamp">A key kept in this browser. Put nothing on it you would mind losing.</p>
+        <div className="rule" />
         <div className="row wrapped">
           <button className="btn" disabled={wallet.busy} onClick={() => void wallet.connectLocal()}>
             Create a demo key
@@ -111,7 +109,7 @@ function Disconnected() {
         </div>
 
         {restoring && (
-          <div className="stack-sm" style={{ marginTop: 12 }}>
+          <div className="stack-sm restore">
             <input
               className="input mono"
               placeholder="64 hex characters"
@@ -125,6 +123,13 @@ function Disconnected() {
             {restoreError && <Notice tone="warn">{restoreError}</Notice>}
           </div>
         )}
+        <div className="rule" />
+        <More>
+          <p>
+            Weaker than a passkey by construction — anything with access to this origin's storage can read it — and offered
+            only so the demo runs where no authenticator exists.
+          </p>
+        </More>
       </Panel>
     </section>
   );
@@ -154,17 +159,18 @@ function Connected() {
           }
         >
           <Copyable value={vault.address} label="address" />
-          <div className="row tiny faint" style={{ marginTop: 8 }}>
-            <a href={addressUrl(vault.address)} target="_blank" rel="noreferrer">
+          <div className="row tiny faint below">
+            <a href={addressUrl(vault.address)} target="_blank" rel="noopener noreferrer">
               Inspect on mempool.space ↗
             </a>
+            <a href="#/holdings">Your tokens →</a>
             <span className="spacer" />
             <span>{vault.label}</span>
           </div>
 
           <div className="rule" />
 
-          <div className="statrow">
+          <div className="scoreboard">
             <Stat
               k="balance"
               v={balance ? formatBtc(balance.total) : "—"}
@@ -182,22 +188,19 @@ function Connected() {
         </Panel>
 
         <Panel eyebrow="fund" title="Get testnet coins">
-          <p>
-            Tickets cost real satoshis on {NETWORK.label}. They are worthless
-            play money, and the faucets below hand them out for nothing.
-          </p>
+          <p className="clamp">Testnet coins are free play money. Paste your address into a faucet.</p>
+          <div className="rule" />
           <div className="stack-sm">
             {NETWORK.faucets.map((faucet) => (
-              <a key={faucet.url} className="btn" href={faucet.url} target="_blank" rel="noreferrer">
+              <a key={faucet.url} className="btn" href={faucet.url} target="_blank" rel="noopener noreferrer">
                 {faucet.name} ↗
               </a>
             ))}
           </div>
           <div className="rule" />
-          <Notice tone="cyan">
-            Paste the address above into a faucet. The balance updates by itself
-            within a few seconds of the transaction reaching the mempool.
-          </Notice>
+          <More>
+            <p>The balance updates by itself within a few seconds of the transaction reaching the mempool.</p>
+          </More>
         </Panel>
       </section>
 
@@ -209,20 +212,16 @@ function Connected() {
             ["Identity", `${vault.identity.slice(0, 16)}…`],
           ]}
         />
-        <div className="rule" />
-        <p>
-          The identity above is the public key every ledger record is signed
-          under. The address is standard BIP84, so the same mnemonic opens it in
-          any BIP39 wallet — nothing here can trap your coins.
-        </p>
+        <More>
+          <p>
+            The identity is the public key every record is signed under. The address is standard BIP84, so the same
+            mnemonic opens it in any BIP39 wallet — nothing here can trap your coins.
+          </p>
+        </More>
 
         {secret && (
           <div className="stack-sm">
-            <Notice tone="warn">
-              This demo key lives in browser storage. Copy it somewhere safe if
-              you want the same wallet after clearing site data — or on another
-              machine. Anyone holding it holds the wallet.
-            </Notice>
+            <Notice tone="warn">This demo key lives in browser storage. Anyone holding the secret holds the wallet.</Notice>
             {revealed ? (
               <Copyable value={bytesToHex(secret)} label="demo key secret" />
             ) : (

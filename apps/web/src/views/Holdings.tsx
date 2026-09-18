@@ -22,7 +22,7 @@ import { planTransfer, type TokenCell } from "../lib/rgbpp/operations";
 import { DECIMALS } from "../lib/standard";
 import { useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
-import { Chip, Field, Notice, Panel, Stat } from "../ui/primitives";
+import { Chip, Field, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { Sigil } from "../ui/Sigil";
 
 export function Holdings() {
@@ -33,7 +33,7 @@ export function Holdings() {
   if (!wallet.vault) {
     return (
       <Panel eyebrow="holdings" title="Connect a wallet">
-        <p>Tokens are sealed to Bitcoin outputs, so they belong to an address. <a href="#/wallet">Open the wallet</a>.</p>
+        <p className="clamp">Tokens belong to a Bitcoin address. <a href="#/wallet">Open the wallet</a>.</p>
       </Panel>
     );
   }
@@ -42,22 +42,20 @@ export function Holdings() {
 
   return (
     <div className="stack-lg">
-      <div className="row wrapped">
-        <div>
-          <div className="eyebrow">holdings</div>
-          <h1 style={{ fontSize: 30 }}>Your tokens</h1>
-        </div>
-        <span className="spacer" />
-        <Chip tone="cyan">{shortHash(wallet.vault.address, 10, 6)}</Chip>
-      </div>
+      <PageHead
+        eyebrow="holdings"
+        title="Your tokens"
+        lede="Read from the chain on every poll. Yours whether or not this app knows their name."
+        aside={<Chip tone="cyan"><span className="mono">{shortHash(wallet.vault.address, 10, 6)}</span></Chip>}
+      />
 
       {tokens.error && <Notice tone="warn">Could not read your cells: {tokens.error}</Notice>}
       {tokens.holdings === null ? (
-        <Panel><p className="faint" style={{ margin: 0 }}>Reading the cells sealed to your address…</p></Panel>
+        <Panel><p className="faint clamp">Reading the cells sealed to your address…</p></Panel>
       ) : held.length === 0 ? (
         <Panel>
-          <p style={{ margin: 0 }}>
-            No tokens yet. <a href="#/">Pick a launch</a>, buy a ticket and mint — or ask someone to send you some.
+          <p className="clamp">
+            No tokens yet. <a href="#/">Pick a launch</a> and mine — or ask someone to send you some.
           </p>
         </Panel>
       ) : (
@@ -78,24 +76,26 @@ function Position({ tokenId, cells, launch }: { tokenId: string; cells: TokenCel
     <Panel
       eyebrow={launch ? launch.name : "unknown to this app"}
       title={
-        <span className="row" style={{ gap: 10 }}>
-          {launch && <Sigil symbol={launch.symbol} accent={launch.accent} size="sm" />}
+        <span className="row">
+          {launch && <Sigil seed={launch.id} accent={launch.accent} size="md" />}
           {launch ? launch.symbol : shortHash(tokenId, 10, 6)}
         </span>
       }
-      aside={launch && <a className="btn ghost" href={`#/launch/${launch.id}`}>Open launch</a>}
+      aside={launch && <a className="btn ghost sm" href={`#/launch/${launch.id}`}>Open launch</a>}
     >
-      <div className="split" style={{ alignItems: "start" }}>
+      <div className="split">
         <div className="stack-md">
-          <div className="statrow">
+          <div className="scoreboard">
             <Stat k="balance" v={atoms(total, DECIMALS, 2)} unit={symbol} tone="amber" />
             <Stat k="cells" v={group(cells.length)} small />
           </div>
-          <p className="tiny faint" style={{ margin: 0 }}>
-            Token id <span className="mono">{shortHash(tokenId, 12, 8)}</span>. Each cell is sealed to one of your
-            Bitcoin outputs; spending that output without moving the cell would lose it, which is why this app
-            never uses those outputs to pay fees.
-          </p>
+          <More>
+            <p>
+              Token id <span className="mono">{shortHash(tokenId, 12, 8)}</span>. Each cell is sealed to one of your Bitcoin
+              outputs; spending that output without moving the cell would lose it, which is why this app never uses those
+              outputs to pay fees.
+            </p>
+          </More>
         </div>
         {launch ? (
           <TransferForm launch={launch} cells={cells} total={total} />
@@ -157,7 +157,7 @@ function TransferForm({ launch, cells, total }: { launch: Launch; cells: TokenCe
 
   return (
     <div className="stack-sm">
-      <Field label="Send to" hint={toFault ?? "Any Bitcoin address. The tokens are sealed to a small output that pays it."}>
+      <Field label="Send to" hint={toFault ?? "Any Bitcoin address."}>
         <input className="input mono" spellCheck={false} placeholder={`${ACTIVE.addressPrefix}…`} value={to} onChange={(e) => setTo(e.target.value.trim())} />
       </Field>
       <Field label={`Amount (${launch.symbol})`} hint={amountFault ?? `You hold ${atoms(total, DECIMALS, 8)}.`}>
@@ -166,14 +166,16 @@ function TransferForm({ launch, cells, total }: { launch: Launch; cells: TokenCe
       <button className="btn primary" disabled={!ready || busy} onClick={() => void send()}>
         {busy ? "Signing…" : "Send"}
       </button>
-      <p className="tiny faint" style={{ margin: 0 }}>
-        A transfer that leaves you change needs a second cell, whose capacity the RGB++ paymaster provides for a
-        fee in the same transaction.
-      </p>
+      <More>
+        <p>
+          The tokens are sealed to a small output that pays the recipient. A transfer that leaves you change needs a second
+          cell, whose capacity the RGB++ paymaster provides for a fee in the same transaction.
+        </p>
+      </More>
       {error && <Notice tone="danger">{error}</Notice>}
       {sent && (
         <Notice tone="cyan">
-          Sent — <a href={txUrl(sent.btcTxid)} target="_blank" rel="noreferrer">view the Bitcoin transaction</a>. It
+          Sent — <a href={txUrl(sent.btcTxid)} target="_blank" rel="noopener noreferrer">view the Bitcoin transaction</a>. It
           settles on CKB after it confirms.
         </Notice>
       )}
@@ -196,7 +198,7 @@ function History({ operations, launchOf }: { operations: Operation[]; launchOf: 
   const tone = { sent: "cyan", queued: "cyan", settled: "ok", failed: "danger" } as const;
   return (
     <Panel eyebrow="this wallet" title="Operations">
-      <div style={{ overflowX: "auto" }}>
+      <div className="scroll-x">
         <table className="table">
           <thead>
             <tr>
@@ -219,10 +221,10 @@ function History({ operations, launchOf }: { operations: Operation[]; launchOf: 
                     {op.atoms ? atoms(BigInt(op.atoms), DECIMALS, 2) : op.sats ? `${group(op.sats)} sats` : "—"}
                   </td>
                   <td><Chip tone={tone[op.stage]} live={op.stage === "sent" || op.stage === "queued"}>{op.stage}</Chip></td>
-                  <td><a href={txUrl(op.btcTxid)} target="_blank" rel="noreferrer" className="mono">{op.btcTxid.slice(0, 10)}…</a></td>
+                  <td><a href={txUrl(op.btcTxid)} target="_blank" rel="noopener noreferrer" className="mono">{op.btcTxid.slice(0, 10)}…</a></td>
                   <td>
                     {op.ckbTxHash ? (
-                      <a href={`${ACTIVE_RGBPP.ckbExplorer}${op.ckbTxHash}`} target="_blank" rel="noreferrer" className="mono">
+                      <a href={`${ACTIVE_RGBPP.ckbExplorer}${op.ckbTxHash}`} target="_blank" rel="noopener noreferrer" className="mono">
                         {op.ckbTxHash.slice(0, 12)}…
                       </a>
                     ) : "—"}
