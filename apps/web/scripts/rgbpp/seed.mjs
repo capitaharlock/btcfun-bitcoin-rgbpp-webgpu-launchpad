@@ -175,6 +175,9 @@ const steps = {
           continue;
         }
         write();
+        // The cells were read before this operation settled; acting on them
+        // now would repeat it. The next pass reads them fresh.
+        continue;
       }
       if ((state.rounds[id] ?? 0) >= ROUNDS) continue;
       if (tip < commitment.h0) continue;
