@@ -16,6 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { FALLBACK_TIP, specFor, type LaunchSpec } from "../data/launches";
 import { feed, faultIn as activityFault, type ActivityEntry } from "../lib/activity";
 import { createdLocally, idMatches, LAUNCH_ID_PATTERN, type LaunchCommitment } from "../lib/launches/create";
+import { resolveAnnouncements, type Heard } from "../lib/launches/registry";
 import { useWallet } from "./WalletProvider";
 
 /** How often to look for launches other people announced. */
@@ -37,7 +38,7 @@ const LaunchesContext = createContext<LaunchesContextValue | null>(null);
 
 export function LaunchesProvider({ children }: { children: ReactNode }) {
   const { tipHeight } = useWallet();
-  const [remote, setRemote] = useState<LaunchCommitment[]>([]);
+  const [remote, setRemote] = useState<Heard[]>([]);
   const [indexRead, setIndexRead] = useState(false);
   const [localRevision, setLocalRevision] = useState(0);
 
@@ -64,16 +65,13 @@ export function LaunchesProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   const specs = useMemo(() => {
-    const byId = new Map<string, LaunchCommitment>();
-    // Local first: an announcer's own copy wins over the index's echo of it,
-    // so a launch is visible the moment it is signed. The id is derived from
-    // the terms, so two entries under one id are the same launch.
-    for (const commitment of [...createdLocally(), ...remote]) {
-      if (isPlausible(commitment) && idMatches(commitment) && !byId.has(commitment.id)) {
-        byId.set(commitment.id, commitment);
-      }
-    }
-    return [...byId.values()].sort((a, b) => b.at.localeCompare(a.at)).map(specFor);
+    const valid = (c: LaunchCommitment) => isPlausible(c) && idMatches(c);
+    return resolveAnnouncements(
+      createdLocally().filter(valid),
+      remote.filter((heard) => valid(heard.commitment)),
+    )
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .map(specFor);
     // `localRevision` is the invalidation signal for the storage-backed list.
   }, [remote, localRevision]);
 
@@ -106,7 +104,7 @@ export function useLaunchRegistry(): LaunchesContextValue {
  * Returns nothing rather than throwing: one bad event must not empty the
  * registry, and the index is untrusted input by design.
  */
-function commitmentIn(entry: ActivityEntry): LaunchCommitment[] {
+function commitmentIn(entry: ActivityEntry): Heard[] {
   const { body } = entry.signed;
   if (body.kind !== "launch" || !body.meta) return [];
   if (activityFault(entry.signed) !== null) return [];
@@ -122,7 +120,7 @@ function commitmentIn(entry: ActivityEntry): LaunchCommitment[] {
   // The event's own fields must agree with the payload they carry, or the
   // signature covers one launch while the feed indexes another.
   if (commitment.id !== body.launch || commitment.creator !== body.actor) return [];
-  return [commitment];
+  return [{ commitment, receivedAt: entry.receivedAt }];
 }
 
 /** Shape checks an announcement must pass before its terms are even derived. */
