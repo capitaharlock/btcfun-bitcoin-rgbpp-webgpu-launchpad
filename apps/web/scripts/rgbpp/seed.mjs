@@ -7,6 +7,7 @@
  *   advance    one pass over every launch: open, ticket, mine and mint as its
  *              cells allow, announcing each mint; `--loop` repeats until every
  *              launch has minted ROUNDS times (default 2)
+ *   refresh    re-sign the official launches with their links and story
  *   market     Alice lists token cells and Bob bids, both signed, nothing spent
  *   status     where every launch stands
  *
@@ -48,6 +49,21 @@ const OFFICIAL = [
   ["TIMECHN", "Timechain", "Block by block, the clock nobody can stop.", "var(--mint)"],
 ];
 
+/** Reference pages and a story per launch. Links point at neutral references,
+ *  never at a project that has not asked to be represented. */
+const EXTRAS = {
+  PIZZA: ["https://en.wikipedia.org/wiki/Bitcoin_Pizza_Day", "Every community has a first purchase story; this one funds the next ones.", "Sponsor pizza nights at local meetups where newcomers pay in sats for the first time."],
+  GENESIS: ["https://en.bitcoin.it/wiki/Genesis_block", "Reading the source is the best onboarding there is, and study groups need a place and a projector.", "Run a monthly reading group through the whitepaper and the genesis block, with the notes published."],
+  HODL: ["https://en.wikipedia.org/wiki/Hodl", "Long-term holders are the quiet majority and rarely have a shared place.", "Keep a public, plain-language guide to self-custody and cold storage, updated every halving."],
+  LASER: ["https://en.wikipedia.org/wiki/Laser_eyes", "The meme travels further than any explainer; artists who make it deserve a tip jar.", "Commission pixel art from community artists and release it under an open licence."],
+  STACK: ["https://en.bitcoin.it/wiki/Satoshi_(unit)", "Saving small and often is how most people start, and they learn best together.", "Run a weekly savings challenge with a shared dashboard and small prizes paid in sats."],
+  ORANGE: ["https://bitcoin.org/en/getting-started", "Explaining Bitcoin well takes time, printed material and patience.", "Print and translate a one-page beginner guide and hand it out at events."],
+  NODE: ["https://bitcoin.org/en/full-node", "A node on every desk makes the network stronger; hardware is the obstacle.", "Subsidise low-power node kits for community members and publish uptime monthly."],
+  HALVING: ["https://en.bitcoin.it/wiki/Controlled_supply", "The halving is the calendar the community keeps; it deserves a party.", "Host a halving-night stream and meetup with talks from local builders."],
+  CYPHER: ["https://en.wikipedia.org/wiki/Cypherpunk", "Privacy tools are built by volunteers who are rarely paid for the work.", "Fund small bounties for documentation and translations of open privacy tools."],
+  TIMECHN: ["https://en.bitcoin.it/wiki/Block_timestamp", "Blocks are the clock; a public screen showing them teaches more than a slide.", "Build a block-clock display for the community space and publish the design."],
+};
+
 // ─── the index ───────────────────────────────────────────────────────────
 
 async function publish(key, draft) {
@@ -72,7 +88,11 @@ const steps = {
     const identity = vaultOf(alice).identity;
     for (const [symbol, name, blurb, accent] of OFFICIAL) {
       if (state.launches.some((l) => l.symbol === symbol)) continue;
-      const draft = { symbol, name, blurb, accent, promoter: alice.address, opensInBlocks: 1 };
+      const draft = {
+        symbol, name, blurb, accent, promoter: alice.address, opensInBlocks: 1,
+        links: Object.fromEntries(create.LINK_KINDS.map((k) => [k, ""])),
+        story: { why: "", plan: "" },
+      };
       const faults = create.validate(draft, network.ACTIVE);
       if (Object.keys(faults).length > 0) throw new Error(`${symbol}: ${JSON.stringify(faults)}`);
       const commitment = create.commitmentFor(draft, identity, tip, network.ACTIVE);
@@ -197,6 +217,22 @@ const steps = {
       }
     }
     write();
+  },
+
+  async refresh() {
+    for (const commitment of state.launches) {
+      const extra = EXTRAS[commitment.symbol];
+      if (!extra) continue;
+      const [website, why, plan] = extra;
+      const links = Object.fromEntries(create.LINK_KINDS.map((k) => [k, k === "website" ? website : ""]));
+      const story = { why, plan };
+      const updated = { ...commitment, ...create.extrasOf({ links, story }), at: new Date().toISOString() };
+      if (!create.idMatches(updated, network.ACTIVE)) throw new Error(`${commitment.id}: links changed the id`);
+      await publish(alice, { kind: "launch", launch: updated.id, ref: create.commitmentId(updated), meta: JSON.stringify(updated) });
+      Object.assign(commitment, updated);
+      write();
+      console.log(`${commitment.id}: links and story published`);
+    }
   },
 
   async market() {
