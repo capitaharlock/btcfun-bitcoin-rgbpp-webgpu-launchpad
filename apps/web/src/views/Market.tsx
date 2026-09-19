@@ -29,7 +29,7 @@ import { DECIMALS } from "../lib/standard";
 import { useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
 import { Chip, Field, Notice, PageHead, Panel, Stat } from "../ui/primitives";
-import { Sigil } from "../ui/Sigil";
+import { TokenImage } from "../ui/TokenImage";
 
 const bidOrder = ({ bid }: PublishedBid): Order => ({ priceSats: bid.priceSats, amount: BigInt(bid.amount) });
 const sealKey = (seal: Seal) => `${seal.txid}:${seal.vout}`;
@@ -105,7 +105,7 @@ export function Market() {
         <>
           <div className="ticker">
             <div className="row">
-              <Sigil seed={launch.id} accent={launch.accent} size="md" />
+              <TokenImage art={launch.art} seed={launch.id} accent={launch.accent} symbol={launch.symbol} size="lg" />
               <div className="grow">
                 <Field label="Token">
                   <select className="input" value={launch.tokenId} onChange={(e) => setPicked(e.target.value)}>

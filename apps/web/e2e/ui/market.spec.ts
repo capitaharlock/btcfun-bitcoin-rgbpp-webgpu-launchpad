@@ -1,7 +1,7 @@
 /* A sale the buyer completes alone — and the ways it must not go wrong. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, demoKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
+import { announce, block, browserKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -22,7 +22,7 @@ test.describe("market", () => {
     await page.goto("about:blank"); // the seller leaves
 
     const buyerPage = await secondVisitor(browser, sim, rgbpp);
-    const buyer = await demoKeyOn(buyerPage);
+    const buyer = await browserKeyOn(buyerPage);
     sim.fund(buyer.address, 100_000);
     const sellerBefore = (sim.utxos.get(seller.address) ?? []).reduce((n, u) => n + u.value, 0);
 
@@ -87,7 +87,7 @@ test.describe("market", () => {
   });
 
   test("with nothing to sell, the sell panel says how to get tokens", async ({ page, app }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     await app.goto("/market");
     await expect(page.getByText(/You hold no tokens this app knows/)).toBeVisible();
   });

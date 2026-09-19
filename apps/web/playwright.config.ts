@@ -16,6 +16,7 @@
  */
 
 import { defineConfig, devices } from "@playwright/test";
+import { PLATFORM_IDENTITY } from "./e2e/support/platform";
 
 const PORT = 5273;
 const headed = process.env.HEADED === "1";
@@ -73,6 +74,9 @@ export default defineConfig({
   // parallel workers never wait on a dev server compiling modules on demand.
   webServer: {
     command: `npx vite build --logLevel error && npx vite preview --port ${PORT} --strictPort`,
+    // The platform's identity is build configuration; the suite's is the key
+    // `e2e/support/platform.ts` restores, so it can announce the DEMO launch.
+    env: { VITE_PLATFORM_IDENTITY: PLATFORM_IDENTITY },
     port: PORT,
     reuseExistingServer: true,
     timeout: 60_000,

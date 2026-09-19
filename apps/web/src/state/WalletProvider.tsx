@@ -24,6 +24,7 @@ import {
   ACTIVE,
   broadcast,
   buildPayment,
+  connectDemo as connectDemoVault,
   connectPasskey as connectPasskeyVault,
   createLocal,
   currentVault,
@@ -51,16 +52,19 @@ interface WalletContextValue {
   balance: AddressBalance | null;
   /** Bitcoin tip height — the clock the emission schedule runs on. */
   tipHeight: number | null;
-  /** True while a connect/disconnect or payment is in flight. */
+  /** True while a connect or payment is in flight. */
   busy: boolean;
   /** True while a balance refetch is in flight. */
   refreshing: boolean;
   error: string | null;
   passkeySupported: boolean;
   connectPasskey: () => Promise<void>;
+  /** The shared testnet3 demo wallet (`vault.ts`). Instant, no gesture. */
+  connectDemo: () => Promise<void>;
   connectLocal: () => Promise<void>;
   restoreLocal: (entropy: Uint8Array) => Promise<void>;
-  disconnect: () => void;
+  /** Forget the wallet on this browser. What that loses depends on its kind. */
+  logOut: () => void;
   refresh: () => Promise<void>;
   /** Build, sign and broadcast a payment. Refetches the balance afterwards. */
   pay: (to: string, amountSats: number, memo?: Uint8Array) => Promise<PaymentResult>;
@@ -184,9 +188,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       error,
       passkeySupported: isPasskeySupported(),
       connectPasskey: () => connect(connectPasskeyVault),
+      connectDemo: () => connect(() => connectDemoVault()),
       connectLocal: () => connect(createLocal),
       restoreLocal: (entropy: Uint8Array) => connect(() => importLocal(entropy)),
-      disconnect: () => {
+      logOut: () => {
         forgetVault();
         setVault(null);
         setBalance(null);

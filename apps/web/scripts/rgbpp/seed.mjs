@@ -7,8 +7,9 @@
  *   advance    one pass over every launch: open, ticket, mine and mint as its
  *              cells allow, announcing each mint; `--loop` repeats until every
  *              launch has minted ROUNDS times (default 2)
- *   refresh    re-sign the official launches with their links and story
+ *   refresh    re-sign the official launches with their links, story and image
  *   market     Alice lists token cells and Bob bids, both signed, nothing spent
+ *   gather     move Bob's free coins to Alice, who funds the runs
  *   status     where every launch stands
  *
  * Alice creates and promotes every official launch, so each ticket's 9,500
@@ -21,7 +22,7 @@
 
 import { fileURLToPath } from "node:url";
 import {
-  activity, alice, bid, bob, cellsOf, cfg, close, create, events, launchCells, network, ops, provider, rgbpp, sale,
+  activity, alice, bid, bob, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
   sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
 } from "./kit.mjs";
 
@@ -49,19 +50,20 @@ const OFFICIAL = [
   ["TIMECHN", "Timechain", "Block by block, the clock nobody can stop.", "var(--mint)"],
 ];
 
-/** Reference pages and a story per launch. Links point at neutral references,
- *  never at a project that has not asked to be represented. */
+/** Reference pages, a story and a picture per launch. Links point at neutral
+ *  references, never at a project that has not asked to be represented; the
+ *  pictures are the platform's own artwork in public/tokens/. */
 const EXTRAS = {
-  PIZZA: ["https://en.wikipedia.org/wiki/Bitcoin_Pizza_Day", "Every community has a first purchase story; this one funds the next ones.", "Sponsor pizza nights at local meetups where newcomers pay in sats for the first time."],
-  GENESIS: ["https://en.bitcoin.it/wiki/Genesis_block", "Reading the source is the best onboarding there is, and study groups need a place and a projector.", "Run a monthly reading group through the whitepaper and the genesis block, with the notes published."],
-  HODL: ["https://en.wikipedia.org/wiki/Hodl", "Long-term holders are the quiet majority and rarely have a shared place.", "Keep a public, plain-language guide to self-custody and cold storage, updated every halving."],
-  LASER: ["https://en.wikipedia.org/wiki/Laser_eyes", "The meme travels further than any explainer; artists who make it deserve a tip jar.", "Commission pixel art from community artists and release it under an open licence."],
-  STACK: ["https://en.bitcoin.it/wiki/Satoshi_(unit)", "Saving small and often is how most people start, and they learn best together.", "Run a weekly savings challenge with a shared dashboard and small prizes paid in sats."],
-  ORANGE: ["https://bitcoin.org/en/getting-started", "Explaining Bitcoin well takes time, printed material and patience.", "Print and translate a one-page beginner guide and hand it out at events."],
-  NODE: ["https://bitcoin.org/en/full-node", "A node on every desk makes the network stronger; hardware is the obstacle.", "Subsidise low-power node kits for community members and publish uptime monthly."],
-  HALVING: ["https://en.bitcoin.it/wiki/Controlled_supply", "The halving is the calendar the community keeps; it deserves a party.", "Host a halving-night stream and meetup with talks from local builders."],
-  CYPHER: ["https://en.wikipedia.org/wiki/Cypherpunk", "Privacy tools are built by volunteers who are rarely paid for the work.", "Fund small bounties for documentation and translations of open privacy tools."],
-  TIMECHN: ["https://en.bitcoin.it/wiki/Block_timestamp", "Blocks are the clock; a public screen showing them teaches more than a slide.", "Build a block-clock display for the community space and publish the design."],
+  PIZZA: ["https://en.wikipedia.org/wiki/Bitcoin_Pizza_Day", "Every community has a first purchase story; this one funds the next ones.", "Sponsor pizza nights at local meetups where newcomers pay in sats for the first time.", "/tokens/pizza.svg"],
+  GENESIS: ["https://en.bitcoin.it/wiki/Genesis_block", "Reading the source is the best onboarding there is, and study groups need a place and a projector.", "Run a monthly reading group through the whitepaper and the genesis block, with the notes published.", "/tokens/genesis.svg"],
+  HODL: ["https://en.wikipedia.org/wiki/Hodl", "Long-term holders are the quiet majority and rarely have a shared place.", "Keep a public, plain-language guide to self-custody and cold storage, updated every halving.", "/tokens/hodl.svg"],
+  LASER: ["https://en.wikipedia.org/wiki/Laser_eyes", "The meme travels further than any explainer; artists who make it deserve a tip jar.", "Commission pixel art from community artists and release it under an open licence.", "/tokens/laser.svg"],
+  STACK: ["https://en.bitcoin.it/wiki/Satoshi_(unit)", "Saving small and often is how most people start, and they learn best together.", "Run a weekly savings challenge with a shared dashboard and small prizes paid in sats.", "/tokens/stack.svg"],
+  ORANGE: ["https://bitcoin.org/en/getting-started", "Explaining Bitcoin well takes time, printed material and patience.", "Print and translate a one-page beginner guide and hand it out at events.", "/tokens/orange.svg"],
+  NODE: ["https://bitcoin.org/en/full-node", "A node on every desk makes the network stronger; hardware is the obstacle.", "Subsidise low-power node kits for community members and publish uptime monthly.", "/tokens/node.svg"],
+  HALVING: ["https://en.bitcoin.it/wiki/Controlled_supply", "The halving is the calendar the community keeps; it deserves a party.", "Host a halving-night stream and meetup with talks from local builders.", "/tokens/halving.svg"],
+  CYPHER: ["https://en.wikipedia.org/wiki/Cypherpunk", "Privacy tools are built by volunteers who are rarely paid for the work.", "Fund small bounties for documentation and translations of open privacy tools.", "/tokens/cypher.svg"],
+  TIMECHN: ["https://en.bitcoin.it/wiki/Block_timestamp", "Blocks are the clock; a public screen showing them teaches more than a slide.", "Build a block-clock display for the community space and publish the design.", "/tokens/timechn.svg"],
 };
 
 // ─── the index ───────────────────────────────────────────────────────────
@@ -92,6 +94,7 @@ const steps = {
         symbol, name, blurb, accent, promoter: alice.address, opensInBlocks: 1,
         links: Object.fromEntries(create.LINK_KINDS.map((k) => [k, ""])),
         story: { why: "", plan: "" },
+        image: EXTRAS[symbol]?.[3] ?? "",
       };
       const faults = create.validate(draft, network.ACTIVE);
       if (Object.keys(faults).length > 0) throw new Error(`${symbol}: ${JSON.stringify(faults)}`);
@@ -226,15 +229,16 @@ const steps = {
     for (const commitment of state.launches) {
       const extra = EXTRAS[commitment.symbol];
       if (!extra) continue;
-      const [website, why, plan] = extra;
+      const [website, why, plan, picture] = extra;
       const links = Object.fromEntries(create.LINK_KINDS.map((k) => [k, k === "website" ? website : ""]));
       const story = { why, plan };
-      const updated = { ...commitment, ...create.extrasOf({ links, story }), at: new Date().toISOString() };
+      if (image.imageFor(picture) !== picture) throw new Error(`${commitment.id}: ${picture} is not an acceptable image`);
+      const updated = { ...commitment, ...create.extrasOf({ links, story }), image: picture, at: new Date().toISOString() };
       if (!create.idMatches(updated, network.ACTIVE)) throw new Error(`${commitment.id}: links changed the id`);
       await publish(alice, { kind: "launch", launch: updated.id, ref: create.commitmentId(updated), meta: JSON.stringify(updated) });
       Object.assign(commitment, updated);
       write();
-      console.log(`${commitment.id}: links and story published`);
+      console.log(`${commitment.id}: links, story and image published`);
     }
   },
 
@@ -260,6 +264,20 @@ const steps = {
       await publish(bob, bid.bidDraft(b));
       console.log(`${commitment.id}: bid ${amount} atoms for ${b.priceSats} sats`);
     }
+  },
+
+  async gather() {
+    // Seals are never swept: only coins well above the 546-sat seal value.
+    const coins = (await provider.getUtxos(bob.address, network.ACTIVE)).filter((u) => u.value > 2 * ops.SEAL_SATS);
+    const total = coins.reduce((n, u) => n + u.value, 0);
+    if (total === 0) return console.log("Bob has nothing to move");
+    const feeRate = Math.max(await provider.getFeeRate(network.ACTIVE), 1);
+    // The builder adds change when it clears dust and otherwise leaves the
+    // remainder to the fee; asking for everything but a two-output fee fits both.
+    const fee = Math.ceil(payment.estimateVsize(coins.length, [payment.P2WPKH_SCRIPT_BYTES, payment.P2WPKH_SCRIPT_BYTES]) * feeRate) + 1;
+    const signed = payment.buildPayment(bob, { to: alice.address, amountSats: total - fee, feeRate, utxos: coins }, network.ACTIVE);
+    const txid = await provider.broadcast(signed.hex, network.ACTIVE);
+    console.log(`moved ${total - fee} sats from Bob to Alice: ${network.txUrl(txid, network.ACTIVE)}`);
   },
 
   async status() {

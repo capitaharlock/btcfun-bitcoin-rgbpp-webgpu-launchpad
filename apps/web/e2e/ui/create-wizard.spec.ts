@@ -5,7 +5,7 @@ import { announce, block, field } from "../support/flows";
 
 test.describe("create wizard", () => {
   test("announces a launch whose id is its token's, and lists it as opening soon", async ({ page, app, sim, ux }) => {
-    const wallet = await app.createDemoKey();
+    const wallet = await app.createBrowserKey();
     const id = await announce(page, { symbol: "QUILL", opensInBlocks: 3 });
     expect(id).toMatch(/^quill-[0-9a-f]{16}$/);
     await expect(page.getByRole("heading", { name: "QUILL" })).toBeVisible();
@@ -15,7 +15,7 @@ test.describe("create wizard", () => {
     const tokenId = await page.getByText(/^0x[0-9a-f]{8}/).first().getAttribute("title");
     expect(tokenId?.slice(2, 18)).toBe(id.split("-")[1]);
     // The promoter defaulted to the creator's own address.
-    await expect(page.locator(`a[href$="${wallet.address}"]`)).toBeVisible();
+    await expect(page.locator(`a[href$="${wallet.address}"]`).first()).toBeVisible();
 
     await app.goto("/");
     await expect(page.locator(".tokencard").filter({ hasText: "QUILL" }).first()).toContainText("opens soon");
@@ -25,7 +25,7 @@ test.describe("create wizard", () => {
   });
 
   test("never asks for supply, price, difficulty or schedule", async ({ page, app }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     await app.goto("/create");
     for (const label of [/supply/i, /decimals/i, /difficulty/i, /half-life/i, /ticket price/i, /epoch/i]) {
       await expect(page.getByLabel(label)).toHaveCount(0);
@@ -39,7 +39,7 @@ test.describe("create wizard", () => {
   });
 
   test("carries project links and a story to the launch page, marked as the creator's word", async ({ page, app, ux }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     await announce(page, {
       symbol: "LINKS",
       links: { Website: "https://links.example/about", X: "@linkscoop", GitHub: "https://github.com/linkscoop" },
@@ -61,7 +61,7 @@ test.describe("create wizard", () => {
   });
 
   test("refuses a link that does not go where its icon says", async ({ page, app }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     await app.goto("/create");
     await page.getByLabel("Symbol").fill("MESH");
     await page.getByLabel("Name").fill("Meshwork");
@@ -90,7 +90,7 @@ test.describe("create wizard", () => {
     });
 
     test("an income address on another network is refused", async ({ page, app }) => {
-      await app.createDemoKey();
+      await app.createBrowserKey();
       await app.goto("/create");
       await page.getByLabel("Symbol").fill("MESH");
       await page.getByLabel("Name").fill("Meshwork");
@@ -102,7 +102,7 @@ test.describe("create wizard", () => {
     });
 
     test("opening now is refused: a launch must be announced before it opens", async ({ page, app }) => {
-      await app.createDemoKey();
+      await app.createBrowserKey();
       await app.goto("/create");
       await page.getByLabel("Symbol").fill("MESH");
       await page.getByLabel("Name").fill("Meshwork");
@@ -124,7 +124,7 @@ test.describe("create wizard", () => {
     await page.getByRole("button", { name: "Continue →" }).click();
     await page.getByRole("button", { name: "Continue →" }).click();
     await page.getByRole("link", { name: "Connect a wallet" }).click();
-    await page.getByRole("button", { name: "Create a demo key" }).click();
+    await page.getByRole("button", { name: "Create a browser key" }).click();
     await app.goto("/create");
     await expect(page.getByRole("button", { name: "Announce TIDE" })).toBeVisible();
     ux.note("Leaving the wizard for the wallet and coming back lands on the last step with everything kept.");

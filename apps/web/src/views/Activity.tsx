@@ -19,7 +19,7 @@ import { atoms, group } from "../lib/format";
 import { useWallet } from "../state/WalletProvider";
 import type { Launch } from "../data/launches";
 import { Chip, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
-import { Sigil } from "../ui/Sigil";
+import { TokenImage } from "../ui/TokenImage";
 
 type Filter = "all" | ActivityKind;
 
@@ -169,7 +169,14 @@ function Row({
   return (
     <div className={`feedrow${fresh ? " fresh" : ""}`}>
       <i className={`kind ${body.kind}`} />
-      <Sigil seed={body.launch} accent={launch?.accent ?? "var(--ink-faint)"} size="sm" still />
+      <TokenImage
+        art={launch?.art ?? null}
+        seed={body.launch}
+        accent={launch?.accent ?? "var(--ink-faint)"}
+        symbol={symbol}
+        size="md"
+        still
+      />
 
       <span className="what">
         <a

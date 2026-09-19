@@ -24,10 +24,14 @@ export interface Wallet {
 export interface App {
   /** Navigate to a hash route, e.g. `/launch/mesh`. */
   goto(route: string): Promise<void>;
-  /** Create a demo key through the wallet page and return what it shows. */
-  createDemoKey(): Promise<Wallet>;
-  /** Restore a demo key from its 64-hex secret through the wallet page. */
+  /** Create a fresh browser-stored key through the wallet page and return what it shows. */
+  createBrowserKey(): Promise<Wallet>;
+  /** Restore a browser-stored key from its 64-hex secret through the wallet page. */
   restoreKey(secretHex: string): Promise<Wallet>;
+  /** Connect the shared demo wallet from the top bar's chooser, then open the wallet. */
+  connectDemoWallet(): Promise<Wallet>;
+  /** Log out from the wallet page, confirming in the dialog. */
+  logOut(): Promise<void>;
   /** Seed arbitrary localStorage before the app loads. */
   seedStorage(entries: Record<string, string>): Promise<void>;
   /** Errors the page raised so far. */
@@ -77,9 +81,9 @@ export const test = base.extend<{ sim: ChainSim; rgbpp: RgbppSim; app: App; ux: 
       async goto(route) {
         await page.goto(`/#${route}`);
       },
-      async createDemoKey() {
+      async createBrowserKey() {
         await page.goto("/#/wallet");
-        await page.getByRole("button", { name: "Create a demo key" }).click();
+        await page.getByRole("button", { name: "Create a browser key" }).click();
         await expect(page.locator(".copyable code").first()).toHaveText(/^tb1q/);
         return readWallet(page);
       },
@@ -90,6 +94,22 @@ export const test = base.extend<{ sim: ChainSim; rgbpp: RgbppSim; app: App; ux: 
         await page.getByRole("button", { name: "Restore", exact: true }).click();
         await expect(page.locator(".copyable code").first()).toHaveText(/^tb1q/);
         return readWallet(page);
+      },
+      async connectDemoWallet() {
+        await page.goto("/#/");
+        await page.getByRole("banner").getByRole("button", { name: "Connect wallet" }).click();
+        const dialog = page.getByRole("dialog", { name: "Connect a wallet" });
+        await dialog.getByRole("button", { name: "Use the demo wallet" }).click();
+        await expect(dialog).toBeHidden();
+        await page.getByRole("banner").getByRole("link", { name: /wallet/i }).click();
+        await expect(page.locator(".copyable code").first()).toHaveText(/^tb1q/);
+        return readWallet(page);
+      },
+      async logOut() {
+        await page.goto("/#/wallet");
+        await page.getByRole("button", { name: "Log out" }).click();
+        await page.getByRole("dialog", { name: "Log out of this wallet?" }).getByRole("button", { name: "Log out" }).click();
+        await expect(page.getByRole("banner").getByRole("button", { name: "Connect wallet" })).toBeVisible();
       },
       async seedStorage(entries) {
         await page.addInitScript((pairs) => {

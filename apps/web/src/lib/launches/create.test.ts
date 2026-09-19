@@ -22,6 +22,7 @@ import {
   validate,
   type LaunchDraft,
 } from "./create";
+import { MAX_IMAGE_LENGTH } from "./image";
 
 const promoter = deriveKey(new Uint8Array(32).fill(7), TESTNET3).address;
 const draft: LaunchDraft = {
@@ -33,6 +34,7 @@ const draft: LaunchDraft = {
   opensInBlocks: 6,
   links: NO_LINKS,
   story: NO_STORY,
+  image: "",
 };
 
 describe("launch drafts", () => {
@@ -104,16 +106,18 @@ describe("launch links and story", () => {
         ...draft,
         links: { ...NO_LINKS, website: "ftp://mesh.example", github: "https://gitlab.com/x" },
         story: { why: "w".repeat(MAX_STORY_LENGTH + 1), plan: "fine" },
+        image: "http://img.example/p.png",
       },
       TESTNET3,
     );
-    expect(Object.keys(faults).sort()).toEqual(["links.github", "links.website", "story.why"]);
+    expect(Object.keys(faults).sort()).toEqual(["image", "links.github", "links.website", "story.why"]);
   });
 
   it("are optional, and leave an announcement without them exactly as before", () => {
     const plain = commitmentFor(draft, creator, 150_000, TESTNET3);
     expect("links" in plain).toBe(false);
     expect("story" in plain).toBe(false);
+    expect("image" in plain).toBe(false);
     const withExtras = commitmentFor(
       { ...draft, links: { ...NO_LINKS, x: "@meshwork" }, story: { why: "Relays cost money.", plan: "" } },
       creator,
@@ -156,6 +160,7 @@ describe("launch links and story", () => {
         github: `https://github.com/${"g".repeat(80)}`,
       },
       story: { why: "", plan: "" },
+      image: `https://img.example/${"i".repeat(MAX_IMAGE_LENGTH - 20)}`,
     };
     // Grow the story until the budget refuses it; keep the last accepted size.
     let accepted = worst;
@@ -166,6 +171,7 @@ describe("launch links and story", () => {
     }
     expect(validate(accepted, TESTNET3)).toEqual({});
     expect(accepted.story.why.length).toBeGreaterThan(0);
+    expect(commitmentFor(accepted, creator, 150_000, TESTNET3).image).toBe(accepted.image);
     const meta = JSON.stringify(commitmentFor(accepted, creator, 150_000, TESTNET3));
     expect(meta.length).toBeLessThanOrEqual(MAX_META);
     const request = JSON.stringify({

@@ -12,22 +12,22 @@ const whole = (label: string) => Number(label.replace(/^Mint /, "").split(".")[0
 
 test.describe("time", () => {
   test("a day, a week and day 21: the rate halves by the week, shown before buying", async ({ page, app, sim, ux }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     const id = await announce(page, { symbol: "WEEK" });
     await block(page, sim);
-    await expect(page.getByText("halving 0")).toBeVisible();
+    await expect(page.getByText("halving 0", { exact: true })).toBeVisible();
     await expect(page.getByText(/Now, for a 24-bit hash/).locator("..")).toContainText("576");
 
     await block(page, sim, 144); // one day
-    await expect(page.getByText("halving 0")).toBeVisible();
+    await expect(page.getByText("halving 0", { exact: true })).toBeVisible();
     await expect(page.getByText(/^864 blk/).first()).toBeVisible();
 
     await block(page, sim, WEEK - 144); // exactly one week after opening
-    await expect(page.getByText("halving 1")).toBeVisible();
+    await expect(page.getByText("halving 1", { exact: true })).toBeVisible();
     await expect(page.getByText(/Now, for a 24-bit hash/).locator("..")).toContainText("288");
 
     await block(page, sim, 2 * WEEK); // day 21
-    await expect(page.getByText("halving 3")).toBeVisible();
+    await expect(page.getByText("halving 3", { exact: true })).toBeVisible();
     await expect(page.getByText(/Now, for a 24-bit hash/).locator("..")).toContainText("72");
     await app.goto("/");
     await expect(page.locator(".tokencard").filter({ hasText: "WEEK" }).first()).toContainText("72");
@@ -42,7 +42,7 @@ test.describe("time", () => {
     await openMiner(page, sim);
     await buyTicket(page); // anchored at the current tip, before the halving
     await block(page, sim, 10); // now past the halving
-    await expect(page.getByText("halving 1")).toBeVisible();
+    await expect(page.getByText("halving 1", { exact: true })).toBeVisible();
     const mint = await mineUntilMintable(page);
     // DOM text, not rendered text: labels are upper-cased by the theme.
     const label = (await mint.textContent()) ?? "";
@@ -57,7 +57,7 @@ test.describe("time", () => {
   });
 
   test("after the terminal halving a launch is spent and says so", async ({ page, app, sim }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     await announce(page, { symbol: "END" });
     await block(page, sim, 43 * WEEK + 1);
     await expect(page.getByText("spent", { exact: true }).first()).toBeVisible();

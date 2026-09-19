@@ -17,6 +17,8 @@
  * creator-signed announcement and nothing else: they are not in the token's
  * metadata hash, so they never change the token id, and nothing on chain
  * enforces them. They say what the creator claims, under the creator's key.
+ * An image reference travels the same way (`./image.ts`): signed, re-checked
+ * on arrival, and outside the token id. Only `imageHash` is in the terms.
  *
  * Creating a launch costs nothing on chain: the mint script is already
  * deployed and permissionless, and the token comes into existence with its
@@ -25,6 +27,7 @@
  */
 
 import { canonicalId, type Field } from "../canonical";
+import { imageFor } from "./image";
 import { record, signActivity } from "../activity";
 import type { Vault } from "../bitcoin";
 import { ACTIVE, matchesNetwork, type NetworkConfig } from "../bitcoin/network";
@@ -77,9 +80,9 @@ export const MAX_STORY_LENGTH = 400;
  * encoded into an index event. The event travels as JSON inside JSON, so a
  * quote costs four characters by the time it reaches the index, whose body
  * limit is 4,096 characters (`worker/index.ts`); the fixed part of a launch
- * event takes about 2,000 of those at worst. Sized so that five full links
- * and two full paragraphs of ordinary prose fit; `create.test.ts` checks the
- * worst case against both limits.
+ * event takes about 2,000 of those at worst, and an image reference up to 150
+ * more. Sized so that five full links and two full paragraphs of ordinary
+ * prose fit; `create.test.ts` checks the worst case against both limits.
  */
 export const EXTRAS_WIRE_BUDGET = 2_000;
 
@@ -106,6 +109,12 @@ export interface LaunchCommitment {
   links?: LaunchLinks;
   /** Signed by the creator, not enforced on chain. Absent when none was given. */
   story?: LaunchStory;
+  /**
+   * Where the token's picture lives (`imageFor` in `./image.ts`). Signed by
+   * the creator, outside the metadata hash; `imageHash` is what the terms
+   * commit to. Absent when none was given.
+   */
+  image?: string;
 }
 
 export function metadataOf(c: Pick<LaunchCommitment, "name" | "symbol" | "blurb" | "imageHash">): TokenMetadata {
@@ -149,12 +158,13 @@ export function idMatches(c: LaunchCommitment, network: NetworkConfig = ACTIVE):
 }
 
 function fieldsOf(c: LaunchCommitment): Field[] {
-  // Links and story are appended only when present, so every announcement
+  // Links, story and image are appended only when present, so every announcement
   // made before they existed keeps the digest it was published under. Each
   // is tagged by its own label, so no field set can encode like another.
   const extras: Field[] = [
     ...LINK_KINDS.flatMap((kind): Field[] => (c.links?.[kind] ? [[`link.${kind}`, c.links[kind]]] : [])),
     ...STORY_PARTS.flatMap((part): Field[] => (c.story?.[part] ? [[`story.${part}`, c.story[part]]] : [])),
+    ...(c.image ? [["image", c.image] as Field] : []),
   ];
   return [
     ["v", c.v],
@@ -190,6 +200,8 @@ export interface LaunchDraft {
   links: Record<LinkKind, string>;
   /** As typed; empty strings are "not given". */
   story: Record<StoryPart, string>;
+  /** Where the token's picture lives, as typed; empty is "none". Checked by `imageFor`. */
+  image: string;
 }
 
 export const NO_LINKS: Record<LinkKind, string> = { website: "", x: "", telegram: "", discord: "", github: "" };
@@ -266,8 +278,10 @@ export function storyFor(input: unknown): string | null {
   return text !== "" && text.length <= MAX_STORY_LENGTH ? text : null;
 }
 
-/** The links and story of a draft, normalised, with empty parts left out. */
-export function extrasOf(draft: Pick<LaunchDraft, "links" | "story">): { links?: LaunchLinks; story?: LaunchStory } {
+/** The links, story and image of a draft, normalised, with empty parts left out. */
+export function extrasOf(
+  draft: Pick<LaunchDraft, "links" | "story"> & { image?: string },
+): { links?: LaunchLinks; story?: LaunchStory; image?: string } {
   const links: LaunchLinks = {};
   for (const kind of LINK_KINDS) {
     const href = linkFor(kind, draft.links[kind]);
@@ -278,9 +292,11 @@ export function extrasOf(draft: Pick<LaunchDraft, "links" | "story">): { links?:
     const text = storyFor(draft.story[part]);
     if (text) story[part] = text;
   }
+  const image = imageFor(draft.image);
   return {
     ...(Object.keys(links).length > 0 ? { links } : {}),
     ...(Object.keys(story).length > 0 ? { story } : {}),
+    ...(image ? { image } : {}),
   };
 }
 
@@ -335,6 +351,9 @@ export function validate(draft: LaunchDraft, network: NetworkConfig = ACTIVE): D
       faults[`links.${kind}`] = typed.length > MAX_LINK_LENGTH ? `At most ${MAX_LINK_LENGTH} characters.` : LINK_RULE[kind];
     }
   }
+  if (draft.image.trim() && !imageFor(draft.image)) {
+    faults.image = "An https:// address, or a picture on this site under /tokens/.";
+  }
   for (const part of STORY_PARTS) {
     if (draft.story[part].trim().length > MAX_STORY_LENGTH) {
       faults[`story.${part}`] = `At most ${MAX_STORY_LENGTH} characters.`;
@@ -342,7 +361,7 @@ export function validate(draft: LaunchDraft, network: NetworkConfig = ACTIVE): D
   }
   // The wire size, as the index will measure it: JSON inside JSON.
   if (JSON.stringify(JSON.stringify(extrasOf(draft))).length > EXTRAS_WIRE_BUDGET) {
-    faults.extras = "The links and story are too long together once encoded. Shorten the story.";
+    faults.extras = "The links, story and image are too long together once encoded. Shorten the story.";
   }
   return faults;
 }

@@ -33,11 +33,14 @@ test.describe("navigation", () => {
     await expect(page.getByText("151,234").first()).toBeVisible();
   });
 
-  test("an empty catalogue says so and points at creation, with no invented launches", async ({ page, app, ux }) => {
+  test("an empty catalogue says so and points at creation; every example is labelled simulated", async ({ page, app, ux }) => {
     await app.goto("/");
     await expect(page.getByText("No launches have been announced yet.")).toBeVisible();
-    await expect(page.locator(".tokencard")).toHaveCount(0);
-    ux.note("With nothing announced the front page shows no sample launches, only the way to create the first.");
+    await expect(page.locator(".tokencard:not(.simulated)")).toHaveCount(0);
+    const examples = page.locator(".tokencard.simulated");
+    expect(await examples.count()).toBeGreaterThan(0);
+    for (const card of await examples.all()) await expect(card.getByText("Simulated", { exact: true })).toBeVisible();
+    ux.note("With nothing announced the front page says so; the only boxes are examples, each badged SIMULATED.");
   });
 
   test("an unknown launch says so instead of rendering an empty page", async ({ page, app }) => {

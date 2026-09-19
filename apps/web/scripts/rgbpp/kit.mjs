@@ -16,7 +16,7 @@ import { close, loadAll } from "../e2e/load.mjs";
 
 const WALLET = fileURLToPath(new URL("../../.e2e-wallet.json", import.meta.url));
 
-export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity] =
+export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment] =
   await loadAll(
     "lib/bitcoin/network.ts",
     "lib/bitcoin/keys.ts",
@@ -34,6 +34,8 @@ export const [network, keys, provider, standard, config, launch, ops, bitcoin, s
     "lib/activity/events.ts",
     "lib/market/bid.ts",
     "lib/activity/verify.ts",
+    "lib/launches/image.ts",
+    "lib/bitcoin/payment.ts",
   );
 export { close };
 

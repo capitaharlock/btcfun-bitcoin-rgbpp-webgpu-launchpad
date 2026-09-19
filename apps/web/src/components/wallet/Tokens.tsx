@@ -1,4 +1,4 @@
-/* What you hold, and moving it.
+/* The wallet's tokens, and moving them.
  *
  * Balances are the xUDT cells sealed to this wallet's Bitcoin outputs, read
  * from the chain through the RGB++ service on every poll. A token this app
@@ -13,71 +13,64 @@
 import { useMemo, useState } from "react";
 import { Address } from "@scure/btc-signer";
 
-import type { Launch } from "../data/launches";
-import { useLaunchByToken } from "../hooks/useLaunches";
-import { ACTIVE, matchesNetwork, txUrl } from "../lib/bitcoin/network";
-import { atoms, group, parseAmount, shortHash } from "../lib/format";
-import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
-import { planTransfer, type TokenCell } from "../lib/rgbpp/operations";
-import { DECIMALS } from "../lib/standard";
-import { useTokens, type Operation } from "../state/TokensProvider";
-import { useWallet } from "../state/WalletProvider";
-import { Chip, Field, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
-import { Sigil } from "../ui/Sigil";
+import type { Launch } from "../../data/launches";
+import { useLaunchByToken } from "../../hooks/useLaunches";
+import { ACTIVE, matchesNetwork, txUrl } from "../../lib/bitcoin/network";
+import { atoms, group, parseAmount, shortHash } from "../../lib/format";
+import { ACTIVE_RGBPP } from "../../lib/rgbpp/config";
+import { planTransfer, type TokenCell } from "../../lib/rgbpp/operations";
+import { DECIMALS } from "../../lib/standard";
+import { useTokens, type Holdings, type Operation } from "../../state/TokensProvider";
+import { Field, More, Notice, Panel, Stat } from "../../ui/primitives";
+import { TokenImage } from "../../ui/TokenImage";
 
-export function Holdings() {
-  const wallet = useWallet();
+export interface Position {
+  tokenId: string;
+  cells: TokenCell[];
+  total: bigint;
+}
+
+/** Every token held, largest balance first. */
+export function positionsOf(holdings: Holdings): Position[] {
+  return [...holdings.tokens.entries()]
+    .map(([tokenId, cells]) => ({ tokenId, cells, total: cells.reduce((n, c) => n + c.amount, 0n) }))
+    .sort((a, b) => (a.total === b.total ? 0 : a.total > b.total ? -1 : 1));
+}
+
+/** The Tokens tab. The hub renders it only with a wallet connected. */
+export function WalletTokens() {
   const tokens = useTokens();
   const launchOf = useLaunchByToken();
 
-  if (!wallet.vault) {
-    return (
-      <Panel eyebrow="holdings" title="Connect a wallet">
-        <p className="clamp">Tokens belong to a Bitcoin address. <a href="#/wallet">Open the wallet</a>.</p>
-      </Panel>
-    );
-  }
-
-  const held = [...(tokens.holdings?.tokens ?? new Map<string, TokenCell[]>()).entries()];
-
   return (
     <div className="stack-lg">
-      <PageHead
-        eyebrow="holdings"
-        title="Your tokens"
-        lede="Read from the chain on every poll. Yours whether or not this app knows their name."
-        aside={<Chip tone="cyan"><span className="mono">{shortHash(wallet.vault.address, 10, 6)}</span></Chip>}
-      />
-
       {tokens.error && <Notice tone="warn">Could not read your cells: {tokens.error}</Notice>}
       {tokens.holdings === null ? (
         <Panel><p className="faint clamp">Reading the cells sealed to your address…</p></Panel>
-      ) : held.length === 0 ? (
+      ) : tokens.holdings.tokens.size === 0 ? (
         <Panel>
           <p className="clamp">
             No tokens yet. <a href="#/">Pick a launch</a> and mine — or ask someone to send you some.
           </p>
         </Panel>
       ) : (
-        held.map(([tokenId, cells]) => (
-          <Position key={tokenId} tokenId={tokenId} cells={cells} launch={launchOf(tokenId)} />
+        positionsOf(tokens.holdings).map((position) => (
+          <PositionPanel key={position.tokenId} position={position} launch={launchOf(position.tokenId)} />
         ))
       )}
-
-      <History operations={tokens.operations} launchOf={launchOf} />
     </div>
   );
 }
 
-function Position({ tokenId, cells, launch }: { tokenId: string; cells: TokenCell[]; launch: Launch | undefined }) {
-  const total = cells.reduce((n, c) => n + c.amount, 0n);
+function PositionPanel({ position, launch }: { position: Position; launch: Launch | undefined }) {
+  const { tokenId, cells, total } = position;
   const symbol = launch?.symbol ?? "tokens";
   return (
     <Panel
       eyebrow={launch ? launch.name : "unknown to this app"}
       title={
         <span className="row">
-          {launch && <Sigil seed={launch.id} accent={launch.accent} size="md" />}
+          {launch && <TokenImage art={launch.art} seed={launch.id} accent={launch.accent} symbol={launch.symbol} size="md" />}
           {launch ? launch.symbol : shortHash(tokenId, 10, 6)}
         </span>
       }
@@ -191,50 +184,4 @@ function validAddress(address: string): boolean {
   } catch {
     return false;
   }
-}
-
-function History({ operations, launchOf }: { operations: Operation[]; launchOf: (tokenId: string) => Launch | undefined }) {
-  if (operations.length === 0) return null;
-  const tone = { sent: "cyan", queued: "cyan", settled: "ok", failed: "danger" } as const;
-  return (
-    <Panel eyebrow="this wallet" title="Operations">
-      <div className="scroll-x">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>what</th>
-              <th>token</th>
-              <th>amount</th>
-              <th>stage</th>
-              <th>bitcoin</th>
-              <th>ckb</th>
-            </tr>
-          </thead>
-          <tbody>
-            {operations.map((op) => {
-              const launch = launchOf(op.tokenId);
-              return (
-                <tr key={op.btcTxid}>
-                  <td>{op.kind}</td>
-                  <td>{launch?.symbol ?? shortHash(op.tokenId, 8, 4)}</td>
-                  <td className="mono">
-                    {op.atoms ? atoms(BigInt(op.atoms), DECIMALS, 2) : op.sats ? `${group(op.sats)} sats` : "—"}
-                  </td>
-                  <td><Chip tone={tone[op.stage]} live={op.stage === "sent" || op.stage === "queued"}>{op.stage}</Chip></td>
-                  <td><a href={txUrl(op.btcTxid)} target="_blank" rel="noopener noreferrer" className="mono">{op.btcTxid.slice(0, 10)}…</a></td>
-                  <td>
-                    {op.ckbTxHash ? (
-                      <a href={`${ACTIVE_RGBPP.ckbExplorer}${op.ckbTxHash}`} target="_blank" rel="noopener noreferrer" className="mono">
-                        {op.ckbTxHash.slice(0, 12)}…
-                      </a>
-                    ) : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
-  );
 }

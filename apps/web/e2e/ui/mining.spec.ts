@@ -78,11 +78,9 @@ test.describe("mining", () => {
 
   test.describe("rails", () => {
     test("without a wallet, the page explains that tokens belong to an address", async ({ page, app, sim }) => {
-      await app.createDemoKey();
+      await app.createBrowserKey();
       const id = await announce(page, { symbol: "OBSV" });
-      await page.getByRole("button", { name: /^Disconnect/ }).click().catch(() => undefined);
-      await app.goto("/wallet");
-      await page.getByRole("button", { name: /^Disconnect/ }).click();
+      await app.logOut();
       await block(page, sim);
       await app.goto(`/launch/${id}`);
       await expect(page.getByRole("heading", { name: "Connect a wallet to mine" })).toBeVisible();
@@ -96,7 +94,7 @@ test.describe("mining", () => {
     });
 
     test("an empty wallet is told why nothing was sent", async ({ page, app, sim }) => {
-      await app.createDemoKey();
+      await app.createBrowserKey();
       await announce(page, { symbol: "CAIRN" });
       await block(page, sim);
       await page.getByRole("button", { name: "Open miner cell" }).click();

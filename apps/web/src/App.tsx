@@ -6,14 +6,16 @@ import { LaunchesProvider } from "./state/LaunchesProvider";
 import { TokensProvider } from "./state/TokensProvider";
 import { group } from "./lib/format";
 import { PixelBursts } from "./ui/PixelBursts";
-import { BitcoinMark } from "./ui/PixelIcon";
+import { BitcoinMark, WalletMark } from "./ui/PixelIcon";
 import { Chip } from "./ui/primitives";
+import { ConnectDialog } from "./components/wallet/Connect";
+import { DemoBadge } from "./components/wallet/DemoBadge";
+import type { WalletTab } from "./views/Wallet";
 
 // Sections a visitor may never open load on demand; the front page and a
 // launch page, where nearly everyone starts, ship with the first chunk.
 const Lab = lazy(() => import("./views/Lab").then((m) => ({ default: m.Lab })));
 const ProofView = lazy(() => import("./views/Proof").then((m) => ({ default: m.ProofView })));
-const Holdings = lazy(() => import("./views/Holdings").then((m) => ({ default: m.Holdings })));
 const WalletView = lazy(() => import("./views/Wallet").then((m) => ({ default: m.WalletView })));
 const Market = lazy(() => import("./views/Market").then((m) => ({ default: m.Market })));
 const Activity = lazy(() => import("./views/Activity").then((m) => ({ default: m.Activity })));
@@ -27,10 +29,9 @@ type Route =
   | { name: "proof"; txid?: string }
   | { name: "lab" }
   | { name: "create" }
-  | { name: "holdings" }
   | { name: "market" }
   | { name: "activity" }
-  | { name: "wallet" }
+  | { name: "wallet"; tab: WalletTab }
   | { name: "docs"; page?: string };
 
 function parse(hash: string): Route {
@@ -40,9 +41,13 @@ function parse(hash: string): Route {
   if (path[0] === "lab") return { name: "lab" };
   if (path[0] === "create") return { name: "create" };
   if (path[0] === "activity") return { name: "activity" };
-  if (path[0] === "holdings") return { name: "holdings" };
+  // The old holdings page is the wallet's Tokens tab now; its links still work.
+  if (path[0] === "holdings") return { name: "wallet", tab: "tokens" };
   if (path[0] === "market") return { name: "market" };
-  if (path[0] === "wallet") return { name: "wallet" };
+  if (path[0] === "wallet") {
+    const tab = path[1] === "tokens" || path[1] === "activity" ? path[1] : "overview";
+    return { name: "wallet", tab };
+  }
   if (path[0] === "docs") return { name: "docs", page: path[1] };
   return { name: "launches" };
 }
@@ -64,6 +69,14 @@ export function navigate(to: string): void {
   window.location.hash = to;
 }
 
+/** A retired route rewritten in place, so the address bar shows where the
+ *  visitor actually is and the back button does not return to the alias. */
+function canonicalise(): void {
+  if (/^#\/?holdings\/?$/.test(window.location.hash)) {
+    history.replaceState(history.state, "", "#/wallet/tokens");
+  }
+}
+
 export default function App() {
   return (
     <WalletProvider>
@@ -83,7 +96,9 @@ function Shell() {
   const [visit, setVisit] = useState(0);
 
   useEffect(() => {
+    canonicalise();
     const onHash = () => {
+      canonicalise();
       setRoute(parse(window.location.hash));
       setVisit((v) => v + 1);
       window.scrollTo({ top: 0 });
@@ -125,7 +140,7 @@ function Shell() {
         <div className="topbar-right rail">
           <TipChip />
           <span className="divider" />
-          <HoldingsPill active={tab === "holdings"} />
+          <DemoBadge />
           <WalletPill active={tab === "wallet"} />
         </div>
       </header>
@@ -139,9 +154,8 @@ function Shell() {
           {route.name === "lab" && <Lab />}
           {route.name === "create" && <Create />}
           {route.name === "activity" && <Activity />}
-          {route.name === "holdings" && <Holdings />}
           {route.name === "market" && <Market />}
-          {route.name === "wallet" && <WalletView />}
+          {route.name === "wallet" && <WalletView tab={route.tab} />}
           {route.name === "docs" && <Docs slug={route.page} />}
           </Suspense>
         </div>
@@ -178,42 +192,41 @@ function TipChip() {
   );
 }
 
-/** Holdings sits beside the wallet because it *is* the wallet's contents —
- *  grouping it with the navigation implied it was another place to browse. */
-function HoldingsPill({ active }: { active: boolean }) {
-  const { vault } = useWallet();
-  if (!vault) return null;
-  return (
-    <button
-      className="btn ghost holdings"
-      aria-current={active ? "page" : undefined}
-      onClick={() => navigate("/holdings")}
-    >
-      Holdings
-    </button>
-  );
-}
-
+/**
+ * The way to the wallet, always in the same corner and always with the same
+ * icon. Holdings live inside it, so there is one place to look for what you
+ * own. Without a wallet it opens the chooser in place: connecting should not
+ * take a visitor away from the launch they were about to mine.
+ */
 function WalletPill({ active }: { active: boolean }) {
   const { vault, balance } = useWallet();
+  const [choosing, setChoosing] = useState(false);
 
   if (!vault) {
     return (
-      <button className="btn" onClick={() => navigate("/wallet")}>
-        Connect wallet
-      </button>
+      <>
+        <button className="btn walletbutton" onClick={() => setChoosing(true)}>
+          <WalletMark />
+          Connect wallet
+        </button>
+        <ConnectDialog open={choosing} onClose={() => setChoosing(false)} />
+      </>
     );
   }
 
   return (
-    <button
+    <a
       className="walletpill"
+      href="#/wallet"
       aria-current={active ? "page" : undefined}
-      onClick={() => navigate("/wallet")}
-      title={vault.address}
+      title={`${vault.label} · ${vault.address}`}
     >
+      <span className="icon">
+        <WalletMark />
+      </span>
+      <span className="who">{vault.kind === "demo" ? "Demo wallet" : "Wallet"}</span>
       <span className="addr">{shortAddress(vault.address)}</span>
       <span className="bal">{balance ? formatBtc(balance.total) : "…"}</span>
-    </button>
+    </a>
   );
 }

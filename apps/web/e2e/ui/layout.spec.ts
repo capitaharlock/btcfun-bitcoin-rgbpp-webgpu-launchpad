@@ -2,7 +2,11 @@
 
 import { test, expect } from "../support/fixtures";
 
-const ROUTES = ["/", "/create", "/market", "/activity", "/holdings", "/wallet", "/lab", "/proof"];
+const ROUTES = ["/", "/create", "/market", "/activity", "/wallet", "/wallet/tokens", "/wallet/activity", "/holdings", "/lab", "/proof"];
+
+async function overflowOf(page: import("@playwright/test").Page): Promise<number> {
+  return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+}
 
 test.describe("layout", () => {
   for (const route of ROUTES) {
@@ -17,7 +21,7 @@ test.describe("layout", () => {
   }
 
   test("the top bar fits a phone with a wallet connected", async ({ page, app }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     for (const route of ["/", "/market", "/activity"]) {
       await app.goto(route);
       await expect(page.locator("main")).toBeVisible();
@@ -25,6 +29,35 @@ test.describe("layout", () => {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
       expect(overflow, `${route} is wider than the viewport`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("the top bar fits a phone with the demo wallet, and names it", async ({ page, app }) => {
+    await app.connectDemoWallet();
+    for (const route of ["/", "/market", "/wallet", "/wallet/tokens", "/wallet/activity"]) {
+      await app.goto(route);
+      await expect(page.locator("main")).toBeVisible();
+      expect(await overflowOf(page), `${route} is wider than the viewport`).toBeLessThanOrEqual(1);
+    }
+    const pill = page.getByRole("banner").getByRole("link", { name: /Demo wallet/ });
+    await expect(pill).toBeVisible();
+    const box = await pill.boundingBox();
+    const width = page.viewportSize()!.width;
+    expect(box && box.x + box.width, "the wallet button is cut off").toBeLessThanOrEqual(width);
+  });
+
+  test("the connect chooser fits the screen it opens on", async ({ page, app }) => {
+    await app.goto("/");
+    await page.getByRole("banner").getByRole("button", { name: "Connect wallet" }).click();
+    const dialog = page.getByRole("dialog", { name: "Connect a wallet" });
+    await expect(dialog).toBeVisible();
+    const box = (await dialog.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    for (const name of ["Connect with a passkey", "Use the demo wallet"]) {
+      const button = dialog.getByRole("button", { name });
+      await button.scrollIntoViewIfNeeded();
+      await expect(button).toBeInViewport();
     }
   });
 

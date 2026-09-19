@@ -4,7 +4,8 @@
  * Bitcoin tip, or read from CKB. Supply, cells and your balance come from the
  * chain and can be recomputed by anyone with a CKB node; nothing here is a
  * fixture. The links and the story are the creator's signed words and are
- * labelled as such: nothing on chain enforces them.
+ * labelled as such: nothing on chain enforces them. So is the picture, and
+ * when the platform supplied it instead, the page says that too.
  */
 
 import { useEffect, useRef } from "react";
@@ -12,16 +13,19 @@ import { useEffect, useRef } from "react";
 import { navigate } from "../App";
 import { phaseTone, type Launch } from "../data/launches";
 import { useChainSynced, useLaunch, useTip } from "../hooks/useLaunches";
+import { useImageCheck } from "../hooks/useImageCheck";
 import { useLaunchStats } from "../hooks/useLaunchStats";
 import { addressUrl } from "../lib/bitcoin/network";
+import { ckbMintScriptUrl, ckbTokenUrl } from "../lib/rgbpp/explorer";
 import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, TICKET_SATS } from "../lib/standard";
 import { MinerSteps } from "../components/mining/MinerSteps";
 import { useTokens } from "../state/TokensProvider";
-import { ProjectLinks } from "../ui/PixelIcon";
+import { HalvingBar } from "../ui/HalvingBar";
+import { ExplorerLinks, launchExplorers, ProjectLinks } from "../ui/PixelIcon";
 import { RewardChart } from "../ui/RewardChart";
 import { Chip, Clamp, KV, More, Notice, Panel, Stat } from "../ui/primitives";
-import { Sigil } from "../ui/Sigil";
+import { TokenImage } from "../ui/TokenImage";
 
 export function LaunchView({ id, focusMiner = false }: { id: string; focusMiner?: boolean }) {
   const launch = useLaunch(id);
@@ -45,6 +49,7 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
   const perTicket24 = launch.open ? reward(24, launch.h0, tip) : reward(24, launch.h0, launch.h0);
   const miner = useRef<HTMLElement>(null);
   const { why, plan } = launch.story;
+  const imageCheck = useImageCheck(launch.art, launch.imageHash);
 
   // Arrived from a MINE button: open on the miner rather than the marquee.
   useEffect(() => {
@@ -78,12 +83,25 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
         style={{ "--accent": launch.accent } as React.CSSProperties}
         aria-busy={!synced}
       >
-        <Sigil seed={launch.id} accent={launch.accent} size="xl" />
+        <figure className="marquee-art">
+          <TokenImage art={launch.art} seed={launch.id} accent={launch.accent} symbol={launch.symbol} size="xl" />
+          {launch.art && (
+            <figcaption className="tiny faint">
+              {launch.art.by === "platform" ? "Image supplied by the platform" : "Image chosen by the creator"}
+              {imageCheck === "verified" && <Chip tone="ok">image verified</Chip>}
+              {imageCheck === "mismatch" && <Chip tone="warn" title="The picture's bytes do not hash to the image hash in the token's terms">image ≠ terms</Chip>}
+            </figcaption>
+          )}
+        </figure>
         <div className="stack-sm">
           <div className="eyebrow">{launch.name}</div>
           <h1>{launch.symbol}</h1>
           <p className="lede">{launch.blurb}</p>
-          <ProjectLinks links={launch.links} symbol={launch.symbol} />
+          <div className="row wrapped">
+            <ProjectLinks links={launch.links} symbol={launch.symbol} />
+            <ExplorerLinks links={launchExplorers(launch)} label={`${launch.symbol} on chain`} />
+          </div>
+          {synced && <HalvingBar position={launch.position} accent={launch.accent} symbol={launch.symbol} />}
         </div>
 
         <div className="scoreboard">
@@ -115,8 +133,11 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
             )}
           </div>
         )}
-        {(why || plan || Object.keys(launch.links).length > 0) && (
-          <p className="tiny faint story-note">Links and story are signed by the creator, not enforced on chain.</p>
+        {(why || plan || Object.keys(launch.links).length > 0 || launch.art?.by === "creator") && (
+          <p className="tiny faint story-note">
+            {launch.art?.by === "creator" ? "Links, story and picture are" : "Links and story are"} signed by the creator, not
+            enforced on chain.
+          </p>
         )}
       </section>
       {stats?.truncated && <p className="tiny faint">Counts stop at 2,000 cells; figures are lower bounds.</p>}
@@ -133,8 +154,14 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
               ["Ticket", `${group(TICKET_SATS)} sats`],
               ["Now, for a 24-bit hash", `${atoms(perTicket24, DECIMALS, 0)} ${launch.symbol}`],
               ["Halving", `every ${group(HALVING_BLOCKS)} blocks from ${group(launch.h0)}`],
-              ["Promoter", <a href={addressUrl(launch.promoter)} target="_blank" rel="noopener noreferrer">{shortHash(launch.promoter, 10, 6)}</a>],
-              ["Token id", <span className="mono" title={launch.tokenId}>{shortHash(launch.tokenId, 10, 6)}</span>],
+              ["Promoter · ticket payments", <a href={addressUrl(launch.promoter)} target="_blank" rel="noopener noreferrer">{shortHash(launch.promoter, 10, 6)}</a>],
+              [
+                "Token id",
+                <a className="mono" href={ckbTokenUrl(launch.tokenId)} target="_blank" rel="noopener noreferrer" title={launch.tokenId}>
+                  {shortHash(launch.tokenId, 10, 6)}
+                </a>,
+              ],
+              ["Mint script", <a href={ckbMintScriptUrl()} target="_blank" rel="noopener noreferrer">on the CKB explorer</a>],
             ]}
           />
           <More>

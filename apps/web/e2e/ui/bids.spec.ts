@@ -9,7 +9,7 @@ import type { Page } from "@playwright/test";
 
 import { test, expect } from "../support/fixtures";
 import type { ChainSim } from "../support/chain";
-import { announce, block, demoKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
+import { announce, block, browserKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -31,7 +31,7 @@ test.describe("bids", () => {
     await mintOnce(page, sim);
 
     const bidderPage = await secondVisitor(browser, sim, rgbpp);
-    const bidder = await demoKeyOn(bidderPage);
+    const bidder = await browserKeyOn(bidderPage);
     sim.fund(bidder.address, 100_000);
     await bidderPage.goto("/#/market");
     await placeBid(bidderPage, "100", 20_000);
@@ -96,7 +96,7 @@ test.describe("bids", () => {
     await expect(bidsTable(page)).toContainText("10,000 sats");
 
     const other = await secondVisitor(browser, sim, rgbpp);
-    await demoKeyOn(other);
+    await browserKeyOn(other);
     await other.goto("/#/market");
     await expect(bidsTable(other)).toContainText("10,000 sats", { timeout: 30_000 });
     await expect(bidsTable(other)).toContainText("You hold 0.00.");

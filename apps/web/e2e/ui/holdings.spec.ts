@@ -1,7 +1,7 @@
 /* What you hold, and sending it to someone else. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, demoKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
+import { announce, block, browserKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -14,7 +14,7 @@ test.describe("holdings", () => {
     const total = Number(minted.split(" ")[0].replace(/,/g, ""));
 
     const bobPage = await secondVisitor(browser, sim, rgbpp);
-    const bob = await demoKeyOn(bobPage);
+    const bob = await browserKeyOn(bobPage);
     sim.track(bob.address);
 
     await app.goto("/holdings");
@@ -64,7 +64,7 @@ test.describe("holdings", () => {
   });
 
   test("an empty wallet is told how to get tokens", async ({ page, app }) => {
-    await app.createDemoKey();
+    await app.createBrowserKey();
     await app.goto("/holdings");
     await expect(page.getByText(/No tokens yet/)).toBeVisible();
   });

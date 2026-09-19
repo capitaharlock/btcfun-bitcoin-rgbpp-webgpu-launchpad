@@ -9,9 +9,9 @@
  * The last step signs an announcement. It costs nothing: the mint script is
  * already on chain and permissionless, and the token comes into existence with
  * its first mint. A launch opens at a future height so that its creator cannot
- * mine it before anyone else has heard of it. Links and story are part of the
- * signed announcement but not of the token: they never change its id, and
- * nothing on chain enforces them.
+ * mine it before anyone else has heard of it. Links, story and picture are
+ * part of the signed announcement but not of the token: they never change its
+ * id, and nothing on chain enforces them.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -35,6 +35,7 @@ import {
   type LinkKind,
   type StoryPart,
 } from "../lib/launches/create";
+import { imageFor } from "../lib/launches/image";
 import { ACTIVE } from "../lib/bitcoin/network";
 import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, TICKET_SATS } from "../lib/standard";
@@ -43,6 +44,7 @@ import { useWallet } from "../state/WalletProvider";
 import { LINK_LABEL, ProjectLinks } from "../ui/PixelIcon";
 import { Chip, Field, KV, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { Sigil } from "../ui/Sigil";
+import { TokenImage } from "../ui/TokenImage";
 
 const ACCENT_LABELS: Record<(typeof ACCENTS)[number], string> = {
   "var(--amber)": "Amber",
@@ -66,13 +68,14 @@ const INITIAL: LaunchDraft = {
   opensInBlocks: 6,
   links: NO_LINKS,
   story: NO_STORY,
+  image: "",
 };
 
 /** Which draft fields each step is responsible for. */
 const OWNED: Record<StepIndex, DraftField[]> = {
   0: ["symbol", "name", "blurb", "accent"],
   1: ["promoter", "opensInBlocks"],
-  2: [...LINK_KINDS.map((k) => `links.${k}` as const), "story.why", "story.plan", "extras"],
+  2: [...LINK_KINDS.map((k) => `links.${k}` as const), "story.why", "story.plan", "image", "extras"],
   3: [],
 };
 
@@ -345,9 +348,25 @@ function Opening({ draft, faults, set }: StepProps) {
 function Project({ draft, faults, set }: StepProps) {
   const setLink = (kind: LinkKind, value: string) => set("links", { ...draft.links, [kind]: value });
   const setStory = (part: StoryPart, value: string) => set("story", { ...draft.story, [part]: value });
+  const picture = imageFor(draft.image);
   return (
-    <Panel eyebrow="step 3 · optional" title="Links and story">
+    <Panel eyebrow="step 3 · optional" title="Links, story and picture">
       <div className="stack-md">
+        <div className="row">
+          <TokenImage art={picture ? { src: picture, by: "creator" } : null} seed={draft.symbol || "draft"} accent={draft.accent} symbol={draft.symbol || "Your"} size="lg" />
+          <div className="grow">
+            <Field label="Image" hint={faults.image ?? "A square picture: an https:// address, or one of this site's under /tokens/."}>
+              <input
+                className="input"
+                inputMode="url"
+                spellCheck={false}
+                placeholder="https://…/token.png"
+                value={draft.image}
+                onChange={(e) => set("image", e.target.value)}
+              />
+            </Field>
+          </div>
+        </div>
         <div className="grid g3">
           {LINK_KINDS.map((kind) => (
             <Field key={kind} label={LINK_LABEL[kind]} hint={faults[`links.${kind}`]}>
@@ -449,6 +468,7 @@ function Announce({ draft }: { draft: LaunchDraft }) {
               ["Opens at block", preview ? group(preview.h0) : "—"],
               ["Token id", preview ? <span className="mono">{shortHash(preview.tokenId, 10, 6)}</span> : "—"],
               ["Story", extras.story ? `${Object.keys(extras.story).length} of 2 parts` : "none"],
+              ["Image", extras.image ? <span className="mono" title={extras.image}>{shortHash(extras.image, 24, 10)}</span> : "none"],
             ]}
           />
           {extras.links && <ProjectLinks links={extras.links} symbol={draft.symbol} small />}
@@ -472,8 +492,8 @@ function Announce({ draft }: { draft: LaunchDraft }) {
           </div>
           <More>
             <p>
-              Your key signs everything above together. The token id is derived from all of it except the links and the
-              story, which never change it. The index cannot alter a field without breaking the signature.
+              Your key signs everything above together. The token id is derived from all of it except the links, the
+              story and the image, which never change it. The index cannot alter a field without breaking the signature.
             </p>
             <p>Nothing is written to Bitcoin or CKB now. The mint script is already deployed; the token appears with its first mint.</p>
           </More>

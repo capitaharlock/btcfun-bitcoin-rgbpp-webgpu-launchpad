@@ -3,38 +3,42 @@
 import { test, expect } from "../support/fixtures";
 
 const KNOWN_SECRET = "11".repeat(32);
+/** The shared demo wallet's address, fixed by the constant in `vault.ts`. */
+const DEMO_ADDRESS = "tb1qjjq482m9pj7dvge0l2r07a3fcyflktrzgzf6tz";
 
 test.describe("wallet", () => {
-  test("a demo key yields a testnet address and an empty balance", async ({ page, app }) => {
-    const wallet = await app.createDemoKey();
+  test("a browser key yields a testnet address and an empty balance", async ({ page, app }) => {
+    const wallet = await app.createBrowserKey();
     expect(wallet.address).toMatch(/^tb1q[0-9a-z]{38}$/);
     expect(wallet.identity).toMatch(/^0[23][0-9a-f]{64}$/);
     await expect(page.getByText("balance", { exact: true }).locator("..")).toContainText("0");
     // The header pill now shows the connected wallet instead of "Connect wallet".
     await expect(page.getByRole("button", { name: "Connect wallet" })).toHaveCount(0);
+    await expect(page.getByRole("banner").getByRole("link", { name: /^Wallet/ })).toBeVisible();
   });
 
   test("funds arriving on chain show up without a reload", async ({ page, app, sim }) => {
-    const wallet = await app.createDemoKey();
+    const wallet = await app.createBrowserKey();
     sim.fund(wallet.address, 100_000);
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("0.001").first()).toBeVisible();
+    await expect(page.getByText("confirmed", { exact: true }).locator("..")).toContainText("0.001");
   });
 
   test("restoring the same secret twice yields the same wallet", async ({ page, app }) => {
     const first = await app.restoreKey(KNOWN_SECRET);
-    await page.getByRole("button", { name: /^Disconnect/ }).click();
-    await expect(page.getByRole("button", { name: "Create a demo key" })).toBeVisible();
+    await app.logOut();
+    await expect(page.getByRole("button", { name: "Create a browser key" })).toBeVisible();
     const second = await app.restoreKey(KNOWN_SECRET);
     expect(second).toEqual(first);
   });
 
   test("the revealed secret round-trips to the same address", async ({ page, app }) => {
-    const wallet = await app.createDemoKey();
-    await page.getByRole("button", { name: "Reveal the demo key secret" }).click();
+    const wallet = await app.createBrowserKey();
+    await page.getByRole("button", { name: "Reveal the wallet secret" }).click();
     const secret = (await page.locator(".copyable code").nth(1).innerText()).trim();
     expect(secret).toMatch(/^[0-9a-f]{64}$/);
-    await page.getByRole("button", { name: /^Disconnect/ }).click();
+    await app.logOut();
     expect(await app.restoreKey(secret)).toEqual(wallet);
   });
 
@@ -59,15 +63,125 @@ test.describe("wallet", () => {
       await expect(notice).toBeVisible();
       // An internal function name is not an error message.
       await expect(notice).not.toContainText("hexToBytes");
-      await expect(page.getByRole("button", { name: "Create a demo key" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Create a browser key" })).toBeVisible();
       ux.note("A malformed secret is refused with a readable message and no wallet is created.");
     });
   });
 
-  test("disconnecting forgets the wallet on reload", async ({ page, app }) => {
-    await app.createDemoKey();
-    await page.getByRole("button", { name: /^Disconnect/ }).click();
+  test("logging out forgets the wallet on reload", async ({ page, app }) => {
+    await app.createBrowserKey();
+    await app.logOut();
     await page.reload();
     await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
+  });
+});
+
+test.describe("connect chooser", () => {
+  test("offers your own wallet or the shared demo one, in a modal that Escape closes", async ({ page, app, ux }) => {
+    await app.goto("/");
+    const trigger = page.getByRole("banner").getByRole("button", { name: "Connect wallet" });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Connect a wallet" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute("aria-modal", "true");
+    await expect(dialog.getByRole("heading", { name: "Your wallet — passkey" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: /Demo wallet — shared, testnet3 only/ })).toBeVisible();
+    await expect(dialog).toContainText("Its key is public");
+    await expect(dialog.getByRole("button", { name: "Restore from a secret" })).toBeVisible();
+
+    // Focus starts inside and cannot leave for the page behind.
+    await expect.poll(() => dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+    for (let i = 0; i < 12; i++) await page.keyboard.press("Tab");
+    expect(await dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    ux.note("Connect wallet opens a two-choice dialog; Escape closes it and returns focus to the button.");
+  });
+
+  test("the demo wallet connects in one click and says it is shared", async ({ page, app, context, ux }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const wallet = await app.connectDemoWallet();
+    expect(wallet.address).toBe(DEMO_ADDRESS);
+
+    // The whole address, copyable, with a QR code of it.
+    await expect(page.locator(".copyable code").first()).toHaveText(DEMO_ADDRESS);
+    await page.getByRole("button", { name: "Copy address" }).click();
+    await expect(page.getByRole("button", { name: "Copy address" })).toHaveText("Copied");
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(DEMO_ADDRESS);
+    await expect(page.getByRole("img", { name: `QR code of the address ${DEMO_ADDRESS}` })).toBeVisible();
+
+    // Shared, and said so everywhere the wallet shows.
+    await expect(page.getByRole("banner").getByText("Demo wallet · shared")).toBeVisible();
+    await expect(page.locator("main").getByText("Demo wallet · shared", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Its key is public: anyone can spend what is here/)).toBeVisible();
+    ux.note("The demo wallet needs no gesture and no funds of one's own; its address, copy button and QR are on the overview.");
+  });
+});
+
+test.describe("wallet tabs", () => {
+  test("overview, tokens and activity are places of their own", async ({ page, app }) => {
+    await app.createBrowserKey();
+    const tabs = page.getByRole("navigation", { name: "Wallet sections" });
+    await expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { name: /held|Tokens/ })).toBeVisible();
+
+    await tabs.getByRole("link", { name: "Tokens" }).click();
+    await expect(page).toHaveURL(/#\/wallet\/tokens$/);
+    await expect(page.getByText(/No tokens yet/)).toBeVisible();
+
+    await tabs.getByRole("link", { name: "Activity" }).click();
+    await expect(page).toHaveURL(/#\/wallet\/activity$/);
+    await expect(page.getByText(/Nothing signed from this browser yet/)).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/#\/wallet\/tokens$/);
+  });
+
+  test("the old holdings address opens the Tokens tab", async ({ page, app }) => {
+    await app.createBrowserKey();
+    await app.goto("/holdings");
+    await expect(page).toHaveURL(/#\/wallet\/tokens$/);
+    await expect(
+      page.getByRole("navigation", { name: "Wallet sections" }).getByRole("link", { name: "Tokens" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("the top bar has one way to the wallet and no separate holdings button", async ({ page, app }) => {
+    await app.createBrowserKey();
+    await app.goto("/");
+    const banner = page.getByRole("banner");
+    await expect(banner.getByRole("button", { name: "Holdings" })).toHaveCount(0);
+    await banner.getByRole("link", { name: /^Wallet/ }).click();
+    await expect(page).toHaveURL(/#\/wallet$/);
+  });
+});
+
+test.describe("log out", () => {
+  test("says what each kind of wallet loses before it forgets it", async ({ page, app }) => {
+    await app.connectDemoWallet();
+    await page.getByRole("button", { name: "Log out" }).click();
+    const demo = page.getByRole("dialog", { name: "Log out of this wallet?" });
+    await expect(demo).toContainText("open it again any time");
+    await demo.getByRole("button", { name: "Cancel" }).click();
+    await expect(demo).toBeHidden();
+    await app.logOut();
+    await expect(page.getByRole("heading", { name: "Connect a wallet" })).toBeVisible();
+
+    await app.createBrowserKey();
+    await page.getByRole("button", { name: "Log out" }).click();
+    const local = page.getByRole("dialog", { name: "Log out of this wallet?" });
+    await expect(local).toContainText("loses the wallet");
+    await expect(local.getByRole("button", { name: "Reveal the wallet secret" })).toBeVisible();
+  });
+
+  test("returns to disconnected everywhere", async ({ page, app }) => {
+    await app.connectDemoWallet();
+    await app.logOut();
+    await expect(page.getByRole("banner").getByText("Demo wallet · shared")).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("banner").getByRole("button", { name: "Connect wallet" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use the demo wallet" })).toBeVisible();
   });
 });

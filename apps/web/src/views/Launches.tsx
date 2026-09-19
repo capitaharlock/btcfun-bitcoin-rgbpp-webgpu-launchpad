@@ -6,19 +6,27 @@
  * each with its own MINE button. There is no "start mining" without a token:
  * you mine *a* launch, so the choice comes first.
  *
- * Everything listed is a real announcement whose id matches its token on CKB.
+ * "All launches" lists real announcements whose ids match their tokens on CKB.
  * "Hot" is derived from the public feed, never hand-picked: a curated list on a
- * permissionless launchpad would be a lie about how it works.
+ * permissionless launchpad would be a lie about how it works. The one
+ * exception is narrow and says so: the platform's own DEMO launch, when it
+ * exists, is put first as the place to start (`lib/launches/featured.ts`).
+ *
+ * Under them, a few simulated examples (`data/showcase.ts`) show what a launch
+ * looks like deep into its halvings. They have a section of their own, a
+ * SIMULATED badge each, and no working link or MINE button.
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { navigate } from "../App";
 import type { Launch } from "../data/launches";
+import { showcase } from "../data/showcase";
 import { useActivity, useLaunchActivity } from "../hooks/useActivity";
 import { useLaunches, useTip } from "../hooks/useLaunches";
 import { useLaunchesStats } from "../hooks/useLaunchStats";
 import { compact, group } from "../lib/format";
+import { isFeatured } from "../lib/launches/featured";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
 import { ArcadeScene } from "../ui/arcade/ArcadeScene";
@@ -72,10 +80,14 @@ export function Launches() {
   const [filter, setFilter] = useState<Filter>("all");
   const catalogue = useRef<HTMLElement>(null);
 
+  const shown = useCallback((l: Pick<Launch, "phase">) => filter === "all" || actionFor(l) === filter, [filter]);
+  // Newest first when there are several; the rule is narrow enough that one is the expected case.
+  const featured = useMemo(() => launches.filter((l) => isFeatured(l)).sort((a, b) => b.announcedAt.localeCompare(a.announcedAt))[0], [launches]);
   const listed = useMemo(
-    () => sorted(launches.filter((l) => filter === "all" || actionFor(l) === filter), sort, heat),
-    [launches, filter, sort, heat],
+    () => sorted(launches.filter((l) => shown(l) && l.id !== featured?.id), sort, heat),
+    [launches, shown, sort, heat, featured],
   );
+  const examples = useMemo(() => showcase(tip).filter(shown), [tip, shown]);
   const hottest = useMemo(() => {
     const [top] = sorted(launches, "hot", heat);
     return top && (heat.get(top.id) ?? 0) > 0 ? top.id : null;
@@ -162,7 +174,7 @@ export function Launches() {
           </div>
         </div>
 
-        {listed.length === 0 ? (
+        {listed.length === 0 && !(featured && shown(featured)) ? (
           <Panel>
             <p className="clamp">
               {launches.length === 0
@@ -176,12 +188,33 @@ export function Launches() {
           </Panel>
         ) : (
           <div className="cardgrid">
+            {featured && shown(featured) && (
+              <TokenCard entry={featured} tip={tip} synced={synced} stats={stats.get(featured.id)} hot={featured.id === hottest} featured />
+            )}
             {listed.map((launch) => (
-              <TokenCard key={launch.id} launch={launch} tip={tip} stats={stats.get(launch.id)} hot={launch.id === hottest} />
+              <TokenCard key={launch.id} entry={launch} tip={tip} synced={synced} stats={stats.get(launch.id)} hot={launch.id === hottest} />
             ))}
           </div>
         )}
       </section>
+
+      {examples.length > 0 && (
+        <section className="stack-md" aria-labelledby="examples-title">
+          <div className="toolbar">
+            <SectionHead title="Examples" count={examples.length} id="examples-title" />
+          </div>
+          <p className="tiny faint clamp examples-note">
+            Simulated launches further along their schedule — halving 2, halving 9, spent — so you can read a card before a
+            real launch gets there. The figures follow the standard's reward; nothing here is on chain, so there is nothing to
+            mine, list or buy.
+          </p>
+          <div className="cardgrid">
+            {examples.map((example) => (
+              <TokenCard key={example.id} entry={example} tip={tip} synced={synced} mintInstead={featured?.symbol} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="pixel-rule" aria-hidden="true" />
 

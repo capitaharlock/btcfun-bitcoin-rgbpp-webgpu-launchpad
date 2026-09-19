@@ -61,7 +61,9 @@
 .brand em { color: var(--accent); font-style: normal; }
 
 .nav { display: flex; gap: 2px; margin-left: var(--space-1); }
-.nav a {
+/* The wallet's tabs are the same kind of thing as the sections — places, as
+   links — so they are drawn by the same rule. */
+.nav a, .tabs a {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -78,8 +80,17 @@
   white-space: nowrap;
   transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
 }
-.nav a:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
-.nav a[aria-current="page"] { color: var(--bg); background: var(--ink); }
+.nav a:hover, .tabs a:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
+.nav a[aria-current="page"], .tabs a[aria-current="page"] { color: var(--bg); background: var(--ink); }
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-w) solid var(--line-strong);
+}
 
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
@@ -163,17 +174,16 @@
   .nav { overflow-x: auto; flex: 1 1 auto; min-width: 0; margin-left: 0; scrollbar-width: none; }
   .nav a { padding: 0 9px; font-size: var(--text-sm); }
   .topbar-right { flex: none; gap: 6px; }
-  .topbar-right .chip, .topbar-right .divider, .topbar-right .holdings, .topbar-right .walletpill .bal { display: none; }
-  /* The address is on the wallet page; here the pill only has to be the way there. */
-  .topbar-right .walletpill .addr { display: none; }
-  .walletpill::before {
-    content: "Wallet";
-    padding: 0 10px;
-    font-family: var(--font-label);
-    font-size: var(--text-sm);
-    letter-spacing: var(--label-tracking);
-    text-transform: var(--label-case);
-    -webkit-font-smoothing: var(--face-smoothing);
+  .topbar-right .chip, .topbar-right .divider { display: none; }
+  /* The address and balance are one tap away; here the pill only has to be
+     the way there, named in words next to its icon. */
+  .topbar-right .walletpill :is(.addr, .bal) { display: none; }
+  .topbar-right .walletpill .who {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+    padding: 0 10px 0 2px;
   }
   .topbar-right .btn { padding: 0 10px; }
 }
@@ -423,6 +433,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 22px; }
   margin-left: 6px;
   text-shadow: none;
   letter-spacing: var(--label-tracking);
+  /* A unit wraps whole, never letter by letter under the figure. */
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .statrow {
@@ -704,6 +717,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 22px; }
 /* ---------- wallet pill in the top bar ---------- */
 
 .walletpill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   height: 34px;
@@ -713,13 +727,36 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 22px; }
   background: var(--bg);
   color: var(--ink);
   font: inherit;
-  cursor: pointer;
+  white-space: nowrap;
   overflow: hidden;
   transition: border-color var(--dur-base) var(--ease);
 }
-.walletpill:hover { border-color: var(--ink-faint); }
+.walletpill:hover { border-color: var(--ink-faint); text-decoration: none; }
+.walletpill .icon {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  padding: 0 var(--space-2);
+  color: var(--accent);
+}
+.walletpill .icon svg, .walletbutton svg { display: block; flex: none; }
+/* Named in words for assistive technology everywhere; shown on a phone,
+   where the icon stands alone. */
+.walletpill .who {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  font-size: var(--text-sm);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  -webkit-font-smoothing: var(--face-smoothing);
+}
 .walletpill[aria-current="page"] { border-color: var(--ink); }
-.walletpill .addr { padding: 0 10px; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-dim); }
+.walletpill .addr { padding: 0 10px 0 2px; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-dim); }
 .walletpill .bal {
   align-self: stretch;
   display: grid;
@@ -741,10 +778,83 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 22px; }
 .orders.after-notice { margin-top: var(--space-3); }
 .error-text.full { flex-basis: 100%; }
 .scroll-x { overflow-x: auto; }
-.restore { margin-top: var(--space-3); }
-.below { margin-top: var(--space-2); }
 .grow { flex: 1; min-width: 0; }
 .anywhere { overflow-wrap: anywhere; }
 .check { display: flex; align-items: flex-start; gap: 10px; }
 .check .tiny { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .minted { margin: var(--space-3) 0 0; }
+
+/* A narrow desktop keeps the icon and the balance; the address is on the
+   wallet page, whole. */
+@media (max-width: 1180px) {
+  .topbar-right .walletpill .addr { display: none; }
+}
+
+.linkbutton[disabled] { color: var(--ink-faint); cursor: not-allowed; text-decoration: none; }
+
+/* ---------- dialog ---------- */
+
+/* A cabinet window: square, framed in ink, a hard shadow in the accent. The
+   native <dialog> supplies the modality; this only draws it. */
+.dialog {
+  width: min(480px, calc(100vw - 2 * var(--gut)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--gut));
+  padding: 0;
+  border: var(--frame-w) solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg) var(--accent);
+  overflow: auto;
+}
+.dialog.wide { width: min(760px, calc(100vw - 2 * var(--gut))); }
+.dialog::backdrop { background: color-mix(in oklab, var(--shade) 78%, transparent); }
+.dialog-frame { display: grid; gap: var(--space-4); padding: var(--space-5); }
+.dialog-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+
+/* ---------- wallet ---------- */
+
+/* Two ways to get a wallet, side by side where there is room. */
+.choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.choice {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.choice .eyebrow { margin-bottom: 0; }
+.choice .alt { margin: 0; }
+.choice .more { margin-top: var(--space-1); }
+@media (max-width: 720px) {
+  .choices { grid-template-columns: minmax(0, 1fr); }
+  .dialog-frame { padding: var(--space-4); }
+}
+
+.receive { display: flex; align-items: flex-start; gap: var(--space-4); }
+@media (max-width: 480px) {
+  .receive { flex-direction: column; align-items: center; }
+}
+.qr { width: 136px; height: 136px; flex: none; display: block; }
+.qr-paper { fill: var(--paper); }
+.qr-ink { fill: var(--shade); }
+
+.holdlist { list-style: none; margin: 0; padding: 0; display: grid; }
+.holdlist li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-w) solid var(--line);
+}
+.holdlist li:last-child { border-bottom: 0; }
+.holdlist .sym {
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  -webkit-font-smoothing: var(--face-smoothing);
+}
+.holdlist .mono { color: var(--amber); }

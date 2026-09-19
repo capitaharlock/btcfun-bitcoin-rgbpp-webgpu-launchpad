@@ -12,7 +12,7 @@ import type { ChainSim } from "./chain";
 import { RgbppSim } from "./rgbpp";
 
 export async function fundedWallet(app: App, sim: ChainSim, sats = 200_000): Promise<Wallet> {
-  const wallet = await app.createDemoKey();
+  const wallet = await app.createBrowserKey();
   sim.fund(wallet.address, sats);
   return wallet;
 }
@@ -27,6 +27,8 @@ export interface Draft {
   links?: Record<string, string>;
   why?: string;
   plan?: string;
+  /** Picture reference, e.g. `/tokens/demo.svg`. */
+  image?: string;
 }
 
 /**
@@ -48,7 +50,8 @@ export async function announce(page: Page, draft: Draft): Promise<string> {
   if (draft.promoter) await page.getByLabel("Ticket income to").fill(draft.promoter);
   await page.getByLabel("Opens in (blocks)").fill(String(draft.opensInBlocks ?? 1));
   await page.getByRole("button", { name: "Continue →" }).click();
-  // Links and story: optional.
+  // Links, story and picture: optional.
+  if (draft.image) await field(page, "Image").fill(draft.image);
   for (const [label, value] of Object.entries(draft.links ?? {})) await field(page, label).fill(value);
   if (draft.why) await field(page, "Why").fill(draft.why);
   if (draft.plan) await field(page, "The plan").fill(draft.plan);
@@ -116,10 +119,10 @@ export async function secondVisitor(browser: Browser, sim: ChainSim, rgbpp: Rgbp
   return page;
 }
 
-/** Create a demo key on an arbitrary page (a second visitor has no `app`). */
-export async function demoKeyOn(page: Page): Promise<Wallet> {
+/** Create a browser key on an arbitrary page (a second visitor has no `app`). */
+export async function browserKeyOn(page: Page): Promise<Wallet> {
   await page.goto("/#/wallet");
-  await page.getByRole("button", { name: "Create a demo key" }).click();
+  await page.getByRole("button", { name: "Create a browser key" }).click();
   await expect(page.locator(".copyable code").first()).toHaveText(/^tb1q/);
   const address = (await page.locator(".copyable code").first().innerText()).trim();
   const identity = await page.evaluate(

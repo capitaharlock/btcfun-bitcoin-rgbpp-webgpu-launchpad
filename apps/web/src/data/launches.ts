@@ -2,9 +2,10 @@
  *
  * Every launch here is a real announcement — created in this browser or seen
  * through the index, and checked against the token identity its terms produce.
- * There are no sample launches: a catalogue of invented projects with invented
- * reserves and holder counts would be exactly the overstatement PROTOCOL.md §3
- * forbids. An empty list says so and offers to create the first one.
+ * The catalogue also shows a few simulated examples (`./showcase.ts`), but
+ * they are a different type: `source: "simulated"` against `source: "chain"`
+ * here, with no terms, token id or promoter, so no code path that mints, lists
+ * or buys can be handed one. An empty list of real launches still says so.
  *
  * Block height is the clock. A launch opens at `h0`; its current rate is set
  * by how many halvings have passed since then, and each ticket locks in the
@@ -13,10 +14,14 @@
 
 import { blocksToNextHalving, halvingsAt } from "../lib/standard";
 import { publicExtras, termsOf, type LaunchCommitment, type LaunchLinks, type LaunchStory } from "../lib/launches/create";
+import { artFor, type TokenArt } from "../lib/launches/image";
+import { halvingPosition, TERMINAL_HALVING, type HalvingPosition } from "../lib/launches/progress";
 import type { LaunchTerms } from "../lib/rgbpp/launch";
 
 /** A launch as announced. */
 export interface LaunchSpec {
+  /** A real announcement whose id matches its token on CKB. */
+  source: "chain";
   id: string;
   symbol: string;
   name: string;
@@ -37,12 +42,14 @@ export interface LaunchSpec {
   links: LaunchLinks;
   /** Why and what for, in the creator's words. Signed by the creator, not enforced on chain. */
   story: LaunchStory;
+  /** The token's picture and who supplied it; null draws the pixel sigil. */
+  art: TokenArt | null;
 }
 
 export type LaunchPhase = "announced" | "minting" | "spent";
 
-/** A launch placed in time against a known tip. */
-export interface Launch extends LaunchSpec {
+/** Where something with an opening height stands against a known tip. */
+export interface Placement {
   phase: LaunchPhase;
   /** True once the tip has reached `h0`. */
   open: boolean;
@@ -50,14 +57,12 @@ export interface Launch extends LaunchSpec {
   halvings: number | null;
   /** Blocks until the rate halves again — or until opening, before it. */
   blocksToHalving: number;
+  /** The same, as the catalogue's bar and sentence read it. */
+  position: HalvingPosition;
 }
 
-/**
- * Halvings after which even the strongest possible hash mints nothing
- * (`terminalHalving(256)` in `standard.ts`). A launch past it is spent:
- * tokens still move, but no ticket can mint.
- */
-export const TERMINAL_HALVING = 43;
+/** A launch placed in time against a known tip. */
+export interface Launch extends LaunchSpec, Placement {}
 
 /**
  * Height used before the live tip has arrived.
@@ -82,18 +87,24 @@ export function specFor(c: LaunchCommitment): LaunchSpec {
     creator: c.creator,
     announcedAt: c.at,
     ...publicExtras(c),
+    source: "chain",
+    art: artFor(c),
+  };
+}
+
+export function place(h0: number, tip: number): Placement {
+  const halvings = halvingsAt(h0, tip);
+  return {
+    open: halvings !== null,
+    halvings,
+    blocksToHalving: blocksToNextHalving(h0, tip),
+    phase: halvings === null ? "announced" : halvings >= TERMINAL_HALVING ? "spent" : "minting",
+    position: halvingPosition(h0, tip),
   };
 }
 
 export function resolve(spec: LaunchSpec, tip: number): Launch {
-  const halvings = halvingsAt(spec.h0, tip);
-  return {
-    ...spec,
-    open: halvings !== null,
-    halvings,
-    blocksToHalving: blocksToNextHalving(spec.h0, tip),
-    phase: halvings === null ? "announced" : halvings >= TERMINAL_HALVING ? "spent" : "minting",
-  };
+  return { ...spec, ...place(spec.h0, tip) };
 }
 
 export function phaseTone(phase: LaunchPhase): "amber" | "cyan" | undefined {

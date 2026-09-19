@@ -13,6 +13,7 @@ export {
 export { addressOfIdentity, deriveAddress, deriveKey, identityOf, signDigest, verifyDigest, type WalletKey } from "./keys";
 
 export {
+  connectDemo,
   connectPasskey,
   createLocal,
   current as currentVault,

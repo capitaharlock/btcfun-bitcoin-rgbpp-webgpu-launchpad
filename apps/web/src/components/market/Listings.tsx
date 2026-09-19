@@ -13,7 +13,7 @@ import { unitPrice } from "../../lib/market/book";
 import { DECIMALS } from "../../lib/standard";
 import type { Operation } from "../../state/TokensProvider";
 import { Chip, More, Panel } from "../../ui/primitives";
-import { Sigil } from "../../ui/Sigil";
+import { TokenImage } from "../../ui/TokenImage";
 
 export function Listings({
   listings,
@@ -95,7 +95,7 @@ function ListingRow({
     <tr>
       <td>
         <span className="row">
-          <Sigil seed={launch.id} accent={launch.accent} size="sm" still />
+          <TokenImage art={launch.art} seed={launch.id} accent={launch.accent} symbol={launch.symbol} size="md" still />
           <a href={`#/launch/${launch.id}`}>{launch.symbol}</a>
           {listing.bid && <Chip tone="cyan">for a bid</Chip>}
         </span>

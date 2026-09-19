@@ -36,6 +36,17 @@ export default function TestnetPage() {
       </section>
 
       <section>
+        <h2>What is only an example</h2>
+        <p>
+          Every launch starts at halving 0, so the front page also shows a few <strong>simulated</strong> launches further
+          along — two halvings in, nine, spent — to show what a card will say later. Each is badged SIMULATED and sits in
+          its own Examples section; its MINE button and explorer links are switched off, and its figures are the sum of an
+          invented mint history at the standard reward. None of it exists on chain. Token pictures are the creator's signed
+          choice, or the platform's own artwork where it says so; neither is part of the token's identity.
+        </p>
+      </section>
+
+      <section>
         <h2>What has not happened yet</h2>
         <ul>
           <li>
