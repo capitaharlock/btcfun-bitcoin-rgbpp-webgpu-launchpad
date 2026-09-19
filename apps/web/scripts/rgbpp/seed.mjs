@@ -38,6 +38,7 @@ const { state, write } = stateFile(fileURLToPath(new URL("../../.e2e-runs/seed.j
 
 /** Bitcoin culture, not anyone's brand: themes the community shares, issued by nobody in particular. */
 const OFFICIAL = [
+  ["DEMO", "Demo Token", "Start here: buy a ticket, mine in your browser and mint real tokens on testnet.", "var(--lime)"],
   ["PIZZA", "Pizza Day", "Ten thousand coins, two pizzas: the first thing Bitcoin ever bought.", "var(--amber)"],
   ["GENESIS", "Genesis Block", "For everyone who has read the headline in block zero.", "var(--cyan)"],
   ["HODL", "Hodl Guild", "A typo in 2013, a creed ever since. The token for the patient.", "var(--magenta)"],
@@ -54,6 +55,7 @@ const OFFICIAL = [
  *  references, never at a project that has not asked to be represented; the
  *  pictures are the platform's own artwork in public/tokens/. */
 const EXTRAS = {
+  DEMO: ["https://btcfun.rjj.workers.dev/#/docs", "A token that exists to be tried: every step is the real contract on testnet.", "Nothing to fund: tickets pay the platform's own promoter wallet and come back to the demo runs.", "/tokens/demo.svg"],
   PIZZA: ["https://en.wikipedia.org/wiki/Bitcoin_Pizza_Day", "Every community has a first purchase story; this one funds the next ones.", "Sponsor pizza nights at local meetups where newcomers pay in sats for the first time.", "/tokens/pizza.svg"],
   GENESIS: ["https://en.bitcoin.it/wiki/Genesis_block", "Reading the source is the best onboarding there is, and study groups need a place and a projector.", "Run a monthly reading group through the whitepaper and the genesis block, with the notes published.", "/tokens/genesis.svg"],
   HODL: ["https://en.wikipedia.org/wiki/Hodl", "Long-term holders are the quiet majority and rarely have a shared place.", "Keep a public, plain-language guide to self-custody and cold storage, updated every halving.", "/tokens/hodl.svg"],
