@@ -80,7 +80,8 @@
 
 .stage-body {
   position: relative;
-  min-height: 480px;
+  /* Compact enough that the first row of boxes shows above the fold at 960px tall. */
+  min-height: 340px;
   display: flex;
   align-items: center;
   border-top: var(--border-w) solid var(--line);
@@ -112,17 +113,18 @@
 .stage-copy {
   position: relative;
   z-index: 3;
-  max-width: 620px;
-  padding: 88px 0 48px;
+  max-width: 660px;
+  /* Clear of the HUD above it, and no taller than the headline needs. */
+  padding: 88px 0 var(--space-8);
   /* Shade behind the headline so it reads over the stars, fading into the
      scene rather than cutting it off with a box. */
   background: linear-gradient(90deg, var(--bg) 0 72%, transparent);
   padding-right: 90px;
 }
-.stage-copy h1 { font-size: var(--text-display); line-height: 1.25; }
+.stage-copy h1 { font-size: var(--text-display); line-height: 1.2; }
 .stage-copy h1 .line { display: block; }
-.stage-copy .lede { margin: 20px 0 0; font-size: 15.5px; color: var(--ink-dim); max-width: 44ch; }
-.stage-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-7); }
+.stage-copy .lede { margin: var(--space-4) 0 0; font-size: 15.5px; color: var(--ink-dim); max-width: 56ch; }
+.stage-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-6); }
 .insert-coin .blinker { animation: blink var(--blink) steps(1, end) infinite; }
 
 .stage-hud {
@@ -134,7 +136,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-8);
-  padding: 14px 0;
+  padding: var(--space-3) 0;
   pointer-events: none;
 }
 .stage-hud > div { display: grid; gap: 4px; }
@@ -165,7 +167,7 @@
     position: relative;
     left: auto;
     right: auto;
-    height: 300px;
+    height: 236px;
     margin: 0 calc(-1 * var(--gut));
     border-top: var(--border-w) solid var(--line);
     border-bottom: var(--border-w) solid var(--line);
@@ -188,8 +190,17 @@
 
 .cardgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--space-8);
+}
+
+/* The front page breathes: each section stands apart, with its heading given
+   room above the boxes it names. */
+.home { gap: var(--space-16); }
+.home-section { gap: var(--space-6); }
+@media (max-width: 720px) {
+  .home { gap: var(--space-12); }
+  .cardgrid { gap: var(--space-6); }
 }
 
 /* ---------- token box ---------- */
@@ -246,7 +257,7 @@
 }
 .tc-ribbon.sim { color: var(--warn); background: color-mix(in oklab, var(--warn) 12%, var(--bg)); border: var(--border-w) solid color-mix(in oklab, var(--warn) 60%, transparent); }
 
-.tc-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 0; padding: var(--space-4); }
+.tc-body { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-width: 0; padding: var(--space-5); }
 
 .tc-head { display: flex; align-items: flex-start; gap: var(--space-3); }
 .tc-id { min-width: 0; flex: 1; display: grid; gap: 6px; padding-top: 2px; }
@@ -462,7 +473,7 @@
 
 .feedrow {
   display: grid;
-  grid-template-columns: 8px 24px minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  grid-template-columns: 8px 40px minmax(0, 1.2fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
   padding: 9px var(--space-4);
@@ -495,9 +506,26 @@
 .feedrow .who { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-faint); }
 .feedrow .when { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; min-width: 3ch; text-align: right; }
 .feedrow .amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.feedrow .amount .unit { color: var(--ink-dim); }
+/* The row's evidence: the transaction it names, and for a mint the page that re-checks it. */
+.feedrow .tx,
+.feedrow .proof { font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; color: var(--cyan); }
+.feedrow .proof {
+  font-family: var(--font-label);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  padding: 2px var(--space-1);
+  border: var(--border-w) solid color-mix(in oklab, var(--amber) 60%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--amber);
+  -webkit-font-smoothing: var(--face-smoothing);
+}
+.feedrow .tx:hover,
+.feedrow .proof:hover { text-decoration: underline; }
 
 @media (max-width: 720px) {
-  .feedrow { grid-template-columns: 8px 24px minmax(0, 1fr) auto; padding: 9px var(--space-3); gap: 10px; }
+  .feedrow { grid-template-columns: 8px 40px minmax(0, 1fr) auto; padding: 9px var(--space-3); gap: 10px; }
   .feedrow .figures { grid-column: 3 / -1; justify-content: flex-start; }
   .feedrow .meta { grid-column: 4; grid-row: 1; }
   .feedrow .who { display: none; }

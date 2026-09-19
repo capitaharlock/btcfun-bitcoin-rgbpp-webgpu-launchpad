@@ -25,7 +25,7 @@
  *   shape     --border-w, --frame-w, --focus-w, --radius, --radius-sm
  *   depth     --shadow-{sm,md,lg} (offsets; the colour is the caller's),
  *             --lift, --press, --press-lg, --glow
- *   space     --space-{1…10}, --gut, --maxw, --topbar-h
+ *   space     --space-{1…16}, --gut, --maxw, --topbar-h
  *   motion    --dur-{fast,base,slow}, --ease, --ease-out, --ease-step, --blink
  *   texture   --scanlines, --backdrop-grid (0 or 1: opacity multipliers)
  *
@@ -143,6 +143,9 @@
   --space-7: 28px;
   --space-8: 32px;
   --space-10: 40px;
+  /* Between a page's sections: room enough that each reads as its own screen. */
+  --space-12: 48px;
+  --space-16: 64px;
   --gut: 24px;
   --maxw: 1360px;
   --topbar-h: 60px;

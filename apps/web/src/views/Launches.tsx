@@ -26,7 +26,7 @@ import { useActivity, useLaunchActivity } from "../hooks/useActivity";
 import { useLaunches, useTip } from "../hooks/useLaunches";
 import { useLaunchesStats } from "../hooks/useLaunchStats";
 import { compact, group } from "../lib/format";
-import { isFeatured } from "../lib/launches/featured";
+import { featuredLaunch } from "../lib/launches/featured";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
 import { ArcadeScene } from "../ui/arcade/ArcadeScene";
@@ -81,8 +81,7 @@ export function Launches() {
   const catalogue = useRef<HTMLElement>(null);
 
   const shown = useCallback((l: Pick<Launch, "phase">) => filter === "all" || actionFor(l) === filter, [filter]);
-  // Newest first when there are several; the rule is narrow enough that one is the expected case.
-  const featured = useMemo(() => launches.filter((l) => isFeatured(l)).sort((a, b) => b.announcedAt.localeCompare(a.announcedAt))[0], [launches]);
+  const featured = useMemo(() => featuredLaunch(launches), [launches]);
   const listed = useMemo(
     () => sorted(launches.filter((l) => shown(l) && l.id !== featured?.id), sort, heat),
     [launches, shown, sort, heat, featured],
@@ -103,7 +102,7 @@ export function Launches() {
   };
 
   return (
-    <div className="stack-lg">
+    <div className="stack-lg home">
       <section className="stage" aria-labelledby="stage-title">
         <div className="stage-body">
           <ArcadeScene launches={launches} tip={tip} onPick={pick} />
@@ -154,7 +153,7 @@ export function Launches() {
         </div>
       </section>
 
-      <section className="stack-md" ref={catalogue} tabIndex={-1} aria-labelledby="catalogue-title">
+      <section className="stack-md home-section" ref={catalogue} tabIndex={-1} aria-labelledby="catalogue-title">
         <div className="toolbar">
           <SectionHead title="All launches" count={launches.length} id="catalogue-title" />
           <span className="spacer" />
@@ -199,7 +198,9 @@ export function Launches() {
       </section>
 
       {examples.length > 0 && (
-        <section className="stack-md" aria-labelledby="examples-title">
+        <section className="stack-md home-section" aria-labelledby="examples-title">
+          {/* Real launches above, simulated ones below: a line between them, not just a heading. */}
+          <div className="pixel-rule" aria-hidden="true" />
           <div className="toolbar">
             <SectionHead title="Examples" count={examples.length} id="examples-title" />
           </div>
