@@ -51,6 +51,9 @@ const aliceEntropy = mnemonicToEntropy(mnemonic, wordlist);
 const bobEntropy = sha256(new Uint8Array([...aliceEntropy, ...new TextEncoder().encode("btcfun/bob")]));
 export const alice = keys.deriveKey(aliceEntropy, network.ACTIVE);
 export const bob = keys.deriveKey(bobEntropy, network.ACTIVE);
+/** The shared demo wallet the site offers (its secret is public on purpose, testnet only). */
+const demoEntropy = sha256(new Uint8Array([...aliceEntropy, ...new TextEncoder().encode("btcfun/demo")]));
+export const demo = keys.deriveKey(demoEntropy, network.ACTIVE);
 
 /** A key as the activity signer expects a wallet: identity plus a scoped use. */
 export const vaultOf = (key) => ({
