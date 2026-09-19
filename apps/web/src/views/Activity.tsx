@@ -13,8 +13,7 @@ import { useMemo, useState } from "react";
 import { navigate } from "../App";
 import { useActivity } from "../hooks/useActivity";
 import { useLaunches, useTip } from "../hooks/useLaunches";
-import { KIND_LABEL, type ActivityEntry, type ActivityKind } from "../lib/activity";
-import { txUrl } from "../lib/bitcoin";
+import { evidenceFor, KIND_LABEL, type ActivityEntry, type ActivityKind } from "../lib/activity";
 import { atoms, group } from "../lib/format";
 import { useWallet } from "../state/WalletProvider";
 import type { Launch } from "../data/launches";
@@ -165,6 +164,7 @@ function Row({
   const { body } = entry.signed;
   const amount = BigInt(body.amount);
   const symbol = launch?.symbol ?? body.launch;
+  const evidence = evidenceFor(body);
 
   return (
     <div className={`feedrow${fresh ? " fresh" : ""}`}>
@@ -192,16 +192,32 @@ function Row({
       </span>
 
       <span className="figures">
-        {amount > 0n && <span className="amount">{atoms(amount, decimals, 4)}</span>}
+        {amount > 0n && (
+          <span className="amount">
+            {atoms(amount, decimals, 4)} <span className="unit">{symbol}</span>
+          </span>
+        )}
         {body.sats > 0 && <span className="amount">{group(body.sats)} sats</span>}
       </span>
 
       <span className="meta">
         {mine && <Chip tone="cyan">you</Chip>}
         {!entry.authentic && <Chip tone="danger">signature failed</Chip>}
-        {body.txid && (
-          <a href={txUrl(body.txid)} target="_blank" rel="noopener noreferrer" className="who">
-            tx ↗
+        {evidence.proof && (
+          <a href={evidence.proof} className="proof" title="Re-check this mint against both chains">
+            proof
+          </a>
+        )}
+        {evidence.tx && (
+          <a
+            href={evidence.tx.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="tx"
+            title={`Bitcoin transaction ${evidence.tx.txid}`}
+            aria-label={`Bitcoin transaction ${evidence.tx.short} on the explorer`}
+          >
+            {evidence.tx.short} <span aria-hidden="true">↗</span>
           </a>
         )}
         <span className="who">{body.actor.slice(2, 10)}</span>
