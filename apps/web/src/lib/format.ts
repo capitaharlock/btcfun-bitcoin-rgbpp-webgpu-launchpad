@@ -19,6 +19,28 @@ export function compact(value: bigint, decimals: number): string {
   return String(whole);
 }
 
+/**
+ * A count that can grow without bound, short enough for a scoreboard cell:
+ * exact below a million, then 13.15M, 4.20B, 1.07T. A GPU passes a billion
+ * nonces in seconds, so the exact figure belongs in a tooltip, not the cell.
+ */
+export function count(n: bigint): string {
+  if (n < 1_000_000n) return group(n);
+  const units: Array<[bigint, string]> = [
+    [1_000_000_000_000n, "T"],
+    [1_000_000_000n, "B"],
+    [1_000_000n, "M"],
+  ];
+  for (const [scale, unit] of units) {
+    if (n >= scale) {
+      // Two decimals, truncated rather than rounded: never show more work than was done.
+      const hundredths = (n * 100n) / scale;
+      return `${group(hundredths / 100n)}.${(hundredths % 100n).toString().padStart(2, "0")}${unit}`;
+    }
+  }
+  return group(n);
+}
+
 export function group(n: bigint | number): string {
   return n.toLocaleString("en-US");
 }

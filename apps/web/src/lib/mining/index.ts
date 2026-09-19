@@ -10,6 +10,14 @@ export {
   type BackendPorts,
   type SessionCallbacks,
 } from "./session";
+export {
+  absorb,
+  browserProgressStore,
+  NO_PROGRESS,
+  ticketKey,
+  type ProgressStore,
+  type TicketProgress,
+} from "./progress";
 export { NONCE_LIMIT, preimage, recompute, verifyCandidate } from "./verify";
 export { advantageRatio, expectedClz, weightOf } from "./weight";
 export {

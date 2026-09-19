@@ -6,6 +6,7 @@
  * can do without a GPU, and an estimate would not be evidence.
  */
 
+import { laneFrontier, nonceWords } from "./progress";
 import type { BackendAvailability, BackendProgress, Candidate, MiningBackend } from "./types";
 import type { ProgressMsg, StartMsg, WorkerCandidate } from "../../workers/miner.worker";
 
@@ -31,10 +32,16 @@ export class CpuBackend implements MiningBackend {
     return `${this.lanes} worker ${this.lanes === 1 ? "thread" : "threads"}`;
   }
 
-  async start(challenge: Uint8Array, onProgress: (p: BackendProgress) => void): Promise<void> {
+  /**
+   * Lanes interleave rather than split the space: lane `i` tries `from + i`,
+   * `from + i + lanes`, … so the tried nonces stay a prefix of the sweep
+   * (up to the slowest lane) and a paused run can resume from one number.
+   */
+  async start(challenge: Uint8Array, from: bigint, onProgress: (p: BackendProgress) => void): Promise<void> {
     if (challenge.length < 32) throw new RangeError("challenge must be 32 bytes");
     this.stop();
     this.best = null;
+    const counts: number[] = new Array<number>(this.lanes).fill(0);
 
     for (let lane = 0; lane < this.lanes; lane++) {
       const worker = new Worker(new URL("../../workers/miner.worker.ts", import.meta.url), {
@@ -45,14 +52,17 @@ export class CpuBackend implements MiningBackend {
       worker.onmessage = (ev: MessageEvent<ProgressMsg>) => {
         const msg = ev.data;
         if (msg.type !== "progress") return;
+        counts[lane] += msg.hashes;
         onProgress({
           hashes: msg.hashes,
           improvements: this.merge(msg.improvements),
           current: msg.current,
+          frontier: laneFrontier(from, this.lanes, counts),
         });
       };
 
-      const start: StartMsg = { type: "start", challenge, lane };
+      const first = nonceWords(from + BigInt(lane));
+      const start: StartMsg = { type: "start", challenge, firstLo: first.lo, firstHi: first.hi, stride: this.lanes };
       worker.postMessage(start);
       this.workers.push(worker);
     }

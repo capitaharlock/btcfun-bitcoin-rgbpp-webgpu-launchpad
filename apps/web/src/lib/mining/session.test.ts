@@ -11,10 +11,12 @@ class FakeBackend implements MiningBackend {
   readonly lanes = 1;
   started = false;
   stopped = false;
+  from: bigint | null = null;
   private report: ((progress: BackendProgress) => void) | null = null;
 
-  async start(_challenge: Uint8Array, onProgress: (progress: BackendProgress) => void): Promise<void> {
+  async start(_challenge: Uint8Array, from: bigint, onProgress: (progress: BackendProgress) => void): Promise<void> {
     this.started = true;
+    this.from = from;
     this.report = onProgress;
   }
 
@@ -27,8 +29,8 @@ class FakeBackend implements MiningBackend {
   }
 
   /** Deliver a report the way a worker message or a GPU readback would. */
-  emit(hashes: number): void {
-    this.report?.({ hashes, improvements: [], current: "0".repeat(64) });
+  emit(hashes: number, frontier = 0n): void {
+    this.report?.({ hashes, improvements: [], current: "0".repeat(64), frontier });
   }
 }
 
@@ -154,5 +156,23 @@ describe("MiningSession lifecycle", () => {
     // Stopping twice is harmless.
     session.stop();
     expect(session.running).toBe(false);
+  });
+
+  it("resumes from the nonce it is given and reports how far the sweep has gone", async () => {
+    const backend = new FakeBackend();
+    const frontiers: bigint[] = [];
+    const session = new MiningSession(
+      { onSample: (s) => frontiers.push(s.frontier) },
+      { cpu: () => backend, gpu: async () => backend },
+    );
+
+    await session.start(CHALLENGE, "cpu", 5_000n);
+    expect(backend.from).toBe(5_000n);
+    backend.emit(100, 5_100n);
+    frames.splice(0).forEach((run) => run());
+    // A report that lags behind (a slow lane) never moves the frontier back.
+    backend.emit(10, 5_050n);
+    frames.splice(0).forEach((run) => run());
+    expect(frontiers).toEqual([5_100n, 5_100n]);
   });
 });

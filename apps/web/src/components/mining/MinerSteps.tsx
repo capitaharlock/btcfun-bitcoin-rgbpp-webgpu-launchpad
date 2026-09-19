@@ -7,18 +7,26 @@
  *
  * Mining starts the moment a ticket is broadcast — its output is the challenge
  * and exists as soon as the transaction does. Minting waits until the ticket's
- * armed cell has settled on CKB, because the mint spends that cell.
+ * armed cell has settled on CKB, because the mint spends that cell. The search
+ * is keyed by the ticket's outpoint, which is the same before and after it
+ * settles, so the ticket settling never interrupts or resets a run.
+ *
+ * During the testnet showcase this site offers the loop only on the featured
+ * launch (`canMine`). On any other launch a wallet that already holds a ticket
+ * can still mine and mint it: the showcase closing a launch must never strand a
+ * ticket someone paid for.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { Launch } from "../../data/launches";
 import { useAnnounce } from "../../hooks/useAnnounce";
-import { useMiningSession } from "../../hooks/useMiningSession";
+import { useLaunches } from "../../hooks/useLaunches";
+import { useMiningSession, type MiningTarget } from "../../hooks/useMiningSession";
 import { txUrl } from "../../lib/bitcoin/network";
 import { atoms, blocksAsTime, group } from "../../lib/format";
-import type { Candidate } from "../../lib/mining";
-import { recompute } from "../../lib/mining/verify";
+import { featuredLaunch, minerAccess } from "../../lib/launches/featured";
+import { ticketKey, type Candidate } from "../../lib/mining";
 import { ACTIVE_RGBPP } from "../../lib/rgbpp/config";
 import { mintScript } from "../../lib/rgbpp/launch";
 import { planMint, planOpen, planTicket, SEAL_SATS, type MinerCell } from "../../lib/rgbpp/operations";
@@ -27,8 +35,6 @@ import { useTokens, type Operation } from "../../state/TokensProvider";
 import { useWallet } from "../../state/WalletProvider";
 import { Chip, More, Notice, Panel } from "../../ui/primitives";
 import { MinePanel, type TicketView } from "./MinePanel";
-
-const BEST_KEY = "btcfun:best:v1";
 
 export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
   const wallet = useWallet();
@@ -54,10 +60,19 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
     return null;
   }, [armed, landing]);
 
-  const challenge = useMemo(() => (ticket ? ticketChallenge(ticket.txid, ticket.vout) : null), [ticket]);
-  const mining = useMiningSession(challenge);
+  // Keyed by the outpoint string, not the `ticket` object: that object is rebuilt
+  // when a landing ticket settles, and the run must carry on through it.
+  const key = ticket ? ticketKey(ticket.txid, ticket.vout) : null;
+  const target = useMemo<MiningTarget | null>(() => {
+    if (!key) return null;
+    const [txid, vout] = key.split(":");
+    return { key, challenge: ticketChallenge(txid, Number(vout)) };
+  }, [key]);
+  const challenge = target?.challenge ?? null;
+  const mining = useMiningSession(target);
   const announce = useAnnounce();
-  const best = useBestForTicket(ticket, challenge, mining.sample.best);
+  const best = mining.progress.best;
+  const access = minerAccess(launch, ticket !== null || landing !== undefined);
 
   async function run(action: () => Promise<Operation>) {
     setBusy(true);
@@ -111,6 +126,9 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
     });
 
   // ── which step ──────────────────────────────────────────────────────────
+  // Before the wallet's cells are read, "finish" cannot be told from "closed";
+  // without a wallet there is no ticket to finish.
+  if (access === "closed" && (!wallet.vault || tokens.holdings !== null)) return <MiningClosed />;
   if (!wallet.vault) {
     return (
       <Panel eyebrow="mine" title="Connect a wallet to mine">
@@ -137,6 +155,13 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
     );
   }
 
+  const finishing =
+    access === "finish" ? (
+      <Notice tone="cyan">
+        Mining on {launch.symbol} is closed on this testnet showcase, but the ticket you already hold stays yours: mine it
+        and mint it here as usual.
+      </Notice>
+    ) : null;
   const progress = landing && <Landing op={landing} symbol={launch.symbol} />;
   const problem = failure && <Notice tone="danger">{failure}</Notice>;
 
@@ -203,9 +228,7 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
     landing?.kind === "mint" ? (
       progress
     ) : !ticket?.settled ? (
-      <Notice tone="cyan">
-        Your ticket is landing: mine now, and mint once it settles on CKB (after its Bitcoin confirmation).
-      </Notice>
+      <Notice tone="cyan">Ticket landing — you can keep mining; minting unlocks when it settles.</Notice>
     ) : qualifies && armed && best ? (
       <div className="row wrapped">
         <button className="btn primary lg" disabled={busy} onClick={() => mint(armed, best)}>
@@ -219,6 +242,7 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
 
   return (
     <div className="stack-md">
+      {finishing}
       {landing?.kind === "ticket" && progress}
       <MinePanel
         mining={mining}
@@ -233,9 +257,6 @@ export function MinerSteps({ launch, tip }: { launch: Launch; tip: number }) {
           </>
         }
       />
-      {best && !mining.sample.best && (
-        <p className="tiny faint">Best hash for this ticket, kept from an earlier session: {best.clz} zero bits.</p>
-      )}
     </div>
   );
 }
@@ -280,51 +301,27 @@ function Landing({ op, symbol }: { op: Operation; symbol: string }) {
 }
 
 /**
- * The best hash found for a ticket in any session: the running one, or one
- * kept from before a reload. A kept candidate is re-hashed against the
- * challenge before it is believed, so a stale or edited entry cannot be minted.
+ * The miner panel on a launch this site does not offer mining on. Says plainly
+ * that it is the site's choice for the showcase, not a limit of the token.
  */
-function useBestForTicket(
-  ticket: TicketView | null,
-  challenge: Uint8Array | null,
-  running: Candidate | null,
-): Candidate | null {
-  const key = ticket ? `${ticket.txid}:${ticket.vout}` : null;
-  const [kept, setKept] = useState<Candidate | null>(null);
-
-  useEffect(() => {
-    setKept(key && challenge ? readBest(key, challenge) : null);
-  }, [key, challenge]);
-
-  useEffect(() => {
-    if (!key || !running) return;
-    if (!kept || running.clz > kept.clz) {
-      setKept(running);
-      writeBest(key, running);
-    }
-  }, [key, running, kept]);
-
-  if (!running) return kept;
-  if (!kept) return running;
-  return running.clz >= kept.clz ? running : kept;
-}
-
-function readBest(key: string, challenge: Uint8Array): Candidate | null {
-  try {
-    const all = JSON.parse(localStorage.getItem(BEST_KEY) ?? "{}") as Record<string, { nonce: string }>;
-    const entry = all[key];
-    return entry ? recompute(challenge, BigInt(entry.nonce)) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeBest(key: string, candidate: Candidate): void {
-  try {
-    const all = JSON.parse(localStorage.getItem(BEST_KEY) ?? "{}") as Record<string, { nonce: string }>;
-    all[key] = { nonce: candidate.nonce.toString() };
-    localStorage.setItem(BEST_KEY, JSON.stringify(all));
-  } catch {
-    // Storage blocked: the running session still holds the best hash.
-  }
+function MiningClosed() {
+  const demo = featuredLaunch(useLaunches());
+  return (
+    <Panel eyebrow="mine" title={demo ? `Mining is open on ${demo.symbol}` : "Mining is open on DEMO"}>
+      <div className="stack-md">
+        <p className="clamp">
+          On this testnet showcase the site offers its miner on one launch, so everyone's tickets and hashes land in the
+          same place. That is this site's choice, not a rule of the token: the mint script on CKB accepts a paid ticket and
+          a valid hash for any launch.
+        </p>
+        {demo ? (
+          <div className="row wrapped">
+            <a className="btn play lg" href={`#/launch/${demo.id}/mine`}>▶ Mine {demo.symbol}</a>
+          </div>
+        ) : (
+          <p className="tiny faint">The DEMO launch has not reached this browser yet.</p>
+        )}
+      </div>
+    </Panel>
+  );
 }

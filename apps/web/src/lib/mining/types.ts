@@ -30,6 +30,8 @@ export interface BackendProgress {
   improvements: Candidate[];
   /** An arbitrary recent digest, for the live readout. Never null once running. */
   current: string;
+  /** Every nonce from the run's start up to this one (exclusive) has been tried. Absolute, not a delta. */
+  frontier: bigint;
 }
 
 /**
@@ -48,8 +50,12 @@ export interface MiningBackend {
   /** How many parallel lanes are grinding (workers, or shader invocations). */
   readonly lanes: number;
 
-  /** Begin grinding. Resolves when the loop has been set up, not when it ends. */
-  start(challenge: Uint8Array, onProgress: (p: BackendProgress) => void): Promise<void>;
+  /**
+   * Begin grinding from nonce `from` upwards. Resolves when the loop has been
+   * set up, not when it ends. Starting anywhere but 0 is how a paused or
+   * reloaded search resumes (`progress.ts`).
+   */
+  start(challenge: Uint8Array, from: bigint, onProgress: (p: BackendProgress) => void): Promise<void>;
 
   /** Stop grinding and release device resources. Safe to call when not started. */
   stop(): void;
@@ -68,6 +74,8 @@ export interface MiningSample {
   backend: BackendKind;
   /** Total attempts this session. */
   hashes: number;
+  /** Every nonce below this has been tried, counting runs this one resumed. */
+  frontier: bigint;
   /** Attempts per second over a trailing window, so it reacts to throttling. */
   hashRate: number;
   elapsedMs: number;
@@ -80,6 +88,7 @@ export interface MiningSample {
 export const EMPTY_SAMPLE: MiningSample = {
   backend: "cpu",
   hashes: 0,
+  frontier: 0n,
   hashRate: 0,
   elapsedMs: 0,
   lanes: 0,

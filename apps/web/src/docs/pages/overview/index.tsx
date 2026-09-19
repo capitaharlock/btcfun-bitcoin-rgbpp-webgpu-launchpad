@@ -105,7 +105,8 @@ export default function OverviewPage() {
             <li>
               <strong>Mining.</strong> A WGSL compute shader grinds SHA-256d over a fixed 40-byte preimage (the 32-byte
               challenge and an 8-byte nonce); CPU workers do the same where WebGPU is missing. Every candidate the GPU reports
-              is hashed again on the CPU before the page believes it.
+              is hashed again on the CPU before the page believes it. The search starts from the nonce the last run
+              reached, so pausing or reloading continues it rather than starting over.
             </li>
             <li>
               <strong>Settlement.</strong> The app computes the CKB transaction and its RGB++ commitment, signs the Bitcoin

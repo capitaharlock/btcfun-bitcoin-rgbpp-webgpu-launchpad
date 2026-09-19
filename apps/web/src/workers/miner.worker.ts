@@ -3,10 +3,13 @@
  * Grinds `sha256d(challenge32 || nonce_le64)` — PROTOCOL.md §4.2 — over the
  * nonce range assigned to its lane, and reports deltas the session accumulates.
  *
- * The lane owns the high 32 bits of the nonce and sweeps the low 32, so lanes
- * never collide and the hot loop needs no bigint arithmetic or modular stride.
- * Reports carry improvements rather than a running best, so the controller can
- * merge several lanes without re-deriving anything.
+ * A lane tries `first`, `first + stride`, `first + 2·stride`, … with the
+ * 64-bit nonce carried as two u32 words, so the hot loop needs no bigint. With
+ * one lane per residue modulo `stride`, lanes never collide and the tried
+ * nonces stay a prefix of the sweep, which is what lets a paused search resume
+ * from a single number (`lib/mining/progress.ts`). Reports carry improvements
+ * rather than a running best, so the controller can merge several lanes
+ * without re-deriving anything.
  */
 
 import { sha256d, clz256, wordsToHex } from "../lib/sha256";
@@ -16,8 +19,11 @@ export interface StartMsg {
   type: "start";
   /** 32-byte challenge digest. */
   challenge: Uint8Array;
-  /** High 32 bits of every nonce this worker tries. Unique per worker. */
-  lane: number;
+  /** Low and high u32 words of the first nonce this worker tries. */
+  firstLo: number;
+  firstHi: number;
+  /** Distance between consecutive nonces of this worker: the number of lanes. */
+  stride: number;
 }
 
 export interface StopMsg {
@@ -61,20 +67,26 @@ self.onmessage = (ev: MessageEvent<StartMsg | StopMsg>) => {
   if (msg.type !== "start") return;
 
   running = true;
-  grind(msg.challenge, msg.lane >>> 0);
+  grind(msg.challenge, msg.firstLo >>> 0, msg.firstHi >>> 0, Math.max(1, msg.stride >>> 0));
 };
 
-function grind(challenge: Uint8Array, lane: number): void {
+function writeHigh(buf: Uint8Array, hi: number): void {
+  buf[36] = hi & 0xff;
+  buf[37] = (hi >>> 8) & 0xff;
+  buf[38] = (hi >>> 16) & 0xff;
+  buf[39] = (hi >>> 24) & 0xff;
+}
+
+function grind(challenge: Uint8Array, firstLo: number, firstHi: number, stride: number): void {
   const buf = new Uint8Array(PREIMAGE_BYTES);
   buf.set(challenge.subarray(0, 32), 0);
-  // The lane occupies the nonce's high word for the whole run.
-  buf[36] = lane & 0xff;
-  buf[37] = (lane >>> 8) & 0xff;
-  buf[38] = (lane >>> 16) & 0xff;
-  buf[39] = (lane >>> 24) & 0xff;
+  // The high word changes once per 2^32 / stride attempts, so it is written
+  // only then rather than on every hash.
+  let nonceHi = firstHi;
+  writeHigh(buf, nonceHi);
 
   const digest = new Uint32Array(8);
-  let nonceLo = 0;
+  let nonceLo = firstLo;
   let bestClz = -1;
   let hashes = 0;
   let improvements: WorkerCandidate[] = [];
@@ -94,10 +106,16 @@ function grind(challenge: Uint8Array, lane: number): void {
 
       if (clz > bestClz) {
         bestClz = clz;
-        improvements.push({ nonceLo, nonceHi: lane, clz, hash: wordsToHex(digest) });
+        improvements.push({ nonceLo, nonceHi, clz, hash: wordsToHex(digest) });
       }
 
-      nonceLo = (nonceLo + 1) >>> 0;
+      // Plain numbers up to 2^32 + stride are exact, so the carry is a compare.
+      nonceLo += stride;
+      if (nonceLo > 0xffffffff) {
+        nonceLo -= 0x100000000;
+        nonceHi = (nonceHi + 1) >>> 0;
+        writeHigh(buf, nonceHi);
+      }
       hashes++;
     }
 

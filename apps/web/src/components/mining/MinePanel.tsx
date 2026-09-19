@@ -1,5 +1,10 @@
 /* The mining surface: device choice, live feed, and what the best hash is worth.
  *
+ * One button drives it — MINE, then PAUSE, then CONTINUE — because the search
+ * on a ticket is one sweep however often it stops: the counter of nonces tried
+ * and the best hash are the ticket's, kept across pauses and reloads
+ * (`useMiningSession`), and CONTINUE picks the sweep up where it stopped.
+ *
  * The number that matters is "mintable now": the standard reward for the best
  * hash found so far, at the rate this ticket locked in. It is the same function
  * the mint script evaluates (`lib/standard.ts`, checked against the script's
@@ -10,7 +15,7 @@
 import type { UseMiningSession } from "../../hooks/useMiningSession";
 import type { BackendChoice } from "../../lib/mining";
 import { bytesToHex } from "../../lib/bytes";
-import { atoms, duration, group, rate, shortHash } from "../../lib/format";
+import { atoms, count, duration, group, rate, shortHash } from "../../lib/format";
 import { DECIMALS, MIN_CLZ, reward } from "../../lib/standard";
 import { HashFeed, HashLog } from "../../ui/HashFeed";
 import { Chip, KV, More, Notice, Panel, Stat } from "../../ui/primitives";
@@ -44,9 +49,11 @@ export interface MinePanelProps {
 }
 
 export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, action }: MinePanelProps) {
-  const { sample, running } = mining;
+  const { sample, running, progress } = mining;
   const gpu = mining.backends.find((b) => b.kind === "gpu");
-  const best = sample.best;
+  // The ticket's best across every run, not only this one's.
+  const best = progress.best;
+  const begun = progress.next > 0n || best !== null;
   const mintable = best && ticket ? reward(best.clz, h0, ticket.anchor) : 0n;
 
   return (
@@ -79,16 +86,22 @@ export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, acti
               hint={`The reward for the best hash so far, at this ticket's rate. Below ${MIN_CLZ} leading zero bits a ticket mints nothing.`}
             />
             <Stat k="best" v={best ? best.clz : "—"} unit={best ? "zero bits" : undefined} tone="cyan" />
+            <Stat
+              k="nonces tried"
+              v={count(progress.next)}
+              small
+              hint={`${group(progress.next)}: every nonce below this has been hashed against your ticket, across pauses and reloads`}
+            />
             <Stat k="hash rate" v={rate(sample.hashRate)} small />
-            <Stat k="elapsed" v={duration(sample.elapsedMs)} small />
+            <Stat k="this run" v={duration(sample.elapsedMs)} small />
           </div>
 
           <div className="row wrapped">
             {running ? (
-              <button className="btn lg" onClick={mining.stop}>Stop</button>
+              <button className="btn lg" onClick={mining.stop}>Pause</button>
             ) : (
               <button className="btn play lg" onClick={mining.start} disabled={!challenge}>
-                {best ? "Keep mining" : "Mine"}
+                {begun ? "Continue" : "Mine"}
               </button>
             )}
             <div className="segmented" role="group" aria-label="Mining device">
@@ -106,6 +119,11 @@ export function MinePanel({ mining, challenge, ticket, h0, symbol, blocked, acti
               ))}
             </div>
           </div>
+
+          <p className="tiny faint clamp">
+            The challenge is fixed by your ticket; pausing, reloading or restarting never changes it — more time only means
+            more chances at a stronger hash.
+          </p>
 
           {blocked && <Notice tone="warn">{blocked}</Notice>}
           {mining.notice && <Notice tone="warn">{mining.notice}</Notice>}

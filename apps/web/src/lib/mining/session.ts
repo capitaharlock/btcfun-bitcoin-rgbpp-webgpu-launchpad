@@ -94,7 +94,11 @@ export class MiningSession {
     return this.backend !== null;
   }
 
-  async start(challenge: Uint8Array, choice: BackendChoice = "auto"): Promise<void> {
+  /**
+   * Grind `challenge` from nonce `from`. A resumed search passes where the last
+   * run stopped, so pausing and reloading never repeat or reorder the sweep.
+   */
+  async start(challenge: Uint8Array, choice: BackendChoice = "auto", from = 0n): Promise<void> {
     this.stop();
     const run = ++this.generation;
 
@@ -110,9 +114,9 @@ export class MiningSession {
     this.backend = backend;
     this.startedAt = performance.now();
     this.window = [{ t: this.startedAt, hashes: 0 }];
-    this.sample = { ...EMPTY_SAMPLE, backend: backend.kind, lanes: backend.lanes };
+    this.sample = { ...EMPTY_SAMPLE, backend: backend.kind, lanes: backend.lanes, frontier: from };
 
-    await backend.start(challenge, (progress) => {
+    await backend.start(challenge, from, (progress) => {
       // Reports can outlive the run that asked for them: a worker message or a
       // GPU readback already in flight arrives after stop().
       if (run !== this.generation) return;
@@ -140,6 +144,7 @@ export class MiningSession {
       this.sample = {
         backend: backend.kind,
         hashes,
+        frontier: progress.frontier > this.sample.frontier ? progress.frontier : this.sample.frontier,
         hashRate: this.rate(now),
         elapsedMs: now - this.startedAt,
         lanes: backend.lanes,

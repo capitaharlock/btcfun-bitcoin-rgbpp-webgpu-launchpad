@@ -38,6 +38,8 @@
         "apps/web/src/lib/rgbpp/bitcoin.ts",
         "apps/web/src/lib/rgbpp/service.ts",
         "apps/web/src/components/mining/MinerSteps.tsx",
+        "apps/web/src/lib/mining/progress.ts",
+        "apps/web/src/lib/launches/featured.ts",
         "contracts/mint/src/main.rs"
       ]
     },

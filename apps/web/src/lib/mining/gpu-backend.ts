@@ -14,6 +14,7 @@
  *   cares about, since §4.2 weights the single best candidate per ticket.
  */
 
+import { nonceWords } from "./progress";
 import {
   HIT_WORDS,
   buildKernel,
@@ -161,7 +162,7 @@ export class GpuBackend implements MiningBackend {
     return `${this.adapterInfo} · ${this.workgroupSize}-wide workgroups`;
   }
 
-  async start(challenge: Uint8Array, onProgress: (p: BackendProgress) => void): Promise<void> {
+  async start(challenge: Uint8Array, from: bigint, onProgress: (p: BackendProgress) => void): Promise<void> {
     if (challenge.length < 32) throw new RangeError("challenge must be 32 bytes");
     // Single-use: `stop()` releases the device, so restarting would dispatch
     // against a destroyed one. The session creates a fresh backend per run.
@@ -170,7 +171,7 @@ export class GpuBackend implements MiningBackend {
     this.onProgress = onProgress;
     this.best = null;
     this.batch = FIRST_BATCH;
-    this.loopDone = this.loop(challengeWords(challenge));
+    this.loopDone = this.loop(challengeWords(challenge), from);
   }
 
   /**
@@ -196,8 +197,9 @@ export class GpuBackend implements MiningBackend {
     this.device.destroy();
   }
 
-  private async loop(challenge: Uint32Array): Promise<void> {
-    let nonce = 0n;
+  /** Dispatches are consecutive ranges, so the frontier is simply where the next one starts. */
+  private async loop(challenge: Uint32Array, from: bigint): Promise<void> {
+    let nonce = from;
 
     while (this.running) {
       const count = this.batch;
@@ -236,13 +238,14 @@ export class GpuBackend implements MiningBackend {
       const reported = hitWords[0];
       const improvements = this.collect(hitWords, Math.min(reported, HIT_CAPACITY));
 
+      nonce += BigInt(count);
       this.onProgress?.({
         hashes: count,
         improvements,
         current: wordsToHex(sampleWords),
+        frontier: nonce,
       });
 
-      nonce += BigInt(count);
       this.retune(performance.now() - started, reported > HIT_CAPACITY);
     }
   }
@@ -285,8 +288,9 @@ export class GpuBackend implements MiningBackend {
   private writeParams(challenge: Uint32Array, nonce: bigint, count: number): void {
     const params = new Uint32Array(PARAMS_BYTES / 4);
     params.set(challenge, 0);
-    params[8] = Number(nonce & 0xffffffffn);
-    params[9] = Number((nonce >> 32n) & 0xffffffffn);
+    const start = nonceWords(nonce);
+    params[8] = start.lo;
+    params[9] = start.hi;
     params[10] = count;
     params[11] = Math.max(MIN_CLZ_FLOOR, this.best?.clz ?? 0);
     this.device.queue.writeBuffer(this.buffers.params, 0, params);

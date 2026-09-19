@@ -24,7 +24,11 @@ export default function MintPage() {
           <li>
             <strong>Mine.</strong> Your browser searches for a number (a <em>nonce</em>) that makes the hash of the
             challenge start with as many zero bits as possible. The page shows what your best hash so far would mint. You
-            can stop after a minute or keep going for days: a ticket has no expiry.
+            can stop after a minute or keep going for days: a ticket has no expiry. <strong>Mine</strong>,{" "}
+            <strong>Pause</strong> and <strong>Continue</strong> drive one search: the page keeps, per ticket, how many
+            nonces have been tried and the best hash found, so a pause or a reload picks up where it stopped. The challenge
+            is fixed by your ticket; pausing, reloading or restarting never changes it — more time only means more chances
+            at a stronger hash.
           </li>
           <li>
             <strong>Mint.</strong> You sign a Bitcoin transaction that spends the ticket output. The tokens it mints are
@@ -36,6 +40,12 @@ export default function MintPage() {
           or mint elsewhere, and it shows the same step. Each step is one line and one button; what it costs and why is
           folded under <em>More</em>. The <strong>Mine</strong> button on a launch's box in the catalogue opens its page on
           this panel.
+        </p>
+        <p>
+          On this testnet showcase the site offers its miner on one launch, the platform's DEMO, so everyone's tickets and
+          hashes land in the same place; every other launch shows its <strong>Mine</strong> button greyed out and its page
+          points to DEMO. That is this site's choice, not a rule of the token: the mint script accepts a paid ticket and a
+          valid hash for any launch. A ticket you already hold on another launch can still be mined and minted.
         </p>
         <Diagram spec={CIRCUIT} />
         <p>
@@ -115,6 +125,13 @@ export default function MintPage() {
               zero bits, and requires the launch's xUDT balance to grow by exactly{" "}
               <DocLink to="tokenomics">the standard reward</DocLink> at the ticket's anchor. A mint that re-arms is
               refused: that would bring the anchor check back into a transaction carrying a balance.
+            </li>
+            <li>
+              The search is resumable because it is a single sweep of the nonce space from 0 upwards: the GPU dispatches
+              consecutive ranges, and CPU workers interleave (worker <i>i</i> of <i>n</i> tries every <i>n</i>th nonce from{" "}
+              <i>i</i>), so everything below the slowest worker's position has been tried. That position and the best
+              nonce are kept in the browser per ticket outpoint; the kept nonce is hashed again before it is offered for a
+              mint.
             </li>
             <li>
               Opening needs no CKB of your own: the RGB++ paymaster provides the cell's capacity for a fee paid in the same
