@@ -10,6 +10,10 @@
  * attract mode under reduced motion — and a game in progress pauses rather
  * than carrying on unseen. Keys are only heard while the canvas has focus, so
  * the rest of the page scrolls and types as usual.
+ *
+ * Escape always leaves: a game ends and the cabinet goes back to attracting,
+ * with the focus let go. P is the pause. One key per meaning, so nobody has to
+ * learn which screen turns Escape into a pause.
  */
 
 import { drawGame, drawReady, drawScene, type Pointer, type ScenePalette } from "./draw";
@@ -28,9 +32,7 @@ import { createScene, invaderAt, seeded, stepScene, type InvaderSpec, type Scene
 import type { Sound } from "./sound";
 
 /** CSS pixels per scene cell in the attract mode: chunkier on a large screen, finer on a phone. */
-const CELL_CSS = { huge: 5, wide: 4, narrow: 3 } as const;
-/** Width from which the scene uses its largest cells. */
-const HUGE = 1200;
+const CELL_CSS = { wide: 4, narrow: 3 } as const;
 /** Width from which the headline sits over the left of the scene. */
 const WIDE = 900;
 /** How far the headline reaches into the scene when it overlaps it, in CSS px. */
@@ -72,14 +74,28 @@ export interface CabinetOptions {
   /** A launch was clicked in the attract mode. */
   pick(spec: InvaderSpec): void;
   report(hud: Hud): void;
+  /** The player left for the attract mode and the canvas let go of the focus: the page says where it goes. */
+  exited(): void;
   sound: Sound;
 }
 
 export interface Cabinet {
   /** The launches changed: rebuild the attract scene; a game in progress keeps its own. */
   recast(): void;
+  /** Leave whatever is on — a game, a player waiting at the controls — for the attract mode. */
+  exit(): void;
   setReduced(reduced: boolean): void;
   dispose(): void;
+}
+
+/** What a menu key does in a game: Escape leaves it, P pauses and resumes it, and a finished game has nothing to pause. */
+export type MenuCommand = "exit" | "pause" | "resume";
+
+export function menuCommand(key: string, phase: Game["phase"]["kind"]): MenuCommand | null {
+  if (key === "Escape") return "exit";
+  if (key !== "p" && key !== "P") return null;
+  if (phase === "over") return null;
+  return phase === "paused" ? "resume" : "pause";
 }
 
 type State =
@@ -89,7 +105,7 @@ type State =
 export function mountCabinet(o: CabinetOptions): Cabinet {
   const { host, canvas } = o;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return { recast() {}, setReduced() {}, dispose() {} };
+  if (!ctx) return { recast() {}, exit() {}, setReduced() {}, dispose() {} };
 
   let reduced = o.reduced;
   let state: State;
@@ -124,7 +140,7 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
   const attractScene = (): { scene: Scene; palette: ScenePalette } => {
     const { width } = size();
     const wide = width >= WIDE;
-    const cell = width >= HUGE ? CELL_CSS.huge : wide ? CELL_CSS.wide : CELL_CSS.narrow;
+    const cell = wide ? CELL_CSS.wide : CELL_CSS.narrow;
     s = Math.max(1, Math.round(cell * dpr()));
     ox = 0;
     const cols = Math.floor(canvas.width / s);
@@ -282,6 +298,9 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
       if (fire || key === "Enter") {
         e.preventDefault();
         startGame();
+      } else if (key === "Escape") {
+        e.preventDefault();
+        exit();
       }
       return;
     }
@@ -305,18 +324,14 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
       }
       return;
     }
-    if (key === "p" || key === "P" || key === "Escape") {
-      e.preventDefault();
-      if (phase === "over") {
-        if (key === "Escape") toAttract("ready");
-        return;
-      }
-      if (phase === "paused") resume();
-      else {
-        togglePause(game);
-        releaseAll();
-        sync();
-      }
+    const command = menuCommand(key, phase);
+    if (command) e.preventDefault();
+    if (command === "exit") exit();
+    else if (command === "resume") resume();
+    else if (command === "pause") {
+      togglePause(game);
+      releaseAll();
+      sync();
     }
   };
 
@@ -331,6 +346,19 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
       togglePause(state.game);
       sync();
     }
+  };
+
+  /** Back to the start: the score so far still counts for the hi-score, and the controls are put down. */
+  const exit = () => {
+    releaseAll();
+    if (state.mode === "game" && !state.saved) {
+      writeHiScore(state.game.score);
+      hi = Math.max(hi, state.game.score);
+    }
+    toAttract("attract");
+    // Blurring an attract-mode canvas changes nothing more: the scene is already the one a visitor first sees.
+    canvas.blur();
+    o.exited();
   };
 
   const focus = () => {
@@ -462,6 +490,7 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
     recast() {
       if (state.mode !== "game") toAttract(state.mode);
     },
+    exit,
     setReduced(next) {
       if (next === reduced) return;
       reduced = next;

@@ -83,9 +83,9 @@ function announce(hud: Hud): string {
     case "playing":
       return `Score ${group(hud.score)}. Lives ${hud.lives}. Wave ${hud.wave}.`;
     case "paused":
-      return `Paused. Score ${group(hud.score)}. Hi-score ${group(hud.hi)}. Press P to resume.`;
+      return `Paused. Score ${group(hud.score)}. Hi-score ${group(hud.hi)}. Press P to resume, Escape to exit.`;
     case "over":
-      return `Game over. Score ${group(hud.score)}. Hi-score ${group(hud.hi)}. Press Enter to play again.`;
+      return `Game over. Score ${group(hud.score)}. Hi-score ${group(hud.hi)}. Press Enter to play again, Escape to exit.`;
   }
 }
 
@@ -109,6 +109,9 @@ export function ArcadeScene({
   const touch = useMedia("(pointer: coarse)");
   const [hud, setHud] = useState<Hud>(ATTRACT_HUD);
   const [soundOn, setSoundOn] = useState(readSoundOn);
+  const playRef = useRef<HTMLButtonElement>(null);
+  /** Set on leaving a game, so the focus lands on Play instead of falling to the page. */
+  const refocus = useRef(false);
 
   // The cabinet reads the newest values without being rebuilt on every block.
   const latest = useRef({ launches, tip, onPick, reduced });
@@ -149,6 +152,9 @@ export function ArcadeScene({
         if (launch) latest.current.onPick(launch);
       },
       report: setHud,
+      exited: () => {
+        refocus.current = true;
+      },
       sound: audio,
     });
     return () => {
@@ -160,6 +166,12 @@ export function ArcadeScene({
   }, []);
 
   useEffect(() => cabinet.current?.recast(), [identity]);
+  useEffect(() => {
+    if (hud.mode !== "attract" || !refocus.current) return;
+    refocus.current = false;
+    // Only when the focus fell to the page: a click elsewhere keeps its target.
+    if (document.activeElement === document.body || document.activeElement === null) playRef.current?.focus();
+  }, [hud.mode]);
   useEffect(() => cabinet.current?.setReduced(reduced), [reduced]);
 
   const toggleSound = useCallback(() => {
@@ -172,12 +184,12 @@ export function ArcadeScene({
 
   const count = launches.length;
   const playing = IN_GAME.has(hud.mode);
-  const keysHint = touch ? "Drag to move · tap to fire" : "← → move · SPACE fire · P pause";
+  const keysHint = touch ? "Drag to move · tap to fire" : playing ? "← → move · SPACE fire · P pause · ESC exit" : "← → move · SPACE fire · P pause";
   const label =
     count === 0
       ? "Arcade: waiting for the first launch."
       : playing
-        ? `Space invaders game. ${touch ? "Drag to move the cannon and tap to fire." : "Left and right arrows move, Space fires, P pauses, Escape pauses too."} Each hit scores the tokens that hash would mint on that launch.`
+        ? `Space invaders game. ${touch ? "Drag to move the cannon and tap to fire." : "Left and right arrows move, Space fires, P pauses, Escape exits."} Each hit scores the tokens that hash would mint on that launch.`
         : `Arcade: ${count} launch${count === 1 ? "" : "es"} as invaders and a Bitcoin cannon firing hashes. Press Space or Enter to play; click an invader to open its launch.`;
 
   return (
@@ -185,8 +197,19 @@ export function ArcadeScene({
       <canvas ref={canvasRef} tabIndex={0} role="application" aria-label={label} aria-roledescription="game" />
       <div className="arcade-bar">
         {hud.mode === "attract" && count > 0 ? (
-          <button type="button" className="arcade-btn" onClick={() => canvasRef.current?.focus()}>
+          <button type="button" className="arcade-btn" ref={playRef} onClick={() => canvasRef.current?.focus()}>
             <span aria-hidden="true">▶ </span>Play
+          </button>
+        ) : null}
+        {playing ? (
+          <button
+            type="button"
+            className="arcade-btn arcade-exit"
+            // Keep the game's focus until the click lands: a blur would first pause the game, or end a finished one under the pointer.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => cabinet.current?.exit()}
+          >
+            <span aria-hidden="true">✕ </span>Exit
           </button>
         ) : null}
         <span className="arcade-keys">{keysHint}</span>

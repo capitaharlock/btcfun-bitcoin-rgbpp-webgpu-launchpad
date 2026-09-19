@@ -60,9 +60,37 @@ test.describe("arcade", () => {
     await page.locator(".arcade").getByRole("application").focus();
     await page.keyboard.press("Enter");
     await expect(page.locator(".arcade").getByRole("status")).toHaveText("Score 0. Lives 3. Wave 1.");
-    await page.keyboard.press("Escape");
+    await page.keyboard.press("p");
     await expect(page.locator(".arcade")).toHaveAttribute("data-mode", "paused");
     await expect(page.locator(".arcade").getByRole("status")).toHaveText(/Hi-score 4,321\./);
+  });
+
+  test("Escape leaves the game for the attract mode, and so does the Exit button", async ({ page, app }) => {
+    await withLaunch(page, app);
+    const stage = page.locator(".arcade");
+    const game = stage.getByRole("application");
+    const exit = stage.getByRole("button", { name: "Exit" });
+    await expect(exit).toHaveCount(0);
+
+    await game.focus();
+    await page.keyboard.press("Enter");
+    await expect(stage).toHaveAttribute("data-mode", "playing");
+    await expect(exit).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(stage).toHaveAttribute("data-mode", "attract");
+    await expect(game).not.toBeFocused();
+    await expect(exit).toHaveCount(0);
+    // The focus lands on Play, so the keyboard can start again from where it was.
+    await expect(stage.getByRole("button", { name: "Play" })).toBeFocused();
+
+    // Paused, the button still leaves; the game does not resume on the way out.
+    await game.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("p");
+    await expect(stage).toHaveAttribute("data-mode", "paused");
+    await exit.click();
+    await expect(stage).toHaveAttribute("data-mode", "attract");
+    await expect(exit).toHaveCount(0);
   });
 
   test("with no launch yet there is nothing to play, and nothing breaks", async ({ page, app }) => {
