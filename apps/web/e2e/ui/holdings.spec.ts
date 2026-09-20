@@ -1,14 +1,14 @@
 /* What you hold, and sending it to someone else. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, browserKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
+import { announce, block, browserKeyOn, MINEABLE, mintOnce, platformWallet, secondVisitor } from "../support/flows";
 
 test.describe.configure({ timeout: 300_000 });
 
 test.describe("holdings", () => {
   test("a transfer reaches another wallet, which sees it with no action of its own", async ({ page, app, sim, rgbpp, browser, ux }) => {
-    await fundedWallet(app, sim);
-    const id = await announce(page, { symbol: "SEND" });
+    await platformWallet(app, sim);
+    const id = await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     const minted = await mintOnce(page, sim);
     const total = Number(minted.split(" ")[0].replace(/,/g, ""));
@@ -18,9 +18,9 @@ test.describe("holdings", () => {
     sim.track(bob.address);
 
     await app.goto("/holdings");
-    await expect(page.getByRole("heading", { name: /SEND/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: new RegExp(MINEABLE) })).toBeVisible();
     await page.getByLabel("Send to").fill(bob.address);
-    await page.getByLabel("Amount (SEND)").fill("100");
+    await page.getByLabel(`Amount (${MINEABLE})`).fill("100");
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^Sent — /)).toBeVisible();
     await block(page, sim);
@@ -37,19 +37,19 @@ test.describe("holdings", () => {
 
   test.describe("refuses what cannot be sent", () => {
     test("more than the balance, a non-address and a mainnet address keep Send disabled", async ({ page, app, sim }) => {
-      await fundedWallet(app, sim);
-      await announce(page, { symbol: "RAIL" });
+      await platformWallet(app, sim);
+      await announce(page, { symbol: MINEABLE });
       await block(page, sim);
       const minted = await mintOnce(page, sim);
       const total = Number(minted.split(" ")[0].replace(/,/g, ""));
       await app.goto("/holdings");
 
       await page.getByLabel("Send to").fill("tb1qt5r7g40j93s46c3mdnycc2qsz2t57xqfjddukj");
-      await page.getByLabel("Amount (RAIL)").fill(String(total + 1));
+      await page.getByLabel(`Amount (${MINEABLE})`).fill(String(total + 1));
       await expect(page.getByText("More than you hold.")).toBeVisible();
       await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
 
-      await page.getByLabel("Amount (RAIL)").fill("1");
+      await page.getByLabel(`Amount (${MINEABLE})`).fill("1");
       await page.getByLabel("Send to").fill("not-an-address");
       await expect(page.getByText(/A testnet3 address/)).toBeVisible();
       await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
@@ -57,7 +57,7 @@ test.describe("holdings", () => {
       await page.getByLabel("Send to").fill("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq");
       await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
 
-      await page.getByLabel("Amount (RAIL)").fill("0");
+      await page.getByLabel(`Amount (${MINEABLE})`).fill("0");
       await page.getByLabel("Send to").fill("tb1qt5r7g40j93s46c3mdnycc2qsz2t57xqfjddukj");
       await expect(page.getByText("A positive amount, up to 8 decimals.")).toBeVisible();
     });

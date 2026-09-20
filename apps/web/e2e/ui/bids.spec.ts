@@ -9,7 +9,7 @@ import type { Page } from "@playwright/test";
 
 import { test, expect } from "../support/fixtures";
 import type { ChainSim } from "../support/chain";
-import { announce, block, browserKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
+import { announce, block, browserKeyOn, fundedWallet, MINEABLE, mintOnce, platformWallet, secondVisitor } from "../support/flows";
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -25,8 +25,8 @@ const balance = (sim: ChainSim, address: string) => (sim.utxos.get(address) ?? [
 
 test.describe("bids", () => {
   test("a holder sells to a bid and the bidder completes it; both sides settle in one transaction", async ({ page, app, sim, rgbpp, browser, ux }) => {
-    const holder = await fundedWallet(app, sim);
-    await announce(page, { symbol: "BIDS" });
+    const holder = await platformWallet(app, sim);
+    await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     await mintOnce(page, sim);
 
@@ -35,7 +35,7 @@ test.describe("bids", () => {
     sim.fund(bidder.address, 100_000);
     await bidderPage.goto("/#/market");
     await placeBid(bidderPage, "100", 20_000);
-    const myBid = bidderPage.getByRole("group", { name: "Your bid for BIDS" });
+    const myBid = bidderPage.getByRole("group", { name: `Your bid for ${MINEABLE}` });
     await expect(myBid).toContainText("waiting for a seller", { timeout: 30_000 });
     await expect(bidderPage.getByRole("table", { name: "Bids · buying" })).toContainText("200", { timeout: 30_000 });
     // Placing a bid moves nothing.
@@ -45,7 +45,7 @@ test.describe("bids", () => {
     await page.goto("/#/market");
     const row = bidsTable(page).locator("tbody tr").filter({ hasText: "20,000 sats" });
     await row.getByRole("button", { name: /^Set aside 100\.00/ }).click({ timeout: 30_000 });
-    await expect(page.getByText(/^Setting aside 100\.00 BIDS/)).toBeVisible();
+    await expect(page.getByText(new RegExp(`^Setting aside 100\\.00 ${MINEABLE}`))).toBeVisible();
     await block(page, sim);
     expect([...rgbpp.jobs.values()].at(-1)!.state).toBe("completed");
     await row.getByRole("button", { name: "Sell to this bid" }).click({ timeout: 30_000 });
@@ -59,7 +59,7 @@ test.describe("bids", () => {
     await bidderPage.reload();
     await expect(bidderPage.getByText(/A seller accepted your bid/)).toBeVisible({ timeout: 30_000 });
     await myBid.getByRole("button", { name: "Complete purchase" }).click();
-    await expect(bidderPage.getByText(/^Bought 100\.00 BIDS for 20,000 sats/)).toBeVisible();
+    await expect(bidderPage.getByText(new RegExp(`^Bought 100\\.00 ${MINEABLE} for 20,000 sats`))).toBeVisible();
 
     const sale = sim.broadcasts.at(-1)!;
     expect(sale.outputs[0].address).toBe(holder.address);
@@ -82,7 +82,7 @@ test.describe("bids", () => {
     await bidderPage.goto("/#/market");
     await expect(myBid).toContainText("filled", { timeout: 30_000 });
     await expect(bidderPage.getByRole("table", { name: "Recent trades" })).toContainText("20,000 sats");
-    await expect(bidderPage.getByText("No bids for BIDS.")).toBeVisible();
+    await expect(bidderPage.getByText(`No bids for ${MINEABLE}.`)).toBeVisible();
     ux.note("The bidder signed a bid that locked nothing; the holder met it with a listing; the bidder's one transaction settled both sides.");
   });
 

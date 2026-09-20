@@ -1,7 +1,7 @@
 /* Block height is the clock: halvings, the rate a ticket locks in, and the end. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, buyTicket, fundedWallet, mineUntilMintable, openMiner } from "../support/flows";
+import { announce, block, buyTicket, MINEABLE, mineUntilMintable, openMiner, platformWallet } from "../support/flows";
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -36,8 +36,8 @@ test.describe("time", () => {
   });
 
   test("a ticket keeps the rate it was bought at, even when minted after a halving", async ({ page, app, sim, rgbpp, ux }) => {
-    await fundedWallet(app, sim);
-    await announce(page, { symbol: "HOLD" });
+    await platformWallet(app, sim);
+    await announce(page, { symbol: MINEABLE });
     await block(page, sim, WEEK - 5); // five blocks before the first halving
     await openMiner(page, sim);
     await buyTicket(page); // anchored at the current tip, before the halving

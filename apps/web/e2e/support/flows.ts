@@ -9,6 +9,7 @@
 import { expect, type Browser, type Page } from "@playwright/test";
 import type { App, Wallet } from "./fixtures";
 import type { ChainSim } from "./chain";
+import { PLATFORM_SECRET } from "./platform";
 import { RgbppSim } from "./rgbpp";
 
 export async function fundedWallet(app: App, sim: ChainSim, sats = 200_000): Promise<Wallet> {
@@ -16,6 +17,20 @@ export async function fundedWallet(app: App, sim: ChainSim, sats = 200_000): Pro
   sim.fund(wallet.address, sats);
   return wallet;
 }
+
+/**
+ * The platform's key, funded. On the testnet showcase the site offers mining
+ * only on the platform's DEMO launch (`lib/launches/featured.ts`), so a spec
+ * that mines announces DEMO under this key.
+ */
+export async function platformWallet(app: App, sim: ChainSim, sats = 200_000): Promise<Wallet> {
+  const wallet = await app.restoreKey(PLATFORM_SECRET);
+  sim.fund(wallet.address, sats);
+  return wallet;
+}
+
+/** The symbol of the launch the site mines. */
+export const MINEABLE = "DEMO";
 
 export interface Draft {
   symbol: string;
@@ -82,13 +97,18 @@ export async function buyTicket(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "Mine", exact: true })).toBeVisible({ timeout: 30_000 });
 }
 
+/** The one mining toggle while it is not running: MINE on a fresh ticket, CONTINUE after that. */
+export function mineButton(page: Page) {
+  return page.getByRole("button", { name: /^(Mine|Continue)$/ });
+}
+
 /** Mine on the CPU until a hash qualifies; returns the mint button. */
 export async function mineUntilMintable(page: Page, timeout = 180_000) {
   await page.getByRole("group", { name: "Mining device" }).getByRole("button", { name: "CPU" }).click();
-  await page.getByRole("button", { name: "Mine", exact: true }).click();
+  await mineButton(page).click();
   const mint = page.getByRole("button", { name: /^Mint [0-9,.]+ / });
   await expect(mint).toBeVisible({ timeout });
-  await page.getByRole("button", { name: "Stop" }).click();
+  await page.getByRole("button", { name: "Pause" }).click();
   return mint;
 }
 

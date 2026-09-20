@@ -1,7 +1,7 @@
 /* A sale the buyer completes alone — and the ways it must not go wrong. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, browserKeyOn, fundedWallet, mintOnce, secondVisitor } from "../support/flows";
+import { announce, block, browserKeyOn, MINEABLE, mintOnce, platformWallet, secondVisitor } from "../support/flows";
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -14,8 +14,8 @@ async function listFirstCell(page: import("@playwright/test").Page, price: numbe
 
 test.describe("market", () => {
   test("a buyer completes a listing while the seller is away; both sides settle in one transaction", async ({ page, app, sim, rgbpp, browser, ux }) => {
-    const seller = await fundedWallet(app, sim);
-    await announce(page, { symbol: "SALE" });
+    const seller = await platformWallet(app, sim);
+    await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     const minted = await mintOnce(page, sim);
     await listFirstCell(page, 25_000);
@@ -27,7 +27,7 @@ test.describe("market", () => {
     const sellerBefore = (sim.utxos.get(seller.address) ?? []).reduce((n, u) => n + u.value, 0);
 
     await buyerPage.goto("/#/market");
-    const row = buyerPage.locator("tr").filter({ hasText: "SALE" });
+    const row = buyerPage.locator("tr").filter({ hasText: MINEABLE });
     await expect(row).toContainText("25,000 sats", { timeout: 30_000 });
     await row.getByRole("button", { name: "Buy" }).click();
     await expect(buyerPage.getByText(/^Bought .* for 25,000 sats/)).toBeVisible();
@@ -54,12 +54,12 @@ test.describe("market", () => {
   });
 
   test("a listing the seller cancels disappears, and cannot be bought", async ({ page, app, sim, rgbpp }) => {
-    await fundedWallet(app, sim);
-    await announce(page, { symbol: "BACK" });
+    await platformWallet(app, sim);
+    await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     await mintOnce(page, sim);
     await listFirstCell(page, 30_000);
-    const row = page.locator("tr").filter({ hasText: "BACK" });
+    const row = page.locator("tr").filter({ hasText: MINEABLE });
     await expect(row.getByRole("button", { name: "Cancel" })).toBeVisible({ timeout: 30_000 });
     await expect(row.getByRole("button", { name: "Buy" })).toHaveCount(0);
     await row.getByRole("button", { name: "Cancel" }).click();
@@ -71,8 +71,8 @@ test.describe("market", () => {
   });
 
   test("a listing whose PSBT was tampered with is never shown", async ({ page, app, sim, rgbpp, ux }) => {
-    await fundedWallet(app, sim);
-    await announce(page, { symbol: "FAKE" });
+    await platformWallet(app, sim);
+    await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     await mintOnce(page, sim);
     await listFirstCell(page, 40_000);

@@ -1,14 +1,14 @@
 /* Anyone can check a mint from the two chains. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, fundedWallet, mintOnce, openMiner } from "../support/flows";
+import { announce, block, MINEABLE, mintOnce, openMiner, platformWallet } from "../support/flows";
 
 test.describe.configure({ timeout: 240_000 });
 
 test.describe("proof", () => {
   test("a real mint passes every check, recomputed from chain data", async ({ page, app, sim, ux }) => {
-    await fundedWallet(app, sim);
-    await announce(page, { symbol: "PROVE" });
+    await platformWallet(app, sim);
+    await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     const minted = await mintOnce(page, sim);
     const mintTx = sim.broadcasts.at(-1)!.txid;
@@ -25,12 +25,12 @@ test.describe("proof", () => {
   });
 
   test("a ticket is not a mint, and says why", async ({ page, app, sim }) => {
-    await fundedWallet(app, sim);
-    await announce(page, { symbol: "TICK" });
+    await platformWallet(app, sim);
+    await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     await openMiner(page, sim);
     await page.getByRole("button", { name: /^Buy ticket/ }).click();
-    await expect(page.getByText("Your ticket is landing")).toBeVisible();
+    await expect(page.getByText(/^Ticket landing/)).toBeVisible();
     const ticketTx = sim.broadcasts.at(-1)!.txid;
     await block(page, sim);
     await app.goto(`/proof/${ticketTx}`);

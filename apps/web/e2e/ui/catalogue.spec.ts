@@ -37,7 +37,13 @@ test.describe("catalogue", () => {
     await expect(card.getByRole("meter")).toHaveAttribute("aria-valuenow", "0");
     await expect(card.getByRole("link", { name: "BAR ticket payments on mempool" })).toHaveAttribute("href", /mempool\.space\/testnet\/address\/tb1q/);
     await expect(card.getByRole("link", { name: "BAR token on the CKB explorer" })).toHaveAttribute("href", /explorer\.nervos\.org\/xudt\/0x[0-9a-f]{64}$/);
-    await expect(card.getByRole("link", { name: "Mine BAR" })).toBeEnabled();
+    // Only the featured launch is mined on the showcase; the box still opens the launch.
+    await expect(card.getByRole("button", { name: "Mine BAR — Mining on this testnet showcase is open on DEMO" })).toBeDisabled();
+    await expect(card.getByRole("link", { name: "Mine BAR" })).toHaveCount(0);
+    await expect(card.locator(".tc-off")).toHaveAttribute("title", "Mining on this testnet showcase is open on DEMO");
+    await card.getByRole("link", { name: "BAR", exact: true }).click();
+    await expect(page).toHaveURL(/#\/launch\/bar-[0-9a-f]{16}$/);
+    await expect(page.getByRole("heading", { name: /^Mining is open on/ })).toBeVisible();
   });
 
   test("the platform's DEMO launch comes first, with a lit MINE and its picture everywhere", async ({ page, app, sim }) => {
@@ -54,6 +60,8 @@ test.describe("catalogue", () => {
     await expect(first).toContainText("DEMO");
     await expect(first.getByText("Start here")).toBeVisible();
     await expect(first.getByRole("link", { name: "Mine DEMO" })).toBeVisible();
+    // The platform's other launches are listed, but not mined here.
+    await expect(page.locator(".tokencard", { hasText: "EARLY" }).getByRole("button", { name: /^Mine EARLY — Mining on this testnet showcase/ })).toBeDisabled();
     // Examples now point at it.
     await expect(page.getByRole("button", { name: /^Mine SURF — Example data — mint the DEMO token/ })).toBeDisabled();
 
@@ -78,6 +86,8 @@ test.describe("catalogue", () => {
     await block(page, sim, 1);
     await app.goto("/");
     await expect(page.locator(".tokencard.featured")).toHaveCount(0);
-    await expect(page.locator(".tokencard:not(.simulated)", { hasText: "DEMO" })).toBeVisible();
+    const card = page.locator(".tokencard:not(.simulated)", { hasText: "DEMO" });
+    await expect(card).toBeVisible();
+    await expect(card.getByRole("button", { name: /^Mine DEMO — Mining on this testnet showcase/ })).toBeDisabled();
   });
 });

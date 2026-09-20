@@ -1,15 +1,15 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Launches } from "./views/Launches";
 import { LaunchView } from "./views/Launch";
-import { NETWORK, WalletProvider, formatBtc, shortAddress, useWallet } from "./state/WalletProvider";
+import { NETWORK, WalletProvider, useWallet } from "./state/WalletProvider";
 import { LaunchesProvider } from "./state/LaunchesProvider";
 import { TokensProvider } from "./state/TokensProvider";
 import { group } from "./lib/format";
 import { PixelBursts } from "./ui/PixelBursts";
-import { BitcoinMark, WalletMark } from "./ui/PixelIcon";
+import { BitcoinMark } from "./ui/PixelIcon";
 import { Chip } from "./ui/primitives";
-import { ConnectDialog } from "./components/wallet/Connect";
 import { DemoBadge } from "./components/wallet/DemoBadge";
+import { WalletPill } from "./components/wallet/WalletMenu";
 import type { WalletTab } from "./views/Wallet";
 
 // Sections a visitor may never open load on demand; the front page and a
@@ -189,44 +189,5 @@ function TipChip() {
     <Chip title="Waiting for the chain tip">
       <span className="mono">btc …</span>
     </Chip>
-  );
-}
-
-/**
- * The way to the wallet, always in the same corner and always with the same
- * icon. Holdings live inside it, so there is one place to look for what you
- * own. Without a wallet it opens the chooser in place: connecting should not
- * take a visitor away from the launch they were about to mine.
- */
-function WalletPill({ active }: { active: boolean }) {
-  const { vault, balance } = useWallet();
-  const [choosing, setChoosing] = useState(false);
-
-  if (!vault) {
-    return (
-      <>
-        <button className="btn walletbutton" onClick={() => setChoosing(true)}>
-          <WalletMark />
-          Connect wallet
-        </button>
-        <ConnectDialog open={choosing} onClose={() => setChoosing(false)} />
-      </>
-    );
-  }
-
-  return (
-    <a
-      className="walletpill"
-      href="#/wallet"
-      aria-current={active ? "page" : undefined}
-      title={`${vault.label} · ${vault.address}`}
-    >
-      <span className="icon">
-        <WalletMark />
-      </span>
-      <span className="who">{vault.kind === "demo" ? "Demo wallet" : "Wallet"}</span>
-      <span className="addr">{shortAddress(vault.address)}</span>
-      <span className="bal">{balance ? formatBtc(balance.total) : "…"}</span>
-    </a>
   );
 }

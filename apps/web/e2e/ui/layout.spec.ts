@@ -39,11 +39,19 @@ test.describe("layout", () => {
       await expect(page.locator("main")).toBeVisible();
       expect(await overflowOf(page), `${route} is wider than the viewport`).toBeLessThanOrEqual(1);
     }
-    const pill = page.getByRole("banner").getByRole("link", { name: /Demo wallet/ });
+    const pill = page.getByRole("banner").getByRole("button", { name: /Demo wallet/ });
     await expect(pill).toBeVisible();
     const box = await pill.boundingBox();
     const width = page.viewportSize()!.width;
     expect(box && box.x + box.width, "the wallet button is cut off").toBeLessThanOrEqual(width);
+
+    // Its menu opens on the screen, whole, with the way out in reach of a thumb.
+    await pill.click();
+    const menu = page.getByRole("banner").getByRole("menu", { name: "Demo wallet" });
+    const panel = (await menu.locator("..").boundingBox())!;
+    expect(panel.x).toBeGreaterThanOrEqual(0);
+    expect(panel.x + panel.width).toBeLessThanOrEqual(width);
+    await expect(menu.getByRole("menuitem", { name: "Log out" })).toBeInViewport();
   });
 
   test("the connect chooser fits the screen it opens on", async ({ page, app }) => {

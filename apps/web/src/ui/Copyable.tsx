@@ -9,7 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const FEEDBACK_MS = 1600;
 
-export function Copyable({ value, label }: { value: string; label: string }) {
+/** Copy a value on a click, and say so for a moment: "Copied" only once the clipboard took it. */
+export function useCopy(value: string): { copied: boolean; copy: () => void } {
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | undefined>(undefined);
 
@@ -28,6 +29,11 @@ export function Copyable({ value, label }: { value: string; label: string }) {
     );
   }, [value]);
 
+  return { copied, copy };
+}
+
+export function Copyable({ value, label }: { value: string; label: string }) {
+  const { copied, copy } = useCopy(value);
   return (
     <div className="copyable">
       <code className="mono">{value}</code>

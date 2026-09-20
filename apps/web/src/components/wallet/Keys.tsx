@@ -58,27 +58,60 @@ const CONSEQUENCE: Record<VaultKind, string> = {
 };
 
 function LogOut({ vault }: { vault: Vault }) {
-  const wallet = useWallet();
   const [confirming, setConfirming] = useState(false);
   return (
     <>
       <button className="btn ghost" onClick={() => setConfirming(true)}>
         Log out
       </button>
-      <Dialog open={confirming} onClose={() => setConfirming(false)} eyebrow="wallet" title="Log out of this wallet?">
-        <div className="stack-md">
-          <p className="clamp">{CONSEQUENCE[vault.kind]}</p>
-          {vault.kind === "local" && <SecretBackup />}
-          <div className="row wrapped">
-            <button className="btn danger" onClick={wallet.logOut}>
-              Log out
-            </button>
-            <button className="btn ghost" onClick={() => setConfirming(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Dialog>
+      <LogOutDialog vault={vault} open={confirming} onClose={() => setConfirming(false)} />
     </>
+  );
+}
+
+/**
+ * The one way out of a wallet, wherever it is asked for: what leaving costs
+ * this kind of wallet, a last chance to copy a browser key's secret, and then
+ * the log out. `switching` is the same step on the way to another wallet.
+ */
+export function LogOutDialog({
+  vault,
+  open,
+  onClose,
+  switching,
+  onLoggedOut,
+}: {
+  vault: Vault;
+  open: boolean;
+  onClose: () => void;
+  switching?: boolean;
+  onLoggedOut?: () => void;
+}) {
+  const wallet = useWallet();
+  const leave = () => {
+    wallet.logOut();
+    onLoggedOut?.();
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      eyebrow="wallet"
+      title={switching ? "Switch to another wallet?" : "Log out of this wallet?"}
+    >
+      <div className="stack-md">
+        {switching && <p className="clamp">Switching logs this wallet out first, then opens the wallet chooser.</p>}
+        <p className="clamp">{CONSEQUENCE[vault.kind]}</p>
+        {vault.kind === "local" && <SecretBackup />}
+        <div className="row wrapped">
+          <button className="btn danger" onClick={leave}>
+            {switching ? "Log out and switch" : "Log out"}
+          </button>
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
