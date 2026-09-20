@@ -15,10 +15,10 @@ import { Address, OutScript, Transaction } from "@scure/btc-signer";
 import { ccc } from "@ckb-ccc/core";
 
 import { DUST_SATS, ACTIVE, type NetworkConfig } from "../bitcoin/network";
-import { estimateVsize, FeeTooLow, InsufficientFunds } from "../bitcoin/payment";
+import { estimateVsize, FeeTooLow, InsufficientFunds, P2WPKH_SCRIPT_BYTES } from "../bitcoin/payment";
 import type { WalletKey } from "../bitcoin/keys";
 import type { Utxo } from "../bitcoin/provider";
-import type { Plan, PlannedOutput } from "./operations";
+import { SEAL_SATS, type Plan, type PlannedOutput } from "./operations";
 
 export interface SignedOperation {
   hex: string;
@@ -35,10 +35,11 @@ function commitmentScript(commitment: ccc.Hex): Uint8Array {
   return ccc.bytesConcat([0x6a, 0x20], data);
 }
 
-function scriptOf(output: PlannedOutput, key: WalletKey, network: NetworkConfig): Uint8Array {
+/** The scriptPubKey a planned output pays; `own` is the wallet's, which every seal pays. */
+function scriptOf(output: PlannedOutput, own: Uint8Array, network: NetworkConfig): Uint8Array {
   switch (output.kind) {
     case "seal":
-      return key.script;
+      return own;
     case "ticket":
       return output.script;
     case "fee":
@@ -73,7 +74,7 @@ export function signOperation(
 
   const outputs = [
     { script: commitmentScript(plan.commitment), amount: 0n },
-    ...plan.btcOutputs.map((o) => ({ script: scriptOf(o, key, network), amount: BigInt(o.value) })),
+    ...plan.btcOutputs.map((o) => ({ script: scriptOf(o, key.script, network), amount: BigInt(o.value) })),
   ];
   for (const o of outputs.slice(1)) {
     if (o.amount < BigInt(DUST_SATS)) throw new RangeError("an RGB++ output is below the dust limit");
@@ -120,4 +121,36 @@ export function signOperation(
 
   if (fee < tx.vsize * feeRate) throw new FeeTooLow(fee, tx.vsize, feeRate);
   return { hex: tx.hex, txid: tx.id, vsize: tx.vsize, fee, funding: inputs.slice(mandatory.length) };
+}
+
+/**
+ * The plain UTXOs an operation may be funded from: confirmed, not a seal, and
+ * not an output of an operation still landing.
+ *
+ * The RGB++ service reports a UTXO as carrying cells only once its CKB
+ * transaction has landed; until then the seal of an operation in flight looks
+ * like a plain 546-sat output, and spending it would strand the cells it is
+ * about to carry.
+ */
+export function plainFunding(utxos: readonly Utxo[], landing: ReadonlySet<string>): Utxo[] {
+  return utxos.filter((u) => u.confirmed && u.value !== SEAL_SATS && !landing.has(u.txid));
+}
+
+/**
+ * About how many plain sats signing `plan` will take: its outputs and the fee
+ * for one funding input, less what its sealed inputs bring. The same shape
+ * `signOperation` builds, so a wallet that has this much can pay; a second
+ * funding input adds about 68 vB, which the caller's margin absorbs.
+ */
+export function fundingNeeded(plan: Plan, feeRate: number, network: NetworkConfig = ACTIVE): number {
+  // Every wallet here is P2WPKH; only the length of its script matters to the size.
+  const own = new Uint8Array(P2WPKH_SCRIPT_BYTES);
+  const scripts = [
+    commitmentScript(plan.commitment).length,
+    ...plan.btcOutputs.map((o) => scriptOf(o, own, network).length),
+    P2WPKH_SCRIPT_BYTES,
+  ];
+  const spend = plan.btcOutputs.reduce((sum, o) => sum + o.value, 0);
+  const fee = Math.ceil(estimateVsize(plan.sealsSpent.length + 1, scripts) * Math.max(1, feeRate));
+  return Math.max(0, spend + fee - plan.sealsSpent.length * SEAL_SATS);
 }
