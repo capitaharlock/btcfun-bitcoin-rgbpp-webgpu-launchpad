@@ -10,20 +10,28 @@
 :root[data-theme="clean"] {
   --font-display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-heading: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-eyebrow: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-label: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-numeric: "Geist Mono", ui-monospace, "SF Mono", monospace;
 
   --weight-display: 650;
   --weight-heading: 600;
+  --weight-eyebrow: 500;
   --weight-label: 500;
+  --weight-ui: 550;
   --face-smoothing: antialiased;
 
   --display-case: none;
   --heading-case: none;
+  --eyebrow-case: uppercase;
   --label-case: none;
+  --ui-case: none;
   --display-tracking: -0.03em;
   --heading-tracking: -0.01em;
+  --eyebrow-tracking: 0.06em;
   --label-tracking: 0;
+  --ui-tracking: 0;
 
   --bg: #0c0d12;
   --surface-1: #13141b;
@@ -39,10 +47,14 @@
   --frame-w: 1px;
   --radius: 6px;
   --radius-sm: 4px;
+  --control-h-sm: 32px;
+  --control-h: 40px;
+  --control-h-lg: 46px;
 
   --shadow-sm: 0 0 0 0;
   --shadow-md: 0 0 0 0;
   --shadow-lg: 0 12px 28px -18px;
+  --shadow-hard: 0 0 0 0;
   --lift: translateY(-2px);
   --press: translateY(1px);
   --press-lg: translateY(1px);

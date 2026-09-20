@@ -51,7 +51,7 @@ export function RewardChart({ h0, tip, symbol, height = 170 }: { h0: number; tip
         <path d={area} fill={`url(#reward-${uid})`} />
         <path d={path} fill="none" stroke="var(--amber)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
         {Array.from({ length: SPAN_HALVINGS }, (_, k) => (
-          <text key={k} x={xOf(k) + 6} y={H - 6} fill="var(--ink-faint)" fontSize="11" fontFamily="var(--font-mono)">
+          <text key={k} x={xOf(k) + 6} y={H - 6} fill="var(--ink-faint)" fontSize="12" fontFamily="var(--font-mono)">
             wk {k + 1}
           </text>
         ))}

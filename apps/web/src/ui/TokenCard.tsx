@@ -144,7 +144,7 @@ export const TokenCard = memo(function TokenCard({ entry, tip, synced, stats, ho
               </button>
             </span>
           ) : action === "mine" && canMine(entry) ? (
-            <a className="btn play" href={`${href}/mine`} aria-label={`Mine ${entry.symbol}`}>
+            <a className="btn play soft" href={`${href}/mine`} aria-label={`Mine ${entry.symbol}`}>
               ▶ Mine
             </a>
           ) : action === "mine" ? (

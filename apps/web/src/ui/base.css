@@ -13,9 +13,9 @@
   color-scheme: dark;
 
   /* Glows — only for live state and the mining strike. */
-  --amber-glow: color-mix(in oklab, var(--amber) 42%, transparent);
-  --cyan-glow: color-mix(in oklab, var(--cyan) 36%, transparent);
-  --violet-glow: color-mix(in oklab, var(--violet) 38%, transparent);
+  --amber-glow: color-mix(in oklab, var(--amber) 28%, transparent);
+  --cyan-glow: color-mix(in oklab, var(--cyan) 24%, transparent);
+  --violet-glow: color-mix(in oklab, var(--violet) 24%, transparent);
 
   /* Diagrams. A flowchart reads best on paper, so it sits on a white card in
      every theme. Each tone is one of the signals, softened three ways: a wash
@@ -85,7 +85,7 @@ body::before {
   z-index: 0;
   opacity: var(--backdrop-grid);
   background:
-    radial-gradient(60rem 22rem at 50% -8rem, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%),
+    radial-gradient(60rem 22rem at 50% -8rem, color-mix(in oklab, var(--accent) 8%, transparent), transparent 70%),
     linear-gradient(color-mix(in oklab, var(--ink) 5%, transparent) 1px, transparent 1px) 0 0 / 32px 32px,
     linear-gradient(90deg, color-mix(in oklab, var(--ink) 5%, transparent) 1px, transparent 1px) 0 0 / 32px 32px;
   mask-image: linear-gradient(to bottom, var(--shade) 0, color-mix(in oklab, var(--shade) 55%, transparent) 40rem, color-mix(in oklab, var(--shade) 25%, transparent) 100%);
@@ -95,8 +95,9 @@ body::before {
 
 /* ---------- typography roles ---------- */
 
-.t-display, .t-title, .t-subtitle, .t-label, .t-num,
-h1, h2, h3, h4 {
+/* Only the faces a theme may set in pixels take its smoothing; the grotesk
+   roles keep the body's antialiasing, whatever the theme. */
+.t-display, .t-title, .t-num, h1 {
   -webkit-font-smoothing: var(--face-smoothing);
 }
 
@@ -129,6 +130,7 @@ h3 {
   font-weight: var(--weight-heading);
   font-size: var(--text-base);
   line-height: var(--leading-snug);
+  letter-spacing: var(--heading-tracking);
   text-transform: var(--heading-case);
 }
 .t-label {

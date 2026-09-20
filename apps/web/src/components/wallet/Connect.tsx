@@ -83,7 +83,7 @@ export function ConnectOptions({ onConnected }: { onConnected?: () => void }) {
             One wallet built into the app and shared by everyone trying it out. Its key is public, so anyone can use
             it — and spend what is on it.
           </p>
-          <button className="btn play block" disabled={wallet.busy} onClick={attempt(wallet.connectDemo)}>
+          <button className="btn block" disabled={wallet.busy} onClick={attempt(wallet.connectDemo)}>
             Use the demo wallet
           </button>
         </section>

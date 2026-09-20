@@ -26,19 +26,18 @@
   padding: 8px 14px;
   border-left: var(--frame-w) solid transparent;
   color: var(--ink-dim);
-  font-size: 13.5px;
+  font-size: var(--text-md);
 }
 .docs-nav a::before {
   content: counter(doc, decimal-leading-zero);
-  font-family: var(--font-numeric);
-  font-size: 9px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
   color: var(--ink-faint);
-  -webkit-font-smoothing: var(--face-smoothing);
 }
 .docs-nav a:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
 .docs-nav a[aria-current="page"] {
   color: var(--ink);
-  background: color-mix(in oklab, var(--amber) 8%, var(--bg));
+  background: color-mix(in oklab, var(--amber) 6%, var(--bg));
   border-left-color: var(--amber);
 }
 .docs-nav a[aria-current="page"]::before { color: var(--amber); }
@@ -104,14 +103,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
-  font-family: var(--font-label);
-  font-weight: var(--weight-label);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-ui);
   font-size: var(--text-md);
-  letter-spacing: var(--label-tracking);
-  text-transform: var(--label-case);
+  letter-spacing: var(--ui-tracking);
+  text-transform: var(--ui-case);
   color: var(--ink);
-  -webkit-font-smoothing: var(--face-smoothing);
 }
 .docs-tech > summary::-webkit-details-marker { display: none; }
 .docs-tech > summary::before {
@@ -124,11 +122,11 @@
   border: var(--border-w) solid var(--cyan);
   border-radius: var(--radius-sm);
   color: var(--cyan);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1;
 }
 .docs-tech[open] > summary::before { content: "−"; }
-.docs-tech > summary .faint { text-transform: none; font-family: var(--font-body); letter-spacing: 0; -webkit-font-smoothing: antialiased; }
+.docs-tech > summary .faint { font-family: var(--font-body); font-weight: 400; }
 .docs-tech > div { padding: 0 16px 6px; }
 .docs-tech p, .docs-tech li { font-size: 14px; }
 
@@ -146,7 +144,7 @@
   min-width: 0;
   transition: transform var(--dur-fast) var(--ease-step), box-shadow var(--dur-fast) var(--ease-step);
 }
-.docs-pager-link .faint { font-family: var(--font-label); text-transform: var(--label-case); letter-spacing: var(--label-tracking); font-size: var(--text-xs); -webkit-font-smoothing: var(--face-smoothing); }
+.docs-pager-link .faint { font-family: var(--font-label); font-weight: var(--weight-label); text-transform: var(--label-case); letter-spacing: var(--label-tracking); font-size: var(--text-xs); }
 .docs-pager-link.next { text-align: right; margin-left: auto; }
 .docs-pager-link:hover { text-decoration: none; transform: var(--lift); box-shadow: var(--shadow-md) var(--line-strong); }
 

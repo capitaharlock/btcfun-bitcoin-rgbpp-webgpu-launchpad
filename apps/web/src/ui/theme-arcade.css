@@ -8,10 +8,14 @@
  * on <html> (`ui/theme.ts`). Canvas and SVG art read the same properties at
  * run time, so they follow the theme too.
  *
- *   type      --font-{display,heading,label,body,mono,numeric}   one per role
- *             --weight-{display,heading,label}
+ *   type      --font-{display,heading,eyebrow,label,ui,body,mono,numeric}
+ *                                    one per role: display is the headline,
+ *                                    eyebrow the small section marker, label
+ *                                    a field or column name, ui a control
+ *                                    (button, tab, link-button, nav)
+ *             --weight-{display,heading,eyebrow,label,ui}
  *             --face-smoothing       how the pixel faces are rasterised
- *             --{display,heading,label}-case, --*-tracking
+ *             --{display,heading,eyebrow,label,ui}-case, --*-tracking
  *             --text-{2xs…3xl}, --text-title, --text-display     the scale
  *             --leading-{tight,snug,body,loose}
  *   colour    --bg, --surface-{1,2,3}, --line, --line-strong    surfaces
@@ -22,8 +26,11 @@
  *                                                               roles
  *             --shade                  what hard shadows are mixed toward
  *             --paper                  diagram cards; highlights mix toward it
- *   shape     --border-w, --frame-w, --focus-w, --radius, --radius-sm
+ *   shape     --border-w, --frame-w, --focus-w, --radius, --radius-sm,
+ *             --control-h{-sm,,-lg}  buttons and inputs share a height
  *   depth     --shadow-{sm,md,lg} (offsets; the colour is the caller's),
+ *             --shadow-hard          the arcade's offset shadow, kept for
+ *                                    the stage alone
  *             --lift, --press, --press-lg, --glow
  *   space     --space-{1…16}, --gut, --maxw, --topbar-h
  *   motion    --dur-{fast,base,slow}, --ease, --ease-out, --ease-step, --blink
@@ -34,40 +41,53 @@
  * announcements, so those six names are permanent; only their values belong
  * to a theme.
  *
- * Arcade: a black cabinet, square geometry, hard offset shadows instead of
- * blur, neon used as signal, pixel faces for everything that is a label or a
- * score, a clean grotesk for the few sentences left, a mono for every figure.
+ * Arcade: a black cabinet, near-square geometry, signal colours used
+ * sparingly. The pixel faces are kept for what is identity rather than
+ * reading — the headline, the big counters, the small section markers and the
+ * game — and every control, label and sentence is set in the grotesk, at a
+ * size that reads at a glance. Pixel type in a button made it look like a
+ * strip of information rather than something to press; a screen of solid
+ * neon left nothing to look at first. A mono for every figure.
  */
 
 :root {
   /* ---------- type ---------- */
   --font-display: "Press Start 2P", ui-monospace, "SF Mono", monospace;
-  --font-heading: "Silkscreen", ui-monospace, "SF Mono", monospace;
-  --font-label: "Silkscreen", ui-monospace, "SF Mono", monospace;
+  --font-heading: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-eyebrow: "Silkscreen", ui-monospace, "SF Mono", monospace;
+  --font-label: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", monospace;
   --font-numeric: "Press Start 2P", ui-monospace, "SF Mono", monospace;
 
   --weight-display: 400;
-  --weight-heading: 400;
-  --weight-label: 400;
+  --weight-heading: 600;
+  --weight-eyebrow: 400;
+  --weight-label: 500;
+  --weight-ui: 600;
   /* Pixel faces render at their design grid; smoothing turns a crisp glyph
      into a soft blur, which is exactly the cheap look to avoid. */
   --face-smoothing: none;
 
   --display-case: uppercase;
-  --heading-case: uppercase;
-  --label-case: uppercase;
+  --heading-case: none;
+  --eyebrow-case: uppercase;
+  --label-case: none;
+  --ui-case: none;
   --display-tracking: 0;
-  --heading-tracking: 0.02em;
-  --label-tracking: 0.06em;
+  --heading-tracking: -0.005em;
+  --eyebrow-tracking: 0.08em;
+  --label-tracking: 0.01em;
+  --ui-tracking: 0;
 
-  --text-2xs: 10px;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-md: 13px;
-  --text-base: 14px;
-  --text-lg: 16px;
+  /* Nothing a person has to read is set below 12px. */
+  --text-2xs: 12px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-base: 15px;
+  --text-lg: 18px;
   --text-xl: 20px;
   --text-2xl: 24px;
   --text-3xl: 32px;
@@ -76,7 +96,7 @@
 
   --leading-tight: 1.2;
   --leading-snug: 1.4;
-  --leading-body: 1.55;
+  --leading-body: 1.5;
   --leading-loose: 1.7;
 
   /* ---------- colour ---------- */
@@ -92,18 +112,20 @@
   --ink-faint: #8f8b84;
   --on-accent: #000000;
 
-  --amber: #ff9f1a;
-  --amber-soft: #ffc861;
-  --amber-deep: #ff6a00;
-  --cyan: #2ee6ff;
-  --cyan-deep: #0aa3c2;
-  --violet: #a78bff;
-  --violet-deep: #6d3cff;
-  --magenta: #ff4fd3;
-  --lime: #b9ff3b;
-  --mint: #3dffa6;
-  --warn: #ffe14d;
-  --danger: #ff4d6d;
+  /* Signals a step short of neon: still unmistakably arcade, but a column of
+     them no longer vibrates against the black. */
+  --amber: #f2a33c;
+  --amber-soft: #f7c071;
+  --amber-deep: #d97a1c;
+  --cyan: #5ccfe3;
+  --cyan-deep: #2b9bb1;
+  --violet: #a494f2;
+  --violet-deep: #7358dc;
+  --magenta: #e06cc4;
+  --lime: #b3de66;
+  --mint: #5cd9a3;
+  --warn: #ead26a;
+  --danger: #ee6680;
 
   --accent: var(--amber);
   --positive: var(--mint);
@@ -119,19 +141,23 @@
 
   /* ---------- shape ---------- */
   --border-w: 1px;
-  --frame-w: 3px;
+  --frame-w: 2px;
   --focus-w: 2px;
-  --radius: 0;
-  --radius-sm: 0;
+  --radius: 3px;
+  --radius-sm: 2px;
+  --control-h-sm: 34px;
+  --control-h: 42px;
+  --control-h-lg: 48px;
 
   /* ---------- depth ---------- */
-  --shadow-sm: 3px 3px 0 0;
-  --shadow-md: 4px 4px 0 0;
-  --shadow-lg: 6px 6px 0 0;
-  --lift: translate(-3px, -3px);
-  --press: translate(3px, 3px);
-  --press-lg: translate(4px, 4px);
-  --glow: 0 0 18px;
+  --shadow-sm: 0 1px 2px 0;
+  --shadow-md: 0 2px 6px 0;
+  --shadow-lg: 0 16px 40px -16px;
+  --shadow-hard: 4px 4px 0 0;
+  --lift: translateY(-2px);
+  --press: translateY(1px);
+  --press-lg: translateY(1px);
+  --glow: 0 0 8px;
 
   /* ---------- space ---------- */
   --space-1: 4px;
@@ -161,8 +187,8 @@
   --blink: 1.1s;
 
   /* ---------- texture ---------- */
-  --scanlines: 1;
-  --backdrop-grid: 1;
+  --scanlines: 0.6;
+  --backdrop-grid: 0.5;
 }
 
 @media (max-width: 720px) {

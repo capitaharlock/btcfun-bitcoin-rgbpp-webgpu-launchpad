@@ -32,7 +32,7 @@ export function Panel({
   return (
     <section className={`panel ${tight ? "tight" : ""} ${flush ? "flush" : ""} ${className}`}>
       {(title || eyebrow || aside) && (
-        <header className="panel-head" style={flush ? { padding: "16px 16px 0" } : undefined}>
+        <header className="panel-head" style={flush ? { padding: "var(--space-5) var(--space-6) 0" } : undefined}>
           <div>
             {eyebrow && <div className="eyebrow">{eyebrow}</div>}
             {title && <h2>{title}</h2>}

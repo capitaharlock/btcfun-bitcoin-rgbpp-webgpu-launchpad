@@ -17,10 +17,10 @@
 
 .hashfeed {
   position: relative;
-  padding: 16px 18px;
-  border: var(--border-w) solid var(--line-strong);
+  padding: var(--space-5);
+  border: var(--border-w) solid var(--line);
   background:
-    radial-gradient(30rem 8rem at 0% 0%, color-mix(in oklab, var(--amber) 8%, transparent), transparent 70%),
+    radial-gradient(30rem 8rem at 0% 0%, color-mix(in oklab, var(--amber) 6%, transparent), transparent 70%),
     var(--bg);
   overflow: hidden;
   transition: border-color var(--dur-slow) var(--ease), box-shadow var(--dur-slow) var(--ease);
@@ -118,9 +118,10 @@
   max-height: 230px;
   overflow-y: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.7;
   border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--bg);
   padding: 4px;
   min-height: 64px;
@@ -149,7 +150,8 @@
 
 .hashlog .entry .clz {
   color: var(--amber);
-  font-family: var(--font-numeric);
+  font-family: var(--font-mono);
+  font-weight: 700;
   font-size: var(--text-2xs);
   min-width: 2.2ch;
   text-align: right;
