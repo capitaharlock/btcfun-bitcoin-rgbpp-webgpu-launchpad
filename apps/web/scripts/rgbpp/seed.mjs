@@ -12,6 +12,8 @@
  *   transfers  send a fifth of each settled balance to the shared demo wallet,
  *              announcing each transfer
  *   fund       pay FUND sats (default 60,000) from Alice to the demo wallet
+ *   democells  open COUNT (default 3) idle DEMO miner cells in the demo wallet,
+ *              so a visitor's first ticket needs no one-time setup
  *   gather     move Bob's free coins to Alice, who funds the runs
  *   status     where every launch stands
  *
@@ -300,6 +302,19 @@ const steps = {
     const signed = payment.buildPayment(alice, { to: demo.address, amountSats, feeRate, utxos: coins }, network.ACTIVE);
     const txid = await provider.broadcast(signed.hex, network.ACTIVE);
     console.log(`funded the demo wallet with ${amountSats} sats: ${network.txUrl(txid, network.ACTIVE)}`);
+  },
+
+  async democells() {
+    const featured = state.launches.find((c) => c.symbol === "DEMO");
+    if (!featured) throw new Error("announce the DEMO launch first");
+    const terms = launchTerms(featured);
+    const count = Number(process.env.COUNT ?? 3);
+    for (let i = 0; i < count; i++) {
+      const coins = (await provider.getUtxos(demo.address, network.ACTIVE)).filter((u) => u.value > 2 * ops.SEAL_SATS);
+      await submit(`demo open ${i + 1}/${count}`, ops.planOpen(cfg, terms, await rgbpp.paymaster()), demo, coins);
+      // The next opening funds itself from this one's change.
+      await new Promise((r) => setTimeout(r, 8_000));
+    }
   },
 
   async gather() {
