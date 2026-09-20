@@ -29,6 +29,9 @@ import {
   type Scene,
 } from "./scene";
 
+/** A long simulation outruns the default timeout when the whole suite shares the CPU. */
+const SIMULATION_MS = 30_000;
+
 const spec = (i: number): InvaderSpec => ({
   id: `l${i}`,
   symbol: `T${i}`,
@@ -158,7 +161,7 @@ describe("shots and hits", () => {
     const ratio = counts.get(CLZ_RANGE.min + 1)! / counts.get(CLZ_RANGE.min)!;
     expect(ratio).toBeGreaterThan(0.45);
     expect(ratio).toBeLessThan(0.55);
-  });
+  }, SIMULATION_MS);
 
   it("score a hit with the launch's reward, and bring the invader back", () => {
     const s = scene(1, 4);

@@ -33,10 +33,8 @@ import type { Sound } from "./sound";
 
 /** CSS pixels per scene cell in the attract mode: chunkier on a large screen, finer on a phone. */
 const CELL_CSS = { wide: 4, narrow: 3 } as const;
-/** Width from which the headline sits over the left of the scene. */
+/** Width from which the scene uses the large cell. */
 const WIDE = 900;
-/** How far the headline reaches into the scene when it overlaps it, in CSS px. */
-const COPY_CSS = 640;
 /** The strip along the bottom kept clear for the controls bar, in CSS px. */
 export const BAR_CSS = 30;
 /** Rows a game wants: the cell is as large as still fits about this many. */
@@ -145,9 +143,8 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
     ox = 0;
     const cols = Math.floor(canvas.width / s);
     const rows = Math.floor((canvas.height - BAR_CSS * dpr()) / s);
-    const left = wide ? Math.ceil((Math.min(COPY_CSS, width * 0.5) * dpr()) / s) : 4;
     const { specs, palette } = o.roster();
-    const scene = createScene(specs, { width: cols, height: rows, left, right: cols - 4 }, seeded(7));
+    const scene = createScene(specs, { width: cols, height: rows, left: 4, right: cols - 4 }, seeded(7));
     if (reduced) {
       const still = seeded(11);
       for (let t = 0; t < STILL_MS; t += 16) stepScene(scene, 16, still);
@@ -263,8 +260,12 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
   const startGame = () => {
     const { specs, palette } = o.roster();
     if (specs.length === 0) return;
+    // The stage opens to the whole hero for a game (`arcade.css`); the class
+    // goes on before measuring, so the grid is cut for the open stage and not
+    // for the box the attract mode had.
+    host.classList.add("in-game");
     const { height } = size();
-    const cellCss = Math.min(4, Math.max(2, Math.floor((height - BAR_CSS) / GAME_ROWS)));
+    const cellCss = Math.min(5, Math.max(2, Math.floor((height - BAR_CSS) / GAME_ROWS)));
     s = Math.max(1, Math.round(cellCss * dpr()));
     ox = 0;
     const cols = Math.floor(canvas.width / s);

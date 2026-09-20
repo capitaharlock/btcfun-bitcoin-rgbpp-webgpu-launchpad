@@ -23,7 +23,8 @@ test.describe("time", () => {
     await expect(page.getByText(/^Reward halves in 864 blocks/)).toBeVisible();
 
     await block(page, sim, WEEK - 144); // exactly one week after opening
-    await expect(page.getByText("halving 1", { exact: true })).toBeVisible();
+    // Once the wizard runs the header is a strip; the schedule lives in "About".
+    await expect(page.getByRole("list", { name: "Halving 1" })).toBeAttached();
     await expect(page.getByText(/Now, for a 24-bit hash/).locator("..")).toContainText("288");
 
     await block(page, sim, 2 * WEEK); // day 21
@@ -42,7 +43,8 @@ test.describe("time", () => {
     await openMiner(page, sim);
     await buyTicket(page); // anchored at the current tip, before the halving
     await block(page, sim, 10); // now past the halving
-    await expect(page.getByText("halving 1", { exact: true })).toBeVisible();
+    // Once the wizard runs the header is a strip; the schedule lives in "About".
+    await expect(page.getByRole("list", { name: "Halving 1" })).toBeAttached();
     const mint = await mineUntilMintable(page);
     // DOM text, not rendered text: labels are upper-cased by the theme.
     const label = (await mint.textContent()) ?? "";

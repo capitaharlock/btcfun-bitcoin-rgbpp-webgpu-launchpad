@@ -2,6 +2,8 @@
  * controls bar along its bottom, and the stage clearing for a game.
  * Every value is a theme token; the stage's layout is `surfaces.css`. */
 
+/* The controls bar's height; `cabinet.ts` keeps the same strip clear (BAR_CSS). */
+.arcade { --arcade-bar: 30px; }
 .arcade canvas { outline: none; }
 /* The ring shows who has the controls: a keyboard's focus always, and any
    focus while a game is on, since that is when keys go to the game. */
@@ -19,7 +21,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  height: 30px;
+  height: var(--arcade-bar);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -32,13 +34,16 @@
   color: var(--ink-faint);
   -webkit-font-smoothing: var(--face-smoothing);
   white-space: nowrap;
+  overflow: hidden;
   pointer-events: none;
 }
 .arcade-bar > * { pointer-events: auto; }
-.arcade-keys { color: var(--ink-dim); }
+/* The hint gives way before a control does: the bar never reaches past the game. */
+.arcade-keys { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-dim); }
 .arcade-note { color: var(--ink-faint); }
 
 .arcade-btn {
+  flex: none;
   appearance: none;
   height: 22px;
   padding: 0 var(--space-2);
@@ -67,21 +72,30 @@
 }
 
 /* During a game the stage is the game's: the headline and the page HUD step
-   aside (they keep their space, so nothing reflows under the player). */
+   aside, keeping their space, so the hero only grows when the screen is tall
+   enough for a larger field. */
 @media (min-width: 901px) {
   .stage-copy,
   .stage-hud { transition: opacity var(--dur-base) var(--ease), visibility var(--dur-base) var(--ease); }
   .stage-body:has(> .arcade.in-game) .stage-copy,
   .stage-body:has(> .arcade.in-game) .stage-hud { opacity: 0; visibility: hidden; }
+  /* ...and the game takes the whole hero, inside the same margins, at full size. */
+  .stage-body:has(> .arcade.in-game) > .arcade {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    align-self: stretch;
+    height: auto;
+    min-height: min(640px, calc(100svh - 180px));
+    margin: 0;
+  }
 }
 
-/* The note is the first thing to go: at a readable size the bar only has
-   room for it on a wide screen. */
+/* The note is the first thing to go: beside the headline the bar only has
+   room for the controls; an open stage on a wide screen fits it too. */
+.arcade:not(.in-game) .arcade-note { display: none; }
 @media (max-width: 1599px) {
   .arcade-note { display: none; }
 }
 @media (max-width: 900px) {
   .arcade-bar { justify-content: space-between; gap: var(--space-2); padding: 0 var(--gut); letter-spacing: 0.02em; }
-  /* The hint gives way before a control does. */
-  .arcade-keys { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }

@@ -49,8 +49,8 @@ import {
   type SceneBounds,
 } from "./scene";
 
-/** The original cabinet's playfield width, in cells: wider only makes the cannon slower to cross. */
-export const FIELD_MAX = 224;
+/** One and a half of the original cabinet's playfield, in cells: an open stage fills a wide screen, and wider still would only make the cannon slower to cross. */
+export const FIELD_MAX = 336;
 /** Rows above the formation: the score line, the mystery ship's lane and its label. */
 export const HUD_Y = 2;
 export const UFO_Y = 11;

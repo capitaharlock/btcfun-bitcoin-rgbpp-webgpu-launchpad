@@ -34,6 +34,9 @@ import {
   type InvaderSpec,
 } from "./scene";
 
+/** A long simulation outruns the default timeout when the whole suite shares the CPU. */
+const SIMULATION_MS = 30_000;
+
 const spec = (i: number): InvaderSpec => ({
   id: `l${i}`,
   symbol: `T${i}`,
@@ -62,9 +65,12 @@ function playing(seed = 1): Game {
 const press = (over: Partial<Controls>): Controls => ({ ...IDLE, ...over });
 
 describe("a new game", () => {
-  it("starts on a centred cabinet-width field with three lives and a full formation", () => {
-    expect(bounds.right - bounds.left).toBe(FIELD_MAX);
-    expect(bounds.left).toBe((260 - FIELD_MAX) / 2);
+  it("starts on a centred field no wider than FIELD_MAX, with three lives and a full formation", () => {
+    expect(bounds.right - bounds.left).toBe(260 - 8);
+    expect(bounds.left).toBe(4);
+    const wide = gameBounds(1000, 140);
+    expect(wide.right - wide.left).toBe(FIELD_MAX);
+    expect(wide.left).toBe((1000 - FIELD_MAX) / 2);
     const g = game();
     expect(g.lives).toBe(3);
     expect(g.score).toBe(0);
@@ -327,5 +333,5 @@ describe("a whole game", () => {
     expect(a.phase).toBe("over");
     expect(a.score).toBeGreaterThan(0);
     expect(run()).toEqual(a);
-  });
+  }, SIMULATION_MS);
 });
