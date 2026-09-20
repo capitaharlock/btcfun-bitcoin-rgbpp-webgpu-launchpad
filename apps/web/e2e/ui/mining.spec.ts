@@ -1,58 +1,88 @@
 /* The loop: open a miner cell, buy a ticket, mine, mint — and the rails around it. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, buyTicket, MINEABLE, mineButton, mineUntilMintable, mintOnce, openMiner, platformWallet } from "../support/flows";
+import {
+  announce,
+  block,
+  buyTicket,
+  MINEABLE,
+  mineButton,
+  mineOnCpu,
+  mineUntilMintable,
+  mintOnce,
+  openMiner,
+  platformWallet,
+  pressMine,
+} from "../support/flows";
 import { PLATFORM_SECRET } from "../support/platform";
 import { PAYMASTER_ADDRESS, PAYMASTER_FEE, PLATFORM_ADDRESS } from "../support/rgbpp";
 
 test.describe.configure({ timeout: 240_000 });
 
 test.describe("mining", () => {
-  test("a first-time miner goes from nothing to a real balance", async ({ page, app, sim, rgbpp, ux }) => {
+  test("a first-time miner with a key of their own signs every payment, and each step leaves its trace", async ({ page, app, sim, rgbpp, ux }) => {
     await platformWallet(app, sim);
     const id = await announce(page, { symbol: MINEABLE });
     await block(page, sim);
+    const wizard = page.getByRole("region", { name: `Mine ${MINEABLE}` });
 
-    // Step 1: open, paid to the paymaster in the same transaction.
-    await expect(page.getByRole("heading", { name: "Open a miner cell" })).toBeVisible();
+    // Nothing opens before MINE is pressed; then step 1 explains the one-time setup.
+    await expect(wizard).toHaveCount(0);
+    await pressMine(page);
+    await expect(wizard.getByText("One-time setup: open your miner cell, then pay the ticket.")).toBeVisible();
+
+    // Opening, paid to the paymaster in the same transaction.
     await openMiner(page, sim);
-    const opening = sim.broadcasts.at(-1)!;
+    const opening = sim.broadcasts[0];
     expect(opening.outputs.some((o) => o.address === PAYMASTER_ADDRESS && Number(o.amount) >= PAYMASTER_FEE)).toBe(true);
+    await expect(wizard.getByRole("link", { name: "Miner cell transaction on mempool.space" })).toHaveAttribute("href", new RegExp(`${opening.txid}$`));
 
-    // Step 2: the ticket pays the promoter — here, the creator's own address —
-    // and the platform its 5 %.
+    // The ticket says what it pays and waits for the click: a key of one's own never spends by itself.
+    await expect(wizard.getByText(/To mine you'll pay/)).toBeVisible();
+    await expect(wizard.getByText("Platform fee", { exact: true })).toBeVisible();
+    await page.waitForTimeout(1500);
+    expect(sim.broadcasts).toHaveLength(1);
     await buyTicket(page);
     const ticket = sim.broadcasts.at(-1)!;
     expect(ticket.outputs.filter((o) => Number(o.amount) === 9500)).toHaveLength(1);
     expect(ticket.outputs.filter((o) => o.address === PLATFORM_ADDRESS && Number(o.amount) === 500)).toHaveLength(1);
-    await expect(page.getByText(/^Ticket landing/)).toBeVisible();
 
-    // Step 3: mining starts before the ticket settles; minting waits for it.
-    await page.getByRole("group", { name: "Mining device" }).getByRole("button", { name: "CPU" }).click();
-    await page.getByRole("button", { name: "Mine", exact: true }).click();
+    // Mining started by itself on the broadcast ticket; minting waits for it to settle.
+    await expect(page.getByText(/^Ticket landing/)).toBeVisible();
+    await expect(wizard.getByRole("link", { name: "Ticket transaction on mempool.space" })).toHaveAttribute("href", new RegExp(`${ticket.txid}$`));
+    await mineOnCpu(page);
     await expect(page.getByText(/zero bits/).first()).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole("button", { name: /^Mint / })).toHaveCount(0);
-    await page.getByRole("button", { name: "Pause" }).click();
+    await wizard.getByRole("button", { name: "Pause", exact: true }).click();
     await block(page, sim);
 
-    // Step 4: settled — a qualifying hash can be minted, for exactly what it showed.
+    // Settled — a qualifying hash can be minted, for exactly what it showed.
     const mint = await mineUntilMintable(page);
     const shown = ((await mint.textContent()) ?? "").replace(/^Mint /, "");
     await mint.click();
     await expect(page.getByText(/^Minting /)).toBeVisible();
     await block(page, sim);
-    await expect(page.getByRole("button", { name: /^Buy ticket/ })).toBeVisible({ timeout: 30_000 });
+    await expect(wizard.getByRole("button", { name: "Mine again", exact: true })).toBeVisible({ timeout: 30_000 });
+    const mintTx = sim.broadcasts.at(-1)!.txid;
+    await expect(wizard.getByRole("link", { name: "Mint transaction on mempool.space" })).toHaveAttribute("href", new RegExp(`${mintTx}$`));
+    await expect(wizard.getByRole("link", { name: "Proof" })).toHaveAttribute("href", `#/proof/${mintTx}`);
 
     // The balance is on chain: the simulated queue accepted the mint under the script's rules.
     expect([...rgbpp.jobs.values()].every((j) => j.state === "completed")).toBe(true);
     // The mint is announced to the public feed, pointing at its transaction.
     const minted = rgbpp.events.find((e) => e.signed.body.kind === "mint");
-    expect(minted?.signed.body.txid).toBe(sim.broadcasts.at(-1)!.txid);
+    expect(minted?.signed.body.txid).toBe(mintTx);
     await expect(page.getByText("you hold").locator("..")).toContainText(shown.split(" ")[0]);
+
+    // Mine again: back to step 1, with a clean slate.
+    await wizard.getByRole("button", { name: "Mine again", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Sign and pay", exact: true })).toBeVisible();
+    await expect(wizard.getByRole("link", { name: "Mint transaction on mempool.space" })).toHaveCount(0);
+
     await app.goto("/holdings");
     await expect(page.getByText(shown.split(" ")[0]).first()).toBeVisible();
     expect(id).toMatch(/^demo-/);
-    ux.note("First tokens take four clicks and three blocks: open, ticket, mine, mint — each step says what it is waiting for.");
+    ux.note("With a key of one's own the loop is three signatures — open, ticket, mint — and each leaves its transaction on screen.");
   });
 
   test("minting again adds to the same balance, and the best hash survives a reload", async ({ page, app, sim, rgbpp, ux }) => {
@@ -88,54 +118,72 @@ test.describe("mining", () => {
     // The cell is shortened (13.14M); its tooltip carries the exact count.
     const count = async () => Number(((await tried.getAttribute("title")) ?? "").split(":")[0].replace(/[^0-9]/g, ""));
     const bestBits = page.getByText("best", { exact: true }).locator("..");
+    const pause = page.locator(".wz").getByRole("button", { name: "Pause", exact: true });
 
-    // Mining starts on the broadcast ticket, before it settles.
-    await page.getByRole("group", { name: "Mining device" }).getByRole("button", { name: "CPU" }).click();
-    await page.getByRole("button", { name: "Mine", exact: true }).click();
+    // Mining started by itself on the broadcast ticket, before it settles.
+    await mineOnCpu(page);
     await expect.poll(count, { timeout: 30_000 }).toBeGreaterThan(200_000);
-    await page.getByRole("button", { name: "Pause" }).click();
+    await pause.click();
     const paused = await count();
     const best = (await bestBits.textContent()) ?? "";
     expect(best).toMatch(/\d+\s*zero bits/);
     await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
+    await expect(page.getByText("Paused — Continue picks up exactly where it stopped.")).toBeVisible();
 
     await page.reload();
     await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible({ timeout: 30_000 });
     expect(await count()).toBe(paused);
     await expect(bestBits).toHaveText(best);
 
-    await mineButton(page).click();
+    // The header's big button drives the same search.
+    await page.locator(".lh").getByRole("button", { name: "Continue mining" }).click();
     await expect.poll(count, { timeout: 30_000 }).toBeGreaterThan(paused);
-    await page.getByRole("button", { name: "Pause" }).click();
+    await page.locator(".lh").getByRole("button", { name: "Pause mining" }).click();
+    await expect(mineButton(page)).toBeVisible();
     // The best hash only ever improves.
     expect(Number(((await bestBits.textContent()) ?? "").replace(/[^0-9]/g, ""))).toBeGreaterThanOrEqual(Number(best.replace(/[^0-9]/g, "")));
     ux.note("Pausing and reloading keep the count of nonces tried and the best hash; Continue resumes the same sweep.");
   });
 
   test.describe("rails", () => {
-    test("without a wallet, the page explains that tokens belong to an address", async ({ page, app, sim }) => {
+    test("without a wallet, MINE opens the wallet step in place", async ({ page, app, sim }) => {
       await app.restoreKey(PLATFORM_SECRET);
       const id = await announce(page, { symbol: MINEABLE });
       await app.logOut();
       await block(page, sim);
       await app.goto(`/launch/${id}`);
-      await expect(page.getByRole("heading", { name: "Connect a wallet to mine" })).toBeVisible();
+      await pressMine(page);
+      await expect(page.getByRole("heading", { name: "Step 0: Wallet" })).toBeVisible();
+      await expect(page.getByText("You haven't connected a wallet yet.")).toBeVisible();
+      await expect(page.locator(".wz").getByRole("button", { name: "Connect with a passkey" })).toBeVisible();
+      await expect(page.locator(".wz").getByRole("button", { name: "Use the demo wallet" })).toBeVisible();
+      await expect(page.locator(".lh").getByRole("button", { name: "Waiting for a wallet" })).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`#/launch/${id}$`));
     });
 
     test("before the opening block there is nothing to buy", async ({ page, app, sim }) => {
       await platformWallet(app, sim);
       await announce(page, { symbol: MINEABLE, opensInBlocks: 10 });
-      await expect(page.getByRole("heading", { name: "Not open yet" })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Open miner cell|Buy ticket/ })).toHaveCount(0);
+      await expect(page.locator(".lh").getByRole("button", { name: "Not open yet" })).toBeDisabled();
+      await expect(page.locator(".lh-status").getByText(/^Opens in 10 blocks/)).toBeVisible();
+      await expect(page.getByRole("button", { name: /Open miner cell|Sign and pay/ })).toHaveCount(0);
     });
 
-    test("an empty wallet is told why nothing was sent", async ({ page, app, sim }) => {
-      await app.restoreKey(PLATFORM_SECRET);
+    test("an empty wallet is told what to send where, and the step unlocks once it arrives", async ({ page, app, sim }) => {
+      const wallet = await app.restoreKey(PLATFORM_SECRET);
       await announce(page, { symbol: MINEABLE });
       await block(page, sim);
-      await page.getByRole("button", { name: "Open miner cell" }).click();
-      await expect(page.locator(".notice").filter({ hasText: /Not enough confirmed balance/ })).toBeVisible();
+      await pressMine(page);
+      await expect(page.getByText("Not enough bitcoin.")).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator(".wz-fund .copyable code")).toHaveText(wallet.address);
+      await expect(page.getByRole("button", { name: "Open miner cell", exact: true })).toBeDisabled();
+      await expect(page.locator(".lh").getByRole("button", { name: "Waiting for funds" })).toBeVisible();
       expect(sim.broadcasts).toHaveLength(0);
+
+      sim.fund(wallet.address, 200_000);
+      await block(page, sim);
+      await expect(page.getByRole("button", { name: "Open miner cell", exact: true })).toBeEnabled({ timeout: 30_000 });
+      await expect(page.getByText("Not enough bitcoin.")).toHaveCount(0);
     });
 
     test("a queue that has not settled keeps the ticket landing, not failed", async ({ page, app, sim, rgbpp }) => {
@@ -158,10 +206,10 @@ test.describe("mining", () => {
       await block(page, sim);
       await expect(page.getByRole("heading", { name: "Mining is open on DEMO" })).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText(/the mint script on CKB accepts a paid ticket and a valid hash for any launch/)).toBeVisible();
-      await expect(page.getByRole("button", { name: /Open miner cell|Buy ticket/ })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Open miner cell|Sign and pay/ })).toHaveCount(0);
       await page.getByRole("link", { name: "▶ Mine DEMO" }).click();
       await expect(page).toHaveURL(new RegExp(`#/launch/${demo}/mine$`));
-      await expect(page.getByRole("button", { name: "Open miner cell" })).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: "Open miner cell", exact: true })).toBeVisible({ timeout: 30_000 });
     });
   });
 });

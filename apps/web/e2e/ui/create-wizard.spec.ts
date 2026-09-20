@@ -8,8 +8,8 @@ test.describe("create wizard", () => {
     const wallet = await app.createBrowserKey();
     const id = await announce(page, { symbol: "QUILL", opensInBlocks: 3 });
     expect(id).toMatch(/^quill-[0-9a-f]{16}$/);
-    await expect(page.getByRole("heading", { name: "QUILL" })).toBeVisible();
-    await expect(page.getByText(/opens in 3 blk/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "QUILL", exact: true })).toBeVisible();
+    await expect(page.locator(".lh-status").getByText(/^Opens in 3 blocks/)).toBeVisible();
 
     // The token id on the page is the one in the URL.
     const tokenId = await page.getByText(/^0x[0-9a-f]{8}/).first().getAttribute("title");
@@ -46,7 +46,7 @@ test.describe("create wizard", () => {
       why: "Relays and antennas cost money every month.",
       plan: "Buy three solar relays and publish the uptime of each one.",
     });
-    await expect(page.getByRole("heading", { name: "LINKS" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "LINKS", exact: true })).toBeVisible();
     const links = page.getByRole("group", { name: "LINKS links" }).first();
     await expect(links.getByRole("link", { name: "LINKS on Website" })).toHaveAttribute("href", "https://links.example/about");
     await expect(links.getByRole("link", { name: "LINKS on X" })).toHaveAttribute("href", "https://x.com/linkscoop");

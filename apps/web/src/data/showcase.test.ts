@@ -1,8 +1,7 @@
-import type { ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
 
-import type { MinerSteps } from "../components/mining/MinerSteps";
 import type { useMarketActions } from "../hooks/useMarketActions";
+import type { useMiningLoop } from "../hooks/useMiningLoop";
 import { halvingsAt, HALVING_BLOCKS, reward, UNIT } from "../lib/standard";
 import { TERMINAL_HALVING } from "../lib/launches/progress";
 import { isSimulated, placeExample, SHOWCASE, showcase, supplyOf } from "./showcase";
@@ -60,7 +59,7 @@ describe("the showcase", () => {
     const [example] = placed;
     // Type-level: an example has no terms, token id or promoter, so it is not a Launch.
     // @ts-expect-error — the miner takes a real launch only.
-    const miner: ComponentProps<typeof MinerSteps> = { launch: example, tip: TIP };
+    const miner: Parameters<typeof useMiningLoop>[0] = example;
     type Actions = ReturnType<typeof useMarketActions>;
     // @ts-expect-error — listing takes a real launch only.
     const list: Parameters<Actions["list"]>[0] = example;

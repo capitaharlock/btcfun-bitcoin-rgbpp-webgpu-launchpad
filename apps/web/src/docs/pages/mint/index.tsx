@@ -36,10 +36,20 @@ export default function MintPage() {
           </li>
         </ol>
         <p>
-          On a launch page the step you are on is decided by the chain, not by the page: reload it, open it in another tab
-          or mint elsewhere, and it shows the same step. Each step is one line and one button; what it costs and why is
-          folded under <em>More</em>. The <strong>Mine</strong> button on a launch's box in the catalogue opens its page on
-          this panel.
+          On a launch page these steps are a wizard under the token's header. The big <strong>Mine</strong> button in the
+          header starts it; without a wallet, the first step asks for one in place — your own, behind a passkey, or the
+          shared demo wallet — and the page never leaves the token. Each step is one line saying what is happening now and
+          what comes next, and each finished step keeps its trace: the Bitcoin transaction, a link to it on
+          mempool.space, and whether it is still landing or has settled. The mint's trace also links to its proof.
+        </p>
+        <p>
+          The step you are on is decided by the chain, not by the page: reload it, open it in another tab or mint
+          elsewhere, and it shows the same step. With a wallet of your own every payment waits for your click on{" "}
+          <strong>Open miner cell</strong> or <strong>Sign and pay</strong>, next to exactly what it pays. The demo wallet's
+          key is public and shared, so once you press <strong>Mine</strong> it opens the cell and pays the ticket by itself,
+          and mining starts the moment the ticket is sent. If the wallet lacks the bitcoin a step needs, the step shows the
+          full address and faucets, and carries on once the coins confirm. The <strong>Mine</strong> button on a launch's box
+          in the catalogue counts as the press and opens the page on the wizard.
         </p>
         <p>
           On this testnet showcase the site offers its miner on one launch, the platform's DEMO, so everyone's tickets and

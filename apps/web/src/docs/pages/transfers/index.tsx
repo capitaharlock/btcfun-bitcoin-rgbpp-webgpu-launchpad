@@ -134,8 +134,9 @@ export default function TransfersPage() {
               less the CKB fee.
             </li>
             <li>
-              Funding coins are only UTXOs the RGB++ service reports as free of cells: spending a UTXO that carries cells,
-              without moving them, would strand them.
+              Funding coins are only confirmed UTXOs the RGB++ service reports as free of cells, and never a {seal}-sat
+              output of an operation still landing, which the service cannot yet tell from a plain coin: spending a UTXO
+              that carries cells, without moving them, would strand them.
             </li>
             <li>
               The mint script is not involved: without a miner cell in the transaction, the xUDT's owner mode is off, so the

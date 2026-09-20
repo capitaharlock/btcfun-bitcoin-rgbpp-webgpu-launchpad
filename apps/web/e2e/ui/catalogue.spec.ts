@@ -71,7 +71,7 @@ test.describe("catalogue", () => {
     expect(await picture(first).evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
     await first.getByRole("link", { name: "DEMO", exact: true }).click();
     await expect(page).toHaveURL(/#\/launch\/demo-[0-9a-f]{16}$/);
-    await expect(picture(page.locator(".marquee"))).toBeVisible();
+    await expect(picture(page.locator(".lh"))).toBeVisible();
     await expect(page.getByText("Image chosen by the creator")).toBeVisible();
     await app.goto("/market");
     await page.getByLabel("Token").first().selectOption({ label: "DEMO · DEMO collective" });

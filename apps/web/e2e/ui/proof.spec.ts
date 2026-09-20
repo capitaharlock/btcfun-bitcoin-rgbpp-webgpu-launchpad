@@ -1,7 +1,7 @@
 /* Anyone can check a mint from the two chains. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, MINEABLE, mintOnce, openMiner, platformWallet } from "../support/flows";
+import { announce, block, buyTicket, MINEABLE, mintOnce, openMiner, platformWallet } from "../support/flows";
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -29,7 +29,7 @@ test.describe("proof", () => {
     await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     await openMiner(page, sim);
-    await page.getByRole("button", { name: /^Buy ticket/ }).click();
+    await buyTicket(page);
     await expect(page.getByText(/^Ticket landing/)).toBeVisible();
     const ticketTx = sim.broadcasts.at(-1)!.txid;
     await block(page, sim);

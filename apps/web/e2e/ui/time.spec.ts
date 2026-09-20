@@ -20,7 +20,7 @@ test.describe("time", () => {
 
     await block(page, sim, 144); // one day
     await expect(page.getByText("halving 0", { exact: true })).toBeVisible();
-    await expect(page.getByText(/^864 blk/).first()).toBeVisible();
+    await expect(page.getByText(/^Reward halves in 864 blocks/)).toBeVisible();
 
     await block(page, sim, WEEK - 144); // exactly one week after opening
     await expect(page.getByText("halving 1", { exact: true })).toBeVisible();
