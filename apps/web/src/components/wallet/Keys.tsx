@@ -57,14 +57,27 @@ const CONSEQUENCE: Record<VaultKind, string> = {
   demo: "This browser stops using the demo wallet. Its key is built into the app, so you can open it again any time — and so can anyone else.",
 };
 
+/** The two ways out of a wallet: to another one, or to none. Both end on this
+ *  page without a wallet, which is the chooser — so switching needs no step
+ *  of its own after the log out. */
 function LogOut({ vault }: { vault: Vault }) {
-  const [confirming, setConfirming] = useState(false);
+  const [leaving, setLeaving] = useState<"logout" | "switch" | null>(null);
   return (
     <>
-      <button className="btn ghost" onClick={() => setConfirming(true)}>
-        Log out
-      </button>
-      <LogOutDialog vault={vault} open={confirming} onClose={() => setConfirming(false)} />
+      <div className="row wrapped">
+        <button className="btn ghost" onClick={() => setLeaving("switch")}>
+          Switch wallet
+        </button>
+        <button className="btn ghost" onClick={() => setLeaving("logout")}>
+          Log out
+        </button>
+      </div>
+      <LogOutDialog
+        vault={vault}
+        open={leaving !== null}
+        switching={leaving === "switch"}
+        onClose={() => setLeaving(null)}
+      />
     </>
   );
 }

@@ -9,7 +9,7 @@ import { PixelBursts } from "./ui/PixelBursts";
 import { BitcoinMark } from "./ui/PixelIcon";
 import { Chip } from "./ui/primitives";
 import { DemoBadge } from "./components/wallet/DemoBadge";
-import { WalletPill } from "./components/wallet/WalletMenu";
+import { WalletPill } from "./components/wallet/WalletPill";
 import type { WalletTab } from "./views/Wallet";
 
 // Sections a visitor may never open load on demand; the front page and a

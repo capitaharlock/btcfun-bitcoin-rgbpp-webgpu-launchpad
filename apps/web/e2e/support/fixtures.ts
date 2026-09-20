@@ -101,8 +101,7 @@ export const test = base.extend<{ sim: ChainSim; rgbpp: RgbppSim; app: App; ux: 
         const dialog = page.getByRole("dialog", { name: "Connect a wallet" });
         await dialog.getByRole("button", { name: "Use the demo wallet" }).click();
         await expect(dialog).toBeHidden();
-        await page.getByRole("banner").getByRole("button", { name: /wallet/i }).click();
-        await page.getByRole("banner").getByRole("menuitem", { name: "Open wallet" }).click();
+        await page.getByRole("banner").getByRole("link", { name: /wallet/i }).click();
         await expect(page.locator(".copyable code").first()).toHaveText(/^tb1q/);
         return readWallet(page);
       },

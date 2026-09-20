@@ -14,7 +14,7 @@ test.describe("wallet", () => {
     await expect(page.getByText("balance", { exact: true }).locator("..")).toContainText("0");
     // The header pill now shows the connected wallet instead of "Connect wallet".
     await expect(page.getByRole("button", { name: "Connect wallet" })).toHaveCount(0);
-    await expect(page.getByRole("banner").getByRole("button", { name: /^Wallet/ })).toBeVisible();
+    await expect(page.getByRole("banner").getByRole("link", { name: /^Wallet/ })).toBeVisible();
   });
 
   test("funds arriving on chain show up without a reload", async ({ page, app, sim }) => {
@@ -153,98 +153,40 @@ test.describe("wallet tabs", () => {
     await app.goto("/");
     const banner = page.getByRole("banner");
     await expect(banner.getByRole("button", { name: "Holdings" })).toHaveCount(0);
-    await banner.getByRole("button", { name: /^Wallet/ }).click();
-    await banner.getByRole("menuitem", { name: "Open wallet" }).click();
+    // One click: the wallet button is the way to the wallet page, not a menu.
+    await banner.getByRole("link", { name: /^Wallet/ }).click();
     await expect(page).toHaveURL(/#\/wallet$/);
     await expect(banner.getByRole("menu")).toHaveCount(0);
   });
 });
 
-test.describe("wallet menu", () => {
-  test("opens from the top bar with the whole address, copies it, and is driven by the keyboard", async ({ page, app, context }) => {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await app.connectDemoWallet();
-    await app.goto("/");
-    const banner = page.getByRole("banner");
-    const pill = banner.getByRole("button", { name: /^Demo wallet/ });
-    await expect(pill).toHaveAttribute("aria-haspopup", "menu");
-    await expect(pill).toHaveAttribute("aria-expanded", "false");
-
-    await pill.click();
-    await expect(pill).toHaveAttribute("aria-expanded", "true");
-    const menu = banner.getByRole("menu", { name: "Demo wallet" });
-    await expect(menu.locator("..").getByText(DEMO_ADDRESS, { exact: true })).toBeVisible();
-    const items = menu.getByRole("menuitem");
-    await expect(items).toHaveText(["Copy address", "Open wallet", "Switch wallet…", "Log out"]);
-    await expect(items.first()).toBeFocused();
-
-    await page.keyboard.press("ArrowUp");
-    await expect(menu.getByRole("menuitem", { name: "Log out" })).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(items.first()).toBeFocused();
-    await page.keyboard.press("End");
-    await expect(menu.getByRole("menuitem", { name: "Log out" })).toBeFocused();
-    await page.keyboard.press("Home");
-    await page.keyboard.press("Enter");
-    await expect(menu.getByRole("menuitem", { name: "Copied" })).toBeVisible();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(DEMO_ADDRESS);
-
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-    await expect(pill).toBeFocused();
-
-    // A press elsewhere closes it too.
-    await page.keyboard.press("ArrowDown");
-    await expect(menu).toBeVisible();
-    await page.locator("main").click({ position: { x: 5, y: 5 } });
-    await expect(menu).toHaveCount(0);
-  });
-
-  test("logs out from the top bar, after saying what that costs", async ({ page, app }) => {
-    await app.createBrowserKey();
-    const banner = page.getByRole("banner");
-    await banner.getByRole("button", { name: /^Wallet/ }).click();
-    await banner.getByRole("menuitem", { name: "Log out" }).click();
-    const dialog = page.getByRole("dialog", { name: "Log out of this wallet?" });
-    await expect(dialog).toContainText("loses the wallet");
-    await expect(dialog.getByRole("button", { name: "Reveal the wallet secret" })).toBeVisible();
-    await dialog.getByRole("button", { name: "Log out" }).click();
-    await expect(banner.getByRole("button", { name: "Connect wallet" })).toBeVisible();
-    expect(await page.evaluate(() => localStorage.getItem("btcfun:vault:v1"))).toBeNull();
-  });
-
-  test("switches from a browser key to the demo wallet", async ({ page, app }) => {
+test.describe("switching wallets", () => {
+  test("switches from a browser key to the demo wallet on the wallet page", async ({ page, app }) => {
     const before = await app.createBrowserKey();
-    const banner = page.getByRole("banner");
-    await banner.getByRole("button", { name: /^Wallet/ }).click();
-    await banner.getByRole("menuitem", { name: "Switch wallet…" }).click();
+    await app.goto("/wallet");
+    await page.getByRole("button", { name: "Switch wallet" }).click();
 
     // The same warning as a log out: switching away from a browser key loses it.
     const leaving = page.getByRole("dialog", { name: "Switch to another wallet?" });
     await expect(leaving).toContainText("loses the wallet");
     await leaving.getByRole("button", { name: "Log out and switch" }).click();
 
-    const chooser = page.getByRole("dialog", { name: "Connect a wallet" });
-    await expect(chooser).toBeVisible();
-    await chooser.getByRole("button", { name: "Use the demo wallet" }).click();
-    await expect(chooser).toBeHidden();
-    await expect(banner.getByRole("button", { name: /^Demo wallet/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a wallet" })).toBeVisible();
+    await page.getByRole("button", { name: "Use the demo wallet" }).first().click();
+    const banner = page.getByRole("banner");
+    await expect(banner.getByRole("link", { name: /^Demo wallet/ })).toBeVisible();
     await expect(banner.getByText("Demo wallet · shared")).toBeVisible();
     expect(DEMO_ADDRESS).not.toBe(before.address);
   });
 
   test("cancelling a switch keeps the wallet", async ({ page, app }) => {
     await app.connectDemoWallet();
-    const banner = page.getByRole("banner");
-    const pill = banner.getByRole("button", { name: /^Demo wallet/ });
-    await pill.click();
-    await banner.getByRole("menuitem", { name: "Switch wallet…" }).click();
+    await page.getByRole("button", { name: "Switch wallet" }).click();
     const leaving = page.getByRole("dialog", { name: "Switch to another wallet?" });
     await expect(leaving).toContainText("open it again any time");
     await leaving.getByRole("button", { name: "Cancel" }).click();
     await expect(leaving).toBeHidden();
-    await expect(pill).toBeVisible();
-    await expect(page.getByRole("dialog", { name: "Connect a wallet" })).toBeHidden();
+    await expect(page.getByRole("banner").getByRole("link", { name: /^Demo wallet/ })).toBeVisible();
   });
 });
 
