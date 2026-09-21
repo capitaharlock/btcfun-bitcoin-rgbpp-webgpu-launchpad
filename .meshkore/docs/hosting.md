@@ -70,8 +70,12 @@ npm install
 wrangler d1 create btcfun-activity        # once; put the id in wrangler.toml
 npm run db:remote                         # apply worker/schema.sql
 
-npm run deploy                            # build, typecheck, upload
+npm run deploy                            # docs:check, build, typecheck, upload
 ```
+
+The public URL is https://btcfun.rjj.workers.dev. It is stable because the
+Worker's name (`btcfun`) is fixed in `wrangler.toml`. A custom domain can be
+added later as a Worker route without changing anything else.
 
 Local development, in two modes:
 
@@ -87,7 +91,6 @@ no index at all — which is both the offline story and the honest one.
 
 ## Still open
 
-- Custom domain and whether the demo stays on `*.workers.dev`.
 - Whether the offer book moves into the index alongside activity. It would make
   offers discoverable rather than hand-delivered, at the cost of the operator
   being able to omit one. That trade is the same one §5.1 describes and should
