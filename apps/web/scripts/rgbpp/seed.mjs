@@ -4,7 +4,7 @@
  *
  *   announce   sign the official launches and publish them to the index
  *   history    publish the live run's launch and its mint, transfer and sale
- *   advance    one pass over every launch: open, ticket, mine and mint as its
+ *   advance    one pass over every launch: ticket, arm, mine and mint as its
  *              cells allow, announcing each mint; `--loop` repeats until every
  *              launch has minted ROUNDS times (default 2)
  *   refresh    re-sign the official launches with their links, story and image
@@ -12,14 +12,12 @@
  *   transfers  send a fifth of each settled balance to the shared demo wallet,
  *              announcing each transfer
  *   fund       pay FUND sats (default 60,000) from Alice to the demo wallet
- *   democells  open COUNT (default 3) idle DEMO miner cells in the demo wallet,
- *              so a visitor's first ticket needs no one-time setup
  *   gather     move Bob's free coins to Alice, who funds the runs
  *   status     where every launch stands
  *
- * Alice creates and promotes every official launch, so each ticket's 9,500
- * sats come back to the wallet that buys it: a round costs the platform fee,
- * the paymaster when a cell is new, and Bitcoin fees. Everything here goes
+ * Alice creates and promotes every official launch, so each ticket's promoter
+ * share comes back to the wallet that buys it: a round costs the platform's
+ * share, the paymaster when a cell is new, and Bitcoin fees. Everything here goes
  * through the app's own code and the real services; the index only hears about
  * what the chain already has. INDEX sets where events go (default: the
  * deployed site).
@@ -27,7 +25,7 @@
 
 import { fileURLToPath } from "node:url";
 import {
-  activity, alice, bid, bob, demo, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
+  activity, alice, bid, bob, creatingTx, demo, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
   sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
 } from "./kit.mjs";
 
@@ -197,9 +195,14 @@ const steps = {
       const miner = miners[0];
       try {
         if (!miner) {
-          state.pending[id] = await submit(`${id} open`, ops.planOpen(cfg, terms, await rgbpp.paymaster()), alice, await funding());
+          const plan = ops.planTicket(cfg, terms, { idle: null, paymaster: await rgbpp.paymaster(), tip });
+          state.pending[id] = await submit(`${id} ticket`, plan, alice, await funding());
+        } else if (miner.data?.state === "paid") {
+          const plan = ops.planArm(cfg, terms, miner, await creatingTx(miner.seal.txid), tip);
+          state.pending[id] = await submit(`${id} arm`, plan, alice, await funding());
         } else if (miner.data?.state === "idle") {
-          state.pending[id] = await submit(`${id} ticket`, ops.planTicket(cfg, terms, miner, tip), alice, await funding());
+          const plan = ops.planTicket(cfg, terms, { idle: miner, paymaster: null, tip });
+          state.pending[id] = await submit(`${id} ticket`, plan, alice, await funding());
         } else if (miner.data?.state === "armed") {
           // Varied targets make the catalogue look like people mining, and
           // stay under a minute of CPU each.
@@ -216,7 +219,6 @@ const steps = {
             held: tokens[0] ?? null,
             nonce: BigInt(best.nonce),
             reward: atoms,
-            paymaster: tokens[0] ? null : await rgbpp.paymaster(),
           });
           const step = await submit(`${id} mint ${best.clz} bits`, plan, alice, await funding());
           state.pending[id] = step;
@@ -302,19 +304,6 @@ const steps = {
     const signed = payment.buildPayment(alice, { to: demo.address, amountSats, feeRate, utxos: coins }, network.ACTIVE);
     const txid = await provider.broadcast(signed.hex, network.ACTIVE);
     console.log(`funded the demo wallet with ${amountSats} sats: ${network.txUrl(txid, network.ACTIVE)}`);
-  },
-
-  async democells() {
-    const featured = state.launches.find((c) => c.symbol === "DEMO");
-    if (!featured) throw new Error("announce the DEMO launch first");
-    const terms = launchTerms(featured);
-    const count = Number(process.env.COUNT ?? 3);
-    for (let i = 0; i < count; i++) {
-      const coins = (await provider.getUtxos(demo.address, network.ACTIVE)).filter((u) => u.value > 2 * ops.SEAL_SATS);
-      await submit(`demo open ${i + 1}/${count}`, ops.planOpen(cfg, terms, await rgbpp.paymaster()), demo, coins);
-      // The next opening funds itself from this one's change.
-      await new Promise((r) => setTimeout(r, 8_000));
-    }
   },
 
   async gather() {

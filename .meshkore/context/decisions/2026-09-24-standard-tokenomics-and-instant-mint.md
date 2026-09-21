@@ -4,6 +4,10 @@ updated: 2026-09-24
 status: stable
 ---
 
+> The ticket price and split here are superseded by
+> `2026-09-25-one-payment-per-round` (2026-09-25). The reward, the halving and
+> the instant per-ticket mint stand.
+
 # Decision
 
 Every btc.fun token follows the same economic rules. A creator chooses the

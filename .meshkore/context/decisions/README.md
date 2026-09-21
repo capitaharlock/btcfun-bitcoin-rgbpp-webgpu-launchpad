@@ -1,6 +1,6 @@
 ---
 title: Decisions — index
-updated: 2026-09-24
+updated: 2026-09-25
 status: draft
 ---
 
@@ -11,8 +11,9 @@ validation. Superseded records preserve history and must not guide implementatio
 
 | Record | Status | Effect |
 |---|---|---|
-| [Standard tokenomics and instant mint](2026-09-24-standard-tokenomics-and-instant-mint.md) | Adopted | One rule set for every launch; per-ticket mint `10^8·clz²/2^k`; weekly halving; no cap, no reserve; ticket income to the promoter |
-| [Platform fee per ticket](2026-09-24-platform-fee-per-ticket.md) | Adopted | Ticket 10,000 sats: 9,500 to the promoter, 500 (5 %) to a platform script fixed in the mint script; both enforced on chain |
+| [One payment per round](2026-09-25-one-payment-per-round.md) | Adopted | Ticket 14,983 sats, always: 7,000 paymaster when the round creates its cell, 11 % of the rest to the platform, the remainder to the promoter; a created cell is `paid` and armed by a network-fee-only signature; a mint pays only the network |
+| [Standard tokenomics and instant mint](2026-09-24-standard-tokenomics-and-instant-mint.md) | Adopted, price superseded | One rule set for every launch; per-ticket mint `10^8·clz²/2^k`; weekly halving; no cap, no reserve. Its ticket price is replaced by the record above |
+| [Platform fee per ticket](2026-09-24-platform-fee-per-ticket.md) | Superseded | The 10,000-sat ticket split 9,500 / 500; replaced by one payment per round |
 | [Peer-to-peer order book](2026-09-24-peer-to-peer-order-book.md) | Adopted | The market is bids and asks between users; no pool, AMM, market maker or custody; a bid is a signed intention the bidder completes |
 | [Review and validation gates](2026-09-23-review-and-validation-gates.md) | Partly superseded | Evidence gates and claim discipline stand; the 21M ceiling, epoch economics and reserve are replaced by the standard tokenomics |
 | [Testnet first](2026-09-22-testnet-first-no-mainnet.md) | Still applicable | Phase 4 review gate covers all real-fund flows |

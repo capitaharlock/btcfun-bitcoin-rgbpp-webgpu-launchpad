@@ -14,7 +14,7 @@
 import { useMemo, useState } from "react";
 
 import { atoms, group } from "../lib/format";
-import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, terminalHalving, TICKET_SATS } from "../lib/standard";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, NEW_CELL, REUSE, reward, terminalHalving, TICKET_SATS } from "../lib/standard";
 import { RewardChart } from "../ui/RewardChart";
 import { Field, KV, More, PageHead, Panel, Stat } from "../ui/primitives";
 
@@ -41,7 +41,7 @@ export function Lab() {
       Array.from({ length: WEEKS }, (_, k) => {
         const sold = Math.round(tickets * (1 - decay / 100) ** k);
         const perTicket = mintable ? reward(clz, 0, k * HALVING_BLOCKS) : 0n;
-        return { week: k + 1, sold, perTicket, minted: perTicket * BigInt(sold), revenue: sold * PROMOTER_SATS };
+        return { week: k + 1, sold, perTicket, minted: perTicket * BigInt(sold), revenue: sold * REUSE.promoter };
       }),
     [tickets, decay, clz, mintable],
   );
@@ -64,7 +64,7 @@ export function Lab() {
         <Panel eyebrow="rules" title="What every launch shares">
           <KV
             rows={[
-              ["Ticket", `${group(TICKET_SATS)} sats: ${group(PROMOTER_SATS)} to the promoter, ${group(PLATFORM_FEE_SATS)} to the platform`],
+              ["Ticket", `${group(TICKET_SATS)} sats: ${group(REUSE.promoter)} to the promoter and ${group(REUSE.platform)} to the platform; ${group(NEW_CELL.promoter)} and ${group(NEW_CELL.platform)} when ${group(NEW_CELL.paymaster)} pay for a new miner cell`],
               ["Challenge", "the ticket's own Bitcoin output"],
               ["Reward", "1 token × clz² for a hash with clz leading zero bits"],
               ["Minimum", `${MIN_CLZ} bits`],

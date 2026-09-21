@@ -92,7 +92,8 @@ export default function VerificationPage() {
             </li>
             <li>
               Work: the challenge is <code>sha256(ticket txid ‖ vout)</code> of the output the consumed miner cell was sealed
-              to; the hash is <code>sha256d(challenge ‖ nonce)</code> with the nonce the new miner cell carries.
+              to; the hash is <code>sha256d(challenge ‖ nonce)</code> with the nonce the new miner cell carries — or, for a first mint, which turns the miner cell into the token
+              cell, the eight-byte nonce in the first witness past the inputs.
             </li>
             <li>
               Amount: the sum of this launch's xUDT in outputs minus inputs must equal the reward for that many bits at the

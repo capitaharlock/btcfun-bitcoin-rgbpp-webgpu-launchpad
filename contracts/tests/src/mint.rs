@@ -2,10 +2,15 @@
 
 use crate::env::*;
 use ckb_testtool::ckb_types::packed::Script;
+use ckb_testtool::ckb_types::bytes::Bytes;
 use mint_core::{
-    reward, ticket_challenge, work_clz, MinerCell, MinerState, ANCHOR_GRACE_BLOCKS, HALVING_BLOCKS, MIN_CLZ,
-    PLATFORM_FEE_SATS, PLATFORM_SCRIPT, PROMOTER_SATS,
+    reward, ticket_challenge, work_clz, MinerCell, MinerState, ANCHOR_GRACE_BLOCKS, HALVING_BLOCKS, MIN_CLZ, NEW_CELL,
+    PLATFORM_SCRIPT, REUSE,
 };
+
+// A re-armed cell's ticket, which most tests buy.
+const PROMOTER_SATS: u64 = REUSE.promoter;
+const PLATFORM_FEE_SATS: u64 = REUSE.platform;
 
 // The script's error codes (`mint/src/main.rs`).
 const TOO_MANY_MINER_CELLS: i8 = 4;
@@ -17,9 +22,15 @@ const BALANCE_INCREASED: i8 = 12;
 const ARMED_WITHOUT_TICKET: i8 = 13;
 const BAD_ANCHOR: i8 = 14;
 const MINT_MUST_DISARM: i8 = 15;
+const PAID_BESIDE_RGBPP_INPUT: i8 = 18;
+const PAID_CANNOT_MOVE: i8 = 19;
+const BAD_BTCFUN_WITNESS: i8 = 20;
+const BAD_PAID_SEAL: i8 = 21;
+const PAID_ARMED_BESIDE_OTHERS: i8 = 22;
 
 const IDLE: MinerState = MinerState::Idle;
 const ARMED: MinerState = MinerState::Armed;
+const PAID: MinerState = MinerState::Paid;
 
 fn cell(state: MinerState, nonce: u64) -> Vec<u8> {
     anchored(state, nonce, H0)
@@ -435,13 +446,24 @@ fn one_ticket_arms_one_cell() {
 
 #[test]
 fn closing_a_miner_cell_cannot_mint() {
+    // Armed: a balance appearing is a dissolving mint, which needs its nonce.
     let mut l = Launch::new();
     let mut op = Op::new();
     op.inputs.push(l.miner_input(ARMED));
     op.outputs.push(l.udt_out(1));
     op.btc_outputs.push((546, p2wpkh(0x01)));
     let (tx, _) = op.build(&l.env);
-    expect_code(l.env.verify(&tx), BALANCE_INCREASED);
+    expect_code(l.env.verify(&tx), BAD_BTCFUN_WITNESS);
+    // Idle or paid: nothing may be minted at all.
+    for state in [IDLE, PAID] {
+        let mut l = Launch::new();
+        let mut op = Op::new();
+        op.inputs.push(l.miner_input(state));
+        op.outputs.push(l.udt_out(1));
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        let (tx, _) = op.build(&l.env);
+        expect_code(l.env.verify(&tx), BALANCE_INCREASED);
+    }
 }
 
 #[test]
@@ -536,4 +558,209 @@ fn one_payment_buys_one_ticket_even_across_launches() {
     op.btc_outputs.extend(l.ticket());
     let (tx, _) = op.build(&l.env);
     l.env.verify(&tx).unwrap();
+}
+
+// ─── A ticket that creates its miner cell ────────────────────────────────
+
+/// The new-cell ticket's two shares (the paymaster's is not the script's business).
+fn new_cell_ticket(l: &Launch) -> Vec<(i64, Vec<u8>)> {
+    vec![(NEW_CELL.promoter as i64, l.env.promoter.clone()), (NEW_CELL.platform as i64, PLATFORM_SCRIPT.to_vec())]
+}
+
+impl Launch {
+    /// A paid cell sealed to output `vout` of `creating`.
+    fn paid_input(&mut self, creating: [u8; 32], vout: u32) -> (ckb_testtool::ckb_types::packed::CellInput, Option<([u8; 32], u32)>) {
+        let lock = self.env.rgbpp_lock(creating, vout);
+        let input = self.env.live(lock, Some(self.mint.clone()), cell(PAID, 0));
+        (input, Some((creating, vout)))
+    }
+
+    /// Arm a paid cell created by a transaction paying `payments`, carrying `witness`.
+    fn arm_paid(&mut self, payments: Vec<(i64, Vec<u8>)>, witness: impl FnOnce(Bytes) -> Option<Bytes>) -> Op {
+        let (raw, id) = creating_tx(payments);
+        let mut op = Op::new();
+        op.inputs.push(self.paid_input(id, 1));
+        op.outputs.push(self.miner_out(ARMED));
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        op.btcfun_witness = witness(raw);
+        op
+    }
+}
+
+#[test]
+fn anyone_can_open_a_paid_cell_but_not_beside_an_rgbpp_input() {
+    let mut l = Launch::new();
+    let funding = l.env.live(l.env.always_lock.clone(), None, vec![]);
+    let mut op = Op::new();
+    op.inputs.push((funding, None));
+    op.outputs.push(Out { seal: None, lock: Some(l.env.rgbpp_lock([0x33; 32], 1)), type_: Some(l.mint.clone()), data: cell(PAID, 0) });
+    let (tx, _) = op.build(&l.env);
+    l.env.verify(&tx).unwrap();
+
+    // The same Bitcoin transaction also spending sealed cells — here re-arming
+    // one — could lend that ticket's payment to the paid cell later.
+    let mut l = Launch::new();
+    let other_mint = l.env.mint_type(H0 + 1, &l.env.promoter.clone());
+    let mut op = Op::new();
+    op.inputs.push(l.miner_input(IDLE));
+    op.outputs.push(l.miner_out(ARMED));
+    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(other_mint), data: cell(PAID, 0) });
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    op.btc_outputs.extend(l.ticket());
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), PAID_BESIDE_RGBPP_INPUT);
+}
+
+#[test]
+fn a_paid_cell_is_armed_by_the_payment_that_created_it() {
+    let mut l = Launch::new();
+    let payments = new_cell_ticket(&l);
+    let (tx, _) = l.arm_paid(payments, Some).build(&l.env);
+    let cycles = l.env.verify(&tx).unwrap();
+    println!("arm a paid cell: {cycles} cycles");
+}
+
+#[test]
+fn an_underpaid_creation_arms_nothing() {
+    let promoter = Launch::new().env.promoter;
+    let platform = PLATFORM_SCRIPT.to_vec();
+    let (share, fee) = (NEW_CELL.promoter as i64, NEW_CELL.platform as i64);
+    for payments in [
+        vec![],
+        vec![(share - 1, promoter.clone()), (fee, platform.clone())],
+        vec![(share, promoter.clone()), (fee - 1, platform.clone())],
+        vec![(share, p2wpkh(0xbb)), (fee, platform.clone())],
+    ] {
+        let mut l = Launch::new();
+        let (tx, _) = l.arm_paid(payments, Some).build(&l.env);
+        expect_code(l.env.verify(&tx), TICKET_UNPAID);
+    }
+}
+
+#[test]
+fn the_creating_transaction_must_be_the_one_the_seal_names() {
+    // No witness at all.
+    let mut l = Launch::new();
+    let payments = new_cell_ticket(&l);
+    let (tx, _) = l.arm_paid(payments, |_| None).build(&l.env);
+    expect_code(l.env.verify(&tx), BAD_BTCFUN_WITNESS);
+
+    // Another transaction that pays in full, but is not the one the cell is sealed to.
+    let mut l = Launch::new();
+    let payments = new_cell_ticket(&l);
+    let (other, _) = creating_tx([payments.clone(), vec![(1, p2wpkh(0x02))]].concat());
+    let (tx, _) = l.arm_paid(payments, |_| Some(other)).build(&l.env);
+    expect_code(l.env.verify(&tx), BAD_PAID_SEAL);
+
+    // The right transaction, but the cell sealed to an output a ticket does not seal.
+    let mut l = Launch::new();
+    let (raw, id) = creating_tx(new_cell_ticket(&l));
+    let mut op = Op::new();
+    op.inputs.push(l.paid_input(id, 2));
+    op.outputs.push(l.miner_out(ARMED));
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    op.btcfun_witness = Some(raw);
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), BAD_PAID_SEAL);
+}
+
+#[test]
+fn a_paid_cell_is_anchored_like_any_ticket() {
+    let confirmed = H0 + 500;
+    for (anchor, valid) in [(confirmed, true), (confirmed - ANCHOR_GRACE_BLOCKS - 1, false)] {
+        let mut l = Launch::new();
+        let payments = new_cell_ticket(&l);
+        let mut op = l.arm_paid(payments, Some);
+        op.outputs[0] = l.miner_out_anchored(ARMED, anchor);
+        op.height = confirmed;
+        let (tx, _) = op.build(&l.env);
+        if valid { l.env.verify(&tx).unwrap(); } else { expect_code(l.env.verify(&tx), BAD_ANCHOR); }
+    }
+}
+
+#[test]
+fn a_paid_cell_cannot_move_and_nothing_becomes_paid() {
+    for next in [PAID, IDLE] {
+        let mut l = Launch::new();
+        let payments = new_cell_ticket(&l);
+        let mut op = l.arm_paid(payments, Some);
+        op.outputs[0] = l.miner_out(next);
+        let (tx, _) = op.build(&l.env);
+        expect_code(l.env.verify(&tx), PAID_CANNOT_MOVE);
+    }
+    let mut l = Launch::new();
+    let mut op = Op::new();
+    op.inputs.push(l.miner_input(IDLE));
+    op.outputs.push(l.miner_out(PAID));
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), 3); // BadMinerState
+}
+
+#[test]
+fn a_paid_cell_is_armed_alone() {
+    // An armed cell of another launch minting in the same transaction: its
+    // ticket's payment must not be the one the paid cell claims.
+    let mut l = Launch::new();
+    let other_mint = l.env.mint_type(H0 + 1, &l.env.promoter.clone());
+    let payments = new_cell_ticket(&l);
+    let mut op = l.arm_paid(payments, Some);
+    // Sealed to the same output as the paid cell: the case where it would pay.
+    let seal = op.inputs[0].1.unwrap();
+    let lock = l.env.rgbpp_lock(seal.0, seal.1);
+    op.inputs.push((l.env.live(lock, Some(other_mint.clone()), cell(ARMED, 0)), Some(seal)));
+    op.outputs.push(Out { seal: Some(2), lock: None, type_: Some(other_mint), data: cell(IDLE, 0) });
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), PAID_ARMED_BESIDE_OTHERS);
+}
+
+#[test]
+fn a_new_cells_payment_does_not_rearm_an_idle_cell() {
+    let mut l = Launch::new();
+    let mut op = Op::new();
+    op.inputs.push(l.miner_input(IDLE));
+    op.outputs.push(l.miner_out(ARMED));
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    op.btc_outputs.extend(new_cell_ticket(&l));
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), TICKET_UNPAID);
+}
+
+// ─── A first mint dissolves the miner cell ───────────────────────────────
+
+#[test]
+fn a_first_mint_turns_the_miner_cell_into_the_token_cell() {
+    let (nonce, clz) = nonce_for(MIN_CLZ, false);
+    let atoms = u128::from(reward(clz, H0, H0).unwrap());
+    let mut l = Launch::new();
+    let mut op = Op::new();
+    op.inputs.push(l.miner_input(ARMED));
+    op.outputs.push(l.udt_out(atoms));
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    op.btcfun_witness = Some(Bytes::from(nonce.to_le_bytes().to_vec()));
+    let (tx, _) = op.build(&l.env);
+    let cycles = l.env.verify(&tx).unwrap();
+    println!("dissolving mint: {cycles} cycles");
+}
+
+#[test]
+fn a_dissolving_mint_is_checked_like_any_mint() {
+    let (strong, clz) = nonce_for(MIN_CLZ, false);
+    let (weak, _) = nonce_for(MIN_CLZ, true);
+    let atoms = u128::from(reward(clz, H0, H0).unwrap());
+    for (nonce, claimed, code) in [
+        (weak.to_le_bytes().to_vec(), atoms, WORK_TOO_WEAK),
+        (strong.to_le_bytes().to_vec(), atoms + 1, WRONG_AMOUNT),
+        (strong.to_le_bytes()[..7].to_vec(), atoms, BAD_BTCFUN_WITNESS),
+    ] {
+        let mut l = Launch::new();
+        let mut op = Op::new();
+        op.inputs.push(l.miner_input(ARMED));
+        op.outputs.push(l.udt_out(claimed));
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        op.btcfun_witness = Some(Bytes::from(nonce));
+        let (tx, _) = op.build(&l.env);
+        expect_code(l.env.verify(&tx), code);
+    }
 }

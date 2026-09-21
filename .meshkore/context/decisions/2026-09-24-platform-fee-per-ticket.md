@@ -1,8 +1,12 @@
 ---
 title: "A 5 % platform fee inside every ticket, paid in the same transaction"
 updated: 2026-09-24
-status: stable
+status: superseded
 ---
+
+> Superseded on 2026-09-25 by `2026-09-25-one-payment-per-round`: the ticket
+> is 14,983 sats and the platform takes 11 % of what it leaves after the
+> paymaster. Kept as the record of the first fee.
 
 # Decision
 

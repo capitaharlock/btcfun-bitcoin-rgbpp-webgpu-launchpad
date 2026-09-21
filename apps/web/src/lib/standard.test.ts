@@ -12,7 +12,10 @@ import {
   ticketChallenge,
   UNIT,
   TICKET_SATS,
-  PLATFORM_FEE_SATS,
+  PAYMASTER_BUDGET_SATS,
+  PLATFORM_PERCENT,
+  NEW_CELL,
+  REUSE,
   ANCHOR_GRACE_BLOCKS,
 } from "./standard";
 
@@ -32,7 +35,14 @@ describe("standard reward", () => {
     expect(HALVING_BLOCKS).toBe(vectors.constants.HALVING_BLOCKS);
     expect(MIN_CLZ).toBe(vectors.constants.MIN_CLZ);
     expect(TICKET_SATS).toBe(vectors.constants.TICKET_SATS);
-    expect(PLATFORM_FEE_SATS).toBe(vectors.constants.PLATFORM_FEE_SATS);
+    expect(PAYMASTER_BUDGET_SATS).toBe(vectors.constants.PAYMASTER_BUDGET_SATS);
+    expect(PLATFORM_PERCENT).toBe(vectors.constants.PLATFORM_PERCENT);
+  });
+
+  it("splits a ticket exactly as the vectors do, to the last satoshi", () => {
+    expect(NEW_CELL).toEqual(vectors.split.new_cell);
+    expect(REUSE).toEqual(vectors.split.reuse);
+    for (const s of [NEW_CELL, REUSE]) expect(s.paymaster + s.platform + s.promoter).toBe(TICKET_SATS);
   });
 
   it("shows the anchor window the mint script enforces", () => {

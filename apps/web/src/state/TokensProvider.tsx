@@ -29,7 +29,7 @@ import { useWallet } from "./WalletProvider";
 const POLL_MS = 20_000;
 const OPS_KEY = "btcfun:operations:v1";
 
-export type OperationKind = "open" | "ticket" | "mint" | "transfer" | "list" | "buy" | "cancel";
+export type OperationKind = "open" | "ticket" | "arm" | "mint" | "transfer" | "list" | "buy" | "cancel";
 export type OperationStage = "sent" | "queued" | "settled" | "failed";
 
 export interface Operation {
@@ -46,6 +46,13 @@ export interface Operation {
   sats?: number;
   /** A ticket's anchor, so mining can start before the ticket settles. */
   anchor?: number;
+  /** A ticket that created its miner cell, paid: it is armed by a second transaction. */
+  newCell?: boolean;
+  /**
+   * The signed transaction, kept for a ticket that creates its cell: arming
+   * the cell carries it whole (`planArm`), and this saves fetching it back.
+   */
+  hex?: string;
   at: string;
 }
 
@@ -70,8 +77,8 @@ interface TokensContextValue {
    */
   submit: (
     plan: Plan,
-    meta: Pick<Operation, "kind" | "launchId" | "tokenId" | "atoms" | "sats" | "anchor">,
-    sign?: Signer,
+    meta: Pick<Operation, "kind" | "launchId" | "tokenId" | "atoms" | "sats" | "anchor" | "newCell">,
+    options?: SubmitOptions,
   ) => Promise<Operation>;
 }
 
@@ -81,6 +88,15 @@ interface TokensContextValue {
  * seller's signed input (`lib/rgbpp/sale.ts`), so it brings its own.
  */
 export type Signer = (key: WalletKey, sealed: Utxo[], free: Utxo[], feeRate: number) => { hex: string };
+
+export interface SubmitOptions {
+  sign?: Signer;
+  /**
+   * The fee rate to pay, when the caller showed the person a cost at a given
+   * rate; without it the provider's recommendation is fetched at send time.
+   */
+  feeRate?: number;
+}
 
 const TokensContext = createContext<TokensContextValue | null>(null);
 
@@ -155,13 +171,14 @@ export function TokensProvider({ children }: { children: ReactNode }) {
   }, [address, refresh]);
 
   const submit = useCallback<TokensContextValue["submit"]>(
-    async (plan, meta, sign) => {
+    async (plan, meta, options = {}) => {
+      const { sign } = options;
       if (!vault) throw new Error("Connect a wallet first.");
       // Fresh UTXOs at send time: the polled snapshot may already be spent.
       const [all, free, feeRate] = await Promise.all([
         getUtxos(vault.address),
         service.freeUtxos(vault.address),
-        getFeeRate(),
+        options.feeRate ?? getFeeRate(),
       ]);
       const sealed = sign
         ? []
@@ -184,6 +201,7 @@ export function TokensProvider({ children }: { children: ReactNode }) {
         ckbTxHash: null,
         failure: null,
         at: new Date().toISOString(),
+        ...(meta.newCell ? { hex: signed.hex } : {}),
       };
       persist([operation, ...readOps(vault.address)]);
       void refreshWallet();

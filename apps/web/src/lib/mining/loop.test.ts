@@ -4,7 +4,7 @@ import type { MinerCell } from "../rgbpp/operations";
 import { MIN_CLZ } from "../standard";
 import { deriveLoop, inProgress, narrate, statusOf, TICKET_VOUT, type LoopInput, type LoopOperation } from "./loop";
 
-const cell = (state: "idle" | "armed", txid = "aa".repeat(32), anchor = 900): MinerCell => ({
+const cell = (state: "idle" | "armed" | "paid", txid = "aa".repeat(32), anchor = 900): MinerCell => ({
   outPoint: { txHash: "0x" + "12".repeat(32), index: 0 },
   capacity: 1n,
   seal: { txid, vout: 1 },
@@ -44,26 +44,42 @@ describe("which step of the loop a miner is on", () => {
     expect(loop.step).toBeNull();
   });
 
-  it("opens a miner cell once, then waits for it to land", () => {
-    expect(at({}).state.at).toBe("open");
-    const opening = op("open", "01", "sent");
-    const loop = at({ operations: [opening] });
-    expect(loop.state).toEqual({ at: "opening", op: opening });
-    expect(loop.traces.open).toEqual({ txid: "01", stage: "landing", ckbTxHash: null, failure: null });
+  it("without a miner cell, the ticket creates it; the round waits for it to land, then arms it", () => {
+    expect(at({}).state).toEqual({ at: "buy", cell: null });
+    const bought = op("ticket", "01", "sent", { newCell: true });
+    const landing = at({ operations: [bought] });
+    expect(landing.state).toEqual({ at: "bought", op: bought });
+    expect(landing.step).toBe("ticket");
+    expect(landing.ticket).toBeNull();
+    expect(landing.traces.ticket).toEqual({ txid: "01", stage: "landing", ckbTxHash: null, failure: null });
+
+    const paid = cell("paid", "01".repeat(32));
+    const settled = { ...bought, stage: "settled" as const };
+    const ready = at({ miners: [paid], operations: [settled] });
+    expect(ready.state).toEqual({ at: "arm", cell: paid });
+    expect(ready.traces.ticket?.stage).toBe("settled");
   });
 
-  it("pays a ticket on an idle cell, keeping the opening's trace", () => {
+  it("mines on an arming the moment it is broadcast, keeping the ticket's trace", () => {
+    const arming = op("arm", "02", "sent", { anchor: 905 });
+    const loop = at({ miners: [], operations: [arming, op("ticket", "01", "settled", { newCell: true })] });
+    expect(loop.state.at === "mine" && loop.state.blocked).toBe("landing");
+    expect(loop.ticket).toEqual({ txid: "02", vout: TICKET_VOUT, anchor: 905, settled: false });
+    expect(loop.traces.ticket?.txid).toBe("01");
+    expect(loop.traces.arm?.txid).toBe("02");
+  });
+
+  it("with an idle cell, the ticket arms it straight away", () => {
     const idle = cell("idle");
-    const loop = at({ miners: [idle], operations: [op("open", "01", "settled")] });
-    expect(loop.state).toEqual({ at: "pay", cell: idle });
-    expect(loop.traces.open?.stage).toBe("settled");
+    const loop = at({ miners: [idle] });
+    expect(loop.state).toEqual({ at: "buy", cell: idle });
     expect(loop.ticket).toBeNull();
   });
 
   it("mines a ticket the moment it is broadcast, and holds the mint until it settles", () => {
     const loop = at({
       miners: [cell("idle")],
-      operations: [op("ticket", "02", "sent", { anchor: 905 }), op("open", "01", "settled")],
+      operations: [op("ticket", "02", "sent", { anchor: 905 })],
       bestClz: 30,
     });
     expect(loop.state.at).toBe("mine");
@@ -100,27 +116,29 @@ describe("which step of the loop a miner is on", () => {
     const minted = { ...minting, stage: "settled" as const };
     const done = at({ miners: [idle], operations: [minted, ticket] });
     expect(done.state).toEqual({ at: "minted", op: minted, cell: idle });
+    // A first mint dissolved the miner cell: the round is done all the same.
+    expect(at({ miners: [], operations: [minted, ticket] }).state).toEqual({ at: "minted", op: minted, cell: null });
     expect(statusOf("mint", done.step, done.state)).toBe("done");
     expect(done.traces.ticket?.txid).toBe(ticket.btcTxid);
 
     // "Mine again": a fresh round, with no traces from the last one.
     const again = at({ miners: [idle], operations: [minted, ticket], dismissed: minted.btcTxid });
-    expect(again.state).toEqual({ at: "pay", cell: idle });
-    expect(again.traces).toEqual({ open: null, ticket: null, mint: null });
+    expect(again.state).toEqual({ at: "buy", cell: idle });
+    expect(again.traces).toEqual({ ticket: null, arm: null, mint: null });
   });
 
   it("keeps each round's traces to its own ticket", () => {
     const operations = [
       op("ticket", "05".repeat(32), "sent", { anchor: 950 }),
       op("mint", "04", "settled"),
-      op("ticket", "02", "settled"),
-      op("open", "01", "settled"),
+      op("arm", "02", "settled"),
+      op("ticket", "01", "settled", { newCell: true }),
     ];
     const loop = at({ miners: [cell("idle", "04".repeat(32))], operations });
     expect(loop.state.at).toBe("mine");
     expect(loop.traces).toEqual({
-      open: null,
       ticket: { txid: "05".repeat(32), stage: "landing", ckbTxHash: null, failure: null },
+      arm: null,
       mint: null,
     });
   });
@@ -136,6 +154,8 @@ describe("which step of the loop a miner is on", () => {
     // Before the wallet's cells are read, "finish" cannot be told from "closed".
     expect(at({ offered: false, miners: null }).state.at).toBe("reading");
     expect(at({ offered: false, miners: [cell("armed")] }).state.at).toBe("mine");
+    // A paid ticket is a ticket held: it can still be armed and mined.
+    expect(at({ offered: false, miners: [cell("paid")] }).state.at).toBe("arm");
   });
 
   it("marks the steps behind as done and the ones ahead as next", () => {
@@ -150,19 +170,19 @@ describe("which step of the loop a miner is on", () => {
     expect(inProgress(at({}).state)).toBe(false);
     expect(inProgress(at({ miners: [cell("idle")] }).state)).toBe(false);
     expect(inProgress(at({ miners: [cell("armed")] }).state)).toBe(true);
+    expect(inProgress(at({ miners: [cell("paid")] }).state)).toBe(true);
   });
 });
 
 describe("what the page says is happening", () => {
-  const ctx = { symbol: "DEMO", running: false, unfunded: false, auto: false, busy: false };
+  const ctx = { symbol: "DEMO", running: false, unfunded: false, busy: false };
 
   it("says what is happening now and what comes next", () => {
-    expect(narrate(at({ wallet: null, miners: null }).state, ctx)).toEqual({
-      now: "You haven't connected a wallet yet",
-      next: "Pick one below — then the ticket",
-    });
-    expect(narrate(at({ miners: [cell("idle")] }).state, ctx)?.now).toBe("Pay the ticket to start mining");
-    expect(narrate(at({ miners: [cell("idle")] }).state, { ...ctx, auto: true })?.now).toBe("Paying the ticket");
+    expect(narrate(at({ wallet: null, miners: null }).state, ctx)).toEqual({ now: "No wallet connected", next: "Pick one — then the ticket" });
+    expect(narrate(at({}).state, ctx)).toEqual({ now: "Buy the ticket", next: "One block, then arm it and mine" });
+    expect(narrate(at({ miners: [cell("idle")] }).state, ctx)).toEqual({ now: "Buy the ticket", next: "Then mine" });
+    expect(narrate(at({ miners: [cell("idle")] }).state, { ...ctx, busy: true })?.now).toBe("Signing the ticket");
+    expect(narrate(at({ miners: [cell("paid")] }).state, ctx)?.now).toBe("Arm your ticket");
     expect(narrate(at({ miners: [cell("armed")] }).state, { ...ctx, running: true })).toEqual({
       now: "Mining DEMO",
       next: `Minting unlocks at ${MIN_CLZ} zero bits`,
@@ -170,7 +190,7 @@ describe("what the page says is happening", () => {
   });
 
   it("puts a missing balance first", () => {
-    expect(narrate(at({}).state, { ...ctx, unfunded: true, auto: true })?.now).toBe("Your wallet needs bitcoin");
+    expect(narrate(at({}).state, { ...ctx, unfunded: true })?.now).toBe("Your wallet needs bitcoin");
   });
 
   it("leaves a launch that is not on offer to the page", () => {

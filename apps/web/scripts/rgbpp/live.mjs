@@ -3,10 +3,11 @@
  *   node scripts/rgbpp/live.mjs <step>
  *
  *   launch     fix the launch terms (opening now, tickets paid to Bob)
- *   open       open Alice's miner cell through the paymaster
- *   ticket     buy a ticket: the miner cell arms, anchored at the tip
+ *   ticket     buy a ticket: it creates the miner cell, paid, or re-arms an
+ *              idle one at the tip
+ *   arm        arm a paid cell, once its ticket has settled (network fee only)
  *   mine       grind the armed ticket until the hash mints something
- *   mint       mint the result into Alice's token cell
+ *   mint       mint the result into the miner's token cell (network fee only)
  *   transfer   send part of Alice's balance to Bob
  *   list       Bob signs a listing of his token cell (PRICE sats, default 20,000)
  *   buy        Alice completes Bob's listing alone and broadcasts it
@@ -17,13 +18,18 @@
  * records what it did in `.e2e-runs/rgbpp-live.json`, so the steps can be run
  * minutes apart while Bitcoin confirms and the RGB++ queue completes the CKB
  * side. Testnet only: the RGB++ configuration here is CKB testnet's.
+ *
+ * MINER=demo mines with the shared demo wallet instead of Alice.
  */
 
 import { fileURLToPath } from "node:url";
 import {
-  alice, bob, cellsOf, cfg, close, launch, network, ops, provider, rgbpp, sale, sealedUtxos, savedTerms, standard,
-  stateFile, submit as send, termsFrom, verify,
+  alice as aliceKey, bob, cellsOf, cfg, close, creatingTx, demo, launch, network, ops, provider, rgbpp, sale, sealedUtxos,
+  savedTerms, standard, stateFile, submit as send, termsFrom, verify,
 } from "./kit.mjs";
+
+/** Who mines: Alice, or the shared demo wallet. */
+const alice = process.env.MINER === "demo" ? demo : aliceKey;
 
 const { state, write } = stateFile(fileURLToPath(new URL("../../.e2e-runs/rgbpp-live.json", import.meta.url)), { steps: [] });
 
@@ -62,26 +68,30 @@ const steps = {
     console.log(state.launch);
   },
 
-  async open() {
-    const terms = termsOf(state);
-    const plan = ops.planOpen(cfg, terms, await rgbpp.paymaster());
-    await submit("open", plan, alice);
-  },
-
   async ticket() {
     const terms = termsOf(state);
     const { miners } = await cellsOf(alice.address, terms);
-    const idle = miners.find((m) => m.data?.state === "idle");
-    if (!idle) throw new Error("no idle miner cell yet: run `open` and wait for the queue");
+    if (miners.some((m) => m.data?.state !== "idle")) throw new Error("this miner already holds a ticket: arm, mine or mint it");
+    const idle = miners.find((m) => m.data?.state === "idle") ?? null;
     const tip = await provider.getTipHeight(network.ACTIVE);
-    await submit("ticket", ops.planTicket(cfg, terms, idle, tip), alice);
+    const plan = ops.planTicket(cfg, terms, { idle, paymaster: idle ? null : await rgbpp.paymaster(), tip });
+    await submit(idle ? "ticket (re-arm)" : "ticket (new cell)", plan, alice);
+  },
+
+  async arm() {
+    const terms = termsOf(state);
+    const { miners } = await cellsOf(alice.address, terms);
+    const paid = miners.find((m) => m.data?.state === "paid");
+    if (!paid) throw new Error("no paid miner cell yet: run `ticket` and wait for the queue");
+    const tip = await provider.getTipHeight(network.ACTIVE);
+    await submit("arm", ops.planArm(cfg, terms, paid, await creatingTx(paid.seal.txid), tip), alice);
   },
 
   async mine() {
     const terms = termsOf(state);
     const { miners } = await cellsOf(alice.address, terms);
     const armed = miners.find((m) => m.data?.state === "armed");
-    if (!armed) throw new Error("no armed miner cell yet: run `ticket` and wait for the queue");
+    if (!armed) throw new Error("no armed miner cell yet: run `ticket` (and `arm`) and wait for the queue");
     const target = Number(process.env.TARGET_CLZ ?? 20);
     const challenge = standard.ticketChallenge(armed.seal.txid, armed.seal.vout);
     const started = Date.now();
@@ -107,7 +117,6 @@ const steps = {
       held: tokens[0] ?? null,
       nonce: BigInt(state.mined.nonce),
       reward: BigInt(state.mined.atoms),
-      paymaster: tokens[0] ? null : await rgbpp.paymaster(),
     });
     await submit("mint", plan, alice);
   },

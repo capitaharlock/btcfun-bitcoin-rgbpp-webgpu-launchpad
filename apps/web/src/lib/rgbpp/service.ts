@@ -187,8 +187,13 @@ export function virtualResult(plan: Plan) {
       }),
       outputsData: plan.virtualTx.outputsData.map((d) => ccc.hexFrom(d)),
       // Every input is sealed; the queue replaces each placeholder with the
-      // RGB++ unlock once the Bitcoin transaction has a proof.
-      witnesses: plan.virtualTx.inputs.map(() => RGBPP_WITNESS_PLACEHOLDER),
+      // RGB++ unlock once the Bitcoin transaction has a proof. The btc.fun
+      // witness sits past them, where the queue leaves it as written — an
+      // assumption about the queue that the live run on testnet confirms.
+      witnesses: [
+        ...plan.virtualTx.inputs.map(() => RGBPP_WITNESS_PLACEHOLDER),
+        ...(plan.btcfunWitness ? [plan.btcfunWitness] : []),
+      ],
     },
     commitment: plan.commitment.slice(2),
     needPaymasterCell: plan.needPaymasterCell,

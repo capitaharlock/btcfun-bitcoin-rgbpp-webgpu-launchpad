@@ -95,66 +95,85 @@ export async function pressMine(page: Page): Promise<void> {
   await expect(wizard).toBeVisible();
 }
 
-/** Open a miner cell on the launch page that is showing, and let it settle. */
-export async function openMiner(page: Page, sim: ChainSim): Promise<void> {
-  await pressMine(page);
-  await page.getByRole("button", { name: "Open miner cell", exact: true }).click();
-  await expect(page.getByRole("link", { name: "Miner cell transaction on mempool.space" })).toBeVisible();
-  await block(page, sim);
-  await expect(page.getByRole("button", { name: "Sign and pay", exact: true })).toBeVisible({ timeout: 30_000 });
+/** The wizard's bar: back, the step's action, forward. Every loop action is pressed here. */
+export function bar(page: Page) {
+  return page.locator(".wz-bar");
 }
 
 /**
- * Buy a ticket; returns once mining has started on it by itself (the ticket is
- * landing). After a mint, "Mine again" comes first.
+ * Buy a ticket on the launch page that is showing and arm it — a ticket that
+ * creates its miner cell needs one block, then "Arm ticket" — and start mining
+ * on it. After a mint, "Mine again" comes first. Returns once mining runs.
  */
-export async function buyTicket(page: Page): Promise<void> {
+export async function buyTicket(page: Page, sim: ChainSim): Promise<void> {
   await pressMine(page);
-  const again = page.locator(".wz").getByRole("button", { name: "Mine again", exact: true });
-  const pay = page.getByRole("button", { name: "Sign and pay", exact: true });
-  await expect(again.or(pay).first()).toBeVisible({ timeout: 30_000 });
+  const again = bar(page).getByRole("button", { name: "Mine again", exact: true });
+  const sign = bar(page).getByRole("button", { name: "Sign ticket", exact: true });
+  await expect(again.or(sign).first()).toBeVisible({ timeout: 30_000 });
   if (await again.isVisible()) await again.click();
-  await pay.click();
-  await expect(page.locator(".wz").getByRole("button", { name: "Pause", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(sign).toBeEnabled({ timeout: 30_000 });
+  const creates = await page.getByText("Paymaster · new miner cell").isVisible();
+  await sign.click();
+  if (creates) {
+    await expect(bar(page).getByRole("button", { name: "Waiting for a block" })).toBeVisible({ timeout: 30_000 });
+    await block(page, sim);
+    const arm = bar(page).getByRole("button", { name: "Arm ticket", exact: true });
+    await expect(arm).toBeEnabled({ timeout: 30_000 });
+    await arm.click();
+  }
+  // The armed ticket waits on its step until the person moves on to mine.
+  await bar(page).getByRole("button", { name: "Mine →" }).click();
+  await expect(bar(page).getByRole("button", { name: "Pause", exact: true })).toBeVisible({ timeout: 30_000 });
 }
 
-/** The step's mining toggle while it is not running: MINE on a fresh ticket, CONTINUE after that. */
+/** Slide the wizard to one of its steps, to read what it left behind. */
+export async function showStep(page: Page, title: "Wallet" | "Ticket" | "Mine" | "Mint"): Promise<void> {
+  await page.locator(".wz-rail").getByRole("button", { name: new RegExp(`^Step \\d, ${title}:`) }).click();
+}
+
+/** The mining toggle while it is not running: Start on a fresh ticket, Continue after that. */
 export function mineButton(page: Page) {
-  return page.locator(".wz").getByRole("button", { name: /^(Mine|Continue)$/ });
+  return bar(page).getByRole("button", { name: /^(Start mining|Continue)$/ });
 }
 
 /** Pause if running, pick the CPU (deterministic under test), and mine again. */
 export async function mineOnCpu(page: Page): Promise<void> {
-  const pause = page.locator(".wz").getByRole("button", { name: "Pause", exact: true });
+  const pause = bar(page).getByRole("button", { name: "Pause", exact: true });
   if (await pause.isVisible()) await pause.click();
   await page.getByRole("group", { name: "Mining device" }).getByRole("button", { name: "CPU" }).click();
   await mineButton(page).click();
 }
 
-/** Mine on the CPU until a hash qualifies; returns the mint button. */
+/** Mine on the CPU until a hash qualifies, then pause; returns the Accept button. */
 export async function mineUntilMintable(page: Page, timeout = 180_000) {
   await mineOnCpu(page);
-  const mint = page.getByRole("button", { name: /^Mint [0-9,.]+ / });
-  await expect(mint).toBeVisible({ timeout });
-  await page.locator(".wz").getByRole("button", { name: "Pause", exact: true }).click();
-  return mint;
+  const accept = bar(page).getByRole("button", { name: "Accept · mint →" });
+  await expect(accept).toBeEnabled({ timeout });
+  await bar(page).getByRole("button", { name: "Pause", exact: true }).click();
+  return accept;
 }
 
-/** The whole loop on the launch page that is showing: open, ticket, mine, mint. Returns atoms minted as displayed. */
+/** What the mint step says the kept hash mints, e.g. "784.00". */
+export async function mintedShown(page: Page): Promise<string> {
+  return ((await page.locator(".wz-mint-sum .stat").first().locator(".v").innerText()).match(/[0-9][0-9,.]*/) ?? [""])[0];
+}
+
+/**
+ * The whole loop on the launch page that is showing: ticket, (arm,) mine, mint.
+ * Returns the amount minted as displayed.
+ */
 export async function mintOnce(page: Page, sim: ChainSim): Promise<string> {
-  await pressMine(page);
-  // Wait for the page to have read the chain before deciding which step it is on.
-  const step = page.getByRole("button", { name: /^(Open miner cell|Sign and pay|Mine again)$/ });
-  await expect(step).toBeVisible({ timeout: 30_000 });
-  if ((await step.textContent()) === "Open miner cell") await openMiner(page, sim);
-  await buyTicket(page);
+  await buyTicket(page, sim);
   await block(page, sim);
-  const mint = await mineUntilMintable(page);
-  const label = ((await mint.textContent()) ?? "").replace(/^Mint /, "").trim();
-  await mint.click();
-  await expect(page.getByText(/^Minting /)).toBeVisible();
+  const accept = await mineUntilMintable(page);
+  await accept.click();
+  const label = await mintedShown(page);
+  const sign = bar(page).getByRole("button", { name: "Sign mint", exact: true });
+  await expect(sign).toBeEnabled({ timeout: 30_000 });
+  await sign.click();
+  await expect(page.getByText(/ minted — landing\.$/)).toBeVisible({ timeout: 30_000 });
   await block(page, sim);
-  await expect(page.locator(".wz").getByRole("button", { name: "Mine again", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(bar(page).getByRole("button", { name: "Mine again", exact: true })).toBeVisible({ timeout: 30_000 });
   return label;
 }
 

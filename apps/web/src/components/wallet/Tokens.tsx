@@ -37,32 +37,57 @@ export function positionsOf(holdings: Holdings): Position[] {
     .sort((a, b) => (a.total === b.total ? 0 : a.total > b.total ? -1 : 1));
 }
 
+/**
+ * Tokens minted from this browser whose Bitcoin transaction is sent but not
+ * settled, by token. They are shown as landing, never added to the balance:
+ * the balance is what the chain holds.
+ */
+export function landingMints(operations: readonly Operation[]): Map<string, bigint> {
+  const out = new Map<string, bigint>();
+  for (const op of operations) {
+    if (op.kind !== "mint" || !op.atoms || (op.stage !== "sent" && op.stage !== "queued")) continue;
+    out.set(op.tokenId, (out.get(op.tokenId) ?? 0n) + BigInt(op.atoms));
+  }
+  return out;
+}
+
 /** The Tokens tab. The hub renders it only with a wallet connected. */
 export function WalletTokens() {
   const tokens = useTokens();
   const launchOf = useLaunchByToken();
+  const landing = landingMints(tokens.operations);
+  // A first mint still landing has no cell yet: list its token all the same.
+  const positions = tokens.holdings ? positionsOf(tokens.holdings) : [];
+  for (const tokenId of landing.keys()) {
+    if (!positions.some((p) => p.tokenId === tokenId)) positions.push({ tokenId, cells: [], total: 0n });
+  }
 
   return (
     <div className="stack-lg">
       {tokens.error && <Notice tone="warn">Could not read your cells: {tokens.error}</Notice>}
       {tokens.holdings === null ? (
         <Panel><p className="faint clamp">Reading the cells sealed to your address…</p></Panel>
-      ) : tokens.holdings.tokens.size === 0 ? (
+      ) : positions.length === 0 ? (
         <Panel>
           <p className="clamp">
             No tokens yet. <a href="#/">Pick a launch</a> and mine — or ask someone to send you some.
           </p>
         </Panel>
       ) : (
-        positionsOf(tokens.holdings).map((position) => (
-          <PositionPanel key={position.tokenId} position={position} launch={launchOf(position.tokenId)} />
+        positions.map((position) => (
+          <PositionPanel
+            key={position.tokenId}
+            position={position}
+            landing={landing.get(position.tokenId) ?? 0n}
+            launch={launchOf(position.tokenId)}
+          />
         ))
       )}
     </div>
   );
 }
 
-function PositionPanel({ position, launch }: { position: Position; launch: Launch | undefined }) {
+function PositionPanel({ position, landing, launch }: { position: Position; landing: bigint; launch: Launch | undefined }) {
   const { tokenId, cells, total } = position;
   const symbol = launch?.symbol ?? "tokens";
   return (
@@ -80,6 +105,15 @@ function PositionPanel({ position, launch }: { position: Position; launch: Launc
         <div className="stack-md">
           <div className="scoreboard">
             <Stat k="balance" v={atoms(total, DECIMALS, 2)} unit={symbol} tone="amber" />
+            {landing > 0n && (
+              <Stat
+                k="landing"
+                v={`+${atoms(landing, DECIMALS, 2)}`}
+                unit={symbol}
+                tone="cyan"
+                hint="Minted, in the mempool: added to the balance once one Bitcoin block confirms it"
+              />
+            )}
             <Stat k="cells" v={group(cells.length)} small />
           </div>
           <More>

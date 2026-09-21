@@ -27,7 +27,7 @@ import { useLaunches, useTip } from "../hooks/useLaunches";
 import { useLaunchesStats } from "../hooks/useLaunchStats";
 import { compact, group } from "../lib/format";
 import { featuredLaunch } from "../lib/launches/featured";
-import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, TICKET_SATS } from "../lib/standard";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_PERCENT, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
 import { ArcadeScene } from "../ui/arcade/ArcadeScene";
 import { RewardChart } from "../ui/RewardChart";
@@ -221,8 +221,9 @@ export function Launches() {
 
       <More boxed summary="How it works">
         <p>
-          A ticket costs <b>{group(TICKET_SATS)} sats</b>: {group(PROMOTER_SATS)} to the launch's promoter,{" "}
-          {group(PLATFORM_FEE_SATS)} to the platform. Its Bitcoin output is your mining challenge.
+          A ticket costs <b>{group(TICKET_SATS)} sats</b> plus network fees: the launch's promoter receives most of it, the
+          platform {PLATFORM_PERCENT} %, and the RGB++ paymaster its share when the round needs a new miner cell. Its
+          Bitcoin output is your mining challenge.
         </p>
         <p>
           A hash with <i>n</i> leading zero bits mints <b>n² tokens</b>, halved every {group(HALVING_BLOCKS)} blocks

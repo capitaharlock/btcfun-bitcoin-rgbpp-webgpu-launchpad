@@ -84,29 +84,57 @@ fn parses_launch_terms_exactly() {
 }
 
 #[test]
+fn the_split_matches_the_vectors() {
+    let v = &vectors()["split"];
+    for (split, case) in [(NEW_CELL, "new_cell"), (REUSE, "reuse")] {
+        assert_eq!(split.paymaster, v[case]["paymaster"].as_u64().unwrap(), "{case}");
+        assert_eq!(split.platform, v[case]["platform"].as_u64().unwrap(), "{case}");
+        assert_eq!(split.promoter, v[case]["promoter"].as_u64().unwrap(), "{case}");
+        // Every satoshi of the ticket has one destination.
+        assert_eq!(split.paymaster + split.platform + split.promoter, TICKET_SATS);
+        // Each share is its own relayable P2WPKH output.
+        assert!(split.platform >= 294 && split.promoter >= 294);
+    }
+    let c = &vectors()["constants"];
+    assert_eq!(PAYMASTER_BUDGET_SATS, c["PAYMASTER_BUDGET_SATS"].as_u64().unwrap());
+    assert_eq!(PLATFORM_PERCENT, c["PLATFORM_PERCENT"].as_u64().unwrap());
+}
+
+#[test]
 fn a_ticket_pays_the_promoter_and_the_platform_in_full() {
     let promoter: &[u8] = &[0x00, 0x14, 9, 9];
     let other: &[u8] = &[0x00, 0x14, 8, 8];
     let platform: &[u8] = PLATFORM_SCRIPT;
-    let (share, fee) = (PROMOTER_SATS as i64, PLATFORM_FEE_SATS as i64);
-    assert_eq!(PROMOTER_SATS + PLATFORM_FEE_SATS, TICKET_SATS);
-    assert_eq!(PLATFORM_FEE_SATS * 20, TICKET_SATS);
-    // Both shares survive Bitcoin's P2WPKH dust limit on their own.
-    assert!(PLATFORM_FEE_SATS >= 294);
-    let pays = |outs: &[(i64, &[u8])], own, all| pays_tickets(outs.iter().copied(), promoter, platform, own, all);
-    assert!(pays(&[(share, promoter), (fee, platform)], 1, 1));
-    assert!(!pays(&[(share - 1, promoter), (fee, platform)], 1, 1));
-    assert!(!pays(&[(share, promoter), (fee - 1, platform)], 1, 1));
-    assert!(!pays(&[(share, other), (fee, platform)], 1, 1));
-    assert!(!pays(&[(share + fee, promoter)], 1, 1));
-    // Two tickets need two tickets' worth, in one output or several.
-    assert!(!pays(&[(share, promoter), (fee, platform)], 2, 2));
-    assert!(pays(&[(share, promoter), (share, promoter), (2 * fee, platform)], 2, 2));
-    // Another promoter's ticket in the same transaction owes the platform too.
-    assert!(!pays(&[(share, promoter), (fee, platform)], 1, 2));
-    // A promoter who is the platform owes both shares to the one script.
-    assert!(pays_tickets([(share + fee, platform)], platform, platform, 1, 1));
-    assert!(!pays_tickets([(share, platform)], platform, platform, 1, 1));
+    for price in [NEW_CELL, REUSE] {
+        let (share, fee) = (price.promoter as i64, price.platform as i64);
+        let pays = |outs: &[(i64, &[u8])], own, all| pays_tickets(outs.iter().copied(), promoter, platform, own, all, price);
+        assert!(pays(&[(share, promoter), (fee, platform)], 1, 1));
+        assert!(!pays(&[(share - 1, promoter), (fee, platform)], 1, 1));
+        assert!(!pays(&[(share, promoter), (fee - 1, platform)], 1, 1));
+        assert!(!pays(&[(share, other), (fee, platform)], 1, 1));
+        assert!(!pays(&[(share + fee, promoter)], 1, 1));
+        // Two tickets need two tickets' worth, in one output or several.
+        assert!(!pays(&[(share, promoter), (fee, platform)], 2, 2));
+        assert!(pays(&[(share, promoter), (share, promoter), (2 * fee, platform)], 2, 2));
+        // Another promoter's ticket in the same transaction owes the platform too.
+        assert!(!pays(&[(share, promoter), (fee, platform)], 1, 2));
+        // A promoter who is the platform owes both shares to the one script.
+        assert!(pays_tickets([(share + fee, platform)], platform, platform, 1, 1, price));
+        assert!(!pays_tickets([(share, platform)], platform, platform, 1, 1, price));
+    }
+    // A new cell's payment is less than a re-arm's: it cannot stand in for one.
+    let new = [(NEW_CELL.promoter as i64, promoter), (NEW_CELL.platform as i64, platform)];
+    assert!(!pays_tickets(new.iter().copied(), promoter, platform, 1, 1, REUSE));
+}
+
+#[test]
+fn a_txid_is_the_double_sha256_of_the_stripped_transaction() {
+    // The genesis coinbase, serialized without witness; its txid displayed is
+    // 4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b.
+    let raw = unhex("01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000");
+    let mut id = txid(&raw);
+    id.reverse();
+    assert_eq!(hex(&id), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
 }
 
 #[test]
@@ -118,8 +146,10 @@ fn a_miner_cell_is_a_state_a_nonce_and_an_anchor() {
     assert_eq!(MinerCell::parse(&[]), None);
     assert_eq!(MinerCell::parse(&[0; 12]), None);
     assert_eq!(MinerCell::parse(&[0; 14]), None);
+    let paid = MinerCell { state: MinerState::Paid, nonce: 0, anchor: 0 };
+    assert_eq!(MinerCell::parse(&paid.encode()), Some(paid));
     let mut bad = [0u8; 13];
-    bad[0] = 2;
+    bad[0] = 3;
     assert_eq!(MinerCell::parse(&bad), None);
 }
 

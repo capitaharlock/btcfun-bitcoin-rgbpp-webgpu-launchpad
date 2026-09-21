@@ -17,12 +17,40 @@ export const UNIT = 10n ** BigInt(DECIMALS);
 export const HALVING_BLOCKS = 1008;
 /** Smallest mintable result. Below it a ticket mints nothing. */
 export const MIN_CLZ = 16;
-/** Price of one ticket, paid inside the ticket transaction. */
-export const TICKET_SATS = 10_000;
-/** The platform's 5 % of a ticket: large enough to be its own relayable output. */
-export const PLATFORM_FEE_SATS = TICKET_SATS / 20;
-/** What the promoter receives per ticket. */
-export const PROMOTER_SATS = TICKET_SATS - PLATFORM_FEE_SATS;
+/** Price of one ticket, whatever the round. Network fees are not part of it. */
+export const TICKET_SATS = 14_983;
+/**
+ * What a ticket sets aside for the RGB++ paymaster when its round needs a new
+ * miner cell. A paymaster asking more is paid on top, never out of the split.
+ */
+export const PAYMASTER_BUDGET_SATS = 7_000;
+/** The platform's percentage of what a ticket leaves after the paymaster, rounded down. */
+export const PLATFORM_PERCENT = 11;
+
+/** Where a ticket's satoshis go. */
+export interface Split {
+  paymaster: number;
+  platform: number;
+  promoter: number;
+}
+
+/**
+ * The split of one ticket, as the mint script enforces it (`contracts/mint-core`
+ * `split`): with `newCell` the round creates its miner cell and the
+ * paymaster's budget comes off the top; the platform takes its percentage of
+ * the rest, rounded down, and the promoter everything left.
+ */
+export function split(newCell: boolean): Split {
+  const paymaster = newCell ? PAYMASTER_BUDGET_SATS : 0;
+  const shared = TICKET_SATS - paymaster;
+  const platform = Math.floor((shared * PLATFORM_PERCENT) / 100);
+  return { paymaster, platform, promoter: shared - platform };
+}
+
+/** A round that creates its miner cell: 7,000 + 878 + 7,105. */
+export const NEW_CELL = split(true);
+/** A round that re-arms an idle miner cell: 1,648 + 13,335. */
+export const REUSE = split(false);
 /**
  * How far behind the block that confirms a ticket its declared anchor may be.
  * The mint script holds the same constant (`contracts/mint-core`

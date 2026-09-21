@@ -24,7 +24,6 @@
   gap: 10px;
   align-items: baseline;
   padding: 8px 14px;
-  border-left: var(--frame-w) solid transparent;
   color: var(--ink-dim);
   font-size: var(--text-md);
 }
@@ -38,7 +37,6 @@
 .docs-nav a[aria-current="page"] {
   color: var(--ink);
   background: color-mix(in oklab, var(--amber) 6%, var(--bg));
-  border-left-color: var(--amber);
 }
 .docs-nav a[aria-current="page"]::before { color: var(--amber); }
 
@@ -77,7 +75,6 @@
   padding: 14px 16px;
   background: var(--bg);
   border: var(--border-w) solid var(--line-strong);
-  border-left: var(--frame-w) solid var(--accent);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 13px;

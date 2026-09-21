@@ -9,9 +9,14 @@
  *   - a Bitcoin transaction whose OP_RETURN does not commit to the CKB side,
  *     or that does not spend the seals of the cells it moves;
  *   - inputs that are not live, or outputs worth more than the inputs;
- *   - anything the mint script refuses: an unpaid ticket, an anchor outside
- *     its bounds, a mint with too little work or the wrong amount, a mint that
+ *   - anything the mint script refuses: an unpaid ticket (in the arming
+ *     transaction, or in the creating ticket a paid cell's arming carries), an
+ *     anchor outside its bounds, a paid cell created beside an RGB++ input or
+ *     moved, a mint with too little work or the wrong amount, a mint that
  *     re-arms, a balance that grows without a mint.
+ *
+ * Like the real queue it replaces only the placeholder witnesses of sealed
+ * inputs and keeps the btc.fun witness past them as the client wrote it.
  *
  * Those mint rules are restated here as a test oracle, not imported from the
  * app, so a client that built the wrong transaction fails here instead of
@@ -54,8 +59,9 @@ const OWNER_BY_INPUT_TYPE = 0x8000_0000;
 const UNIT = 100_000_000n;
 const HALVING = 1008;
 const MIN_CLZ = 16;
-const PROMOTER_SHARE = 9500;
-const PLATFORM_FEE = 500;
+// A ticket's split: re-arming an idle cell, or arming one the ticket created.
+const REUSE = { promoter: 13_335, platform: 1_648 };
+const NEW_CELL = { promoter: 7_105, platform: 878 };
 const PLATFORM_SCRIPT = "0014f5c1e4b7673e5dfaa348f7cfaa7d73ef0a97a3be";
 const GRACE = 144;
 
@@ -126,10 +132,22 @@ function standardReward(clz: number, h0: number, anchor: number): bigint | null 
   return (UNIT * BigInt(clz * clz)) >> BigInt(Math.floor((anchor - h0) / HALVING));
 }
 
-function minerData(data: ccc.Hex): { armed: boolean; nonce: bigint; anchor: number } | null {
+type MinerState = "idle" | "armed" | "paid";
+
+function minerData(data: ccc.Hex): { state: MinerState; nonce: bigint; anchor: number } | null {
   const b = ccc.bytesFrom(data);
-  if (b.length !== 13 || b[0] > 1) return null;
-  return { armed: b[0] === 1, nonce: ccc.numLeFromBytes(b.slice(1, 9)), anchor: Number(ccc.numLeFromBytes(b.slice(9))) };
+  if (b.length !== 13 || b[0] > 2) return null;
+  const state = (["idle", "armed", "paid"] as const)[b[0]];
+  return { state, nonce: ccc.numLeFromBytes(b.slice(1, 9)), anchor: Number(ccc.numLeFromBytes(b.slice(9))) };
+}
+
+/** A transaction's outputs as the oracle reads payments: scriptPubKey hex and amount. */
+function outputsOf(raw: Uint8Array): Array<{ script: string; amount: number }> {
+  const tx = Transaction.fromRaw(raw, { allowUnknownOutputs: true, allowUnknownInputs: true, disableScriptCheck: true });
+  return Array.from({ length: tx.outputsLength }, (_, i) => {
+    const o = tx.getOutput(i);
+    return { script: ccc.hexFrom(o.script!).slice(2), amount: Number(o.amount) };
+  });
 }
 
 const amountOf = (data: ccc.Hex) => ccc.numLeFromBytes(ccc.bytesFrom(data).slice(0, 16));
@@ -298,12 +316,16 @@ export class RgbppSim {
       throw new Error("TransactionFailedToVerify: Inputs[0].Lock ScriptNotFound (secp256k1)");
     }
 
-    this.checkMintRules(inputs, outputs, outputsData, btc);
+    // The queue fills each sealed input's placeholder with its RGB++ unlock and
+    // leaves every other witness as written.
+    const witnesses = raw.witnesses.map((w) => (w === "0xFF" ? "0x" : ccc.hexFrom(w)));
+    this.checkMintRules(inputs, outputs, outputsData, witnesses, btc);
 
     const tx = ccc.Transaction.from({
       inputs: raw.inputs.map((i) => ({ previousOutput: { txHash: i.previousOutput.txHash, index: Number(i.previousOutput.index) } })),
       outputs,
       outputsData,
+      witnesses,
     });
     const hash = tx.hash();
     for (const cell of inputs) cell.live = false;
@@ -316,13 +338,24 @@ export class RgbppSim {
   }
 
   /** The mint script's rules, per launch present in the transaction. */
-  private checkMintRules(inputs: LiveCell[], outputs: ccc.CellOutput[], data: ccc.Hex[], btc: ChainSim["broadcasts"][number]): void {
+  private checkMintRules(
+    inputs: LiveCell[],
+    outputs: ccc.CellOutput[],
+    data: ccc.Hex[],
+    witnesses: ccc.Hex[],
+    btc: ChainSim["broadcasts"][number],
+  ): void {
     const isMint = (t?: ccc.Script) => !!t && t.codeHash === CONFIG.mint.codeHash && t.hashType === CONFIG.mint.hashType;
     const launches = new Map<string, ccc.Script>();
     for (const c of inputs) if (isMint(c.output.type)) launches.set(c.output.type!.hash(), c.output.type!);
     outputs.forEach((o) => isMint(o.type) && launches.set(o.type!.hash(), o.type!));
+    const btcfun = witnesses[inputs.length] ?? null;
+    const rgbppInput = inputs.some((c) => sealOf(c.output.lock) !== null);
 
-    let armedByPromoter = new Map<string, number>();
+    // Each arming: whose promoter, at which price, paid by which transaction's outputs.
+    const armings: Array<{ promoter: string; price: typeof REUSE; paidBy: Array<{ script: string; amount: number }> }> = [];
+    const armingOutputs = btc.outputs.map((o) => ({ script: o.script, amount: Number(o.amount) }));
+
     for (const [hash, type] of launches) {
       const args = ccc.bytesFrom(type.args);
       const h0 = Number(ccc.numLeFromBytes(args.slice(1, 5)));
@@ -339,33 +372,59 @@ export class RgbppSim {
         cells.filter((c) => c.type?.eq(token)).reduce((n, c) => n + amountOf(c.data), 0n);
       const minted = sum(outputs.map((o, i) => ({ type: o.type, data: data[i] }))) - sum(inputs.map((c) => ({ type: c.output.type, data: c.data })));
 
-      if (!was && now?.armed) throw new Error("armed without a ticket");
-      if (was && now?.armed && was.armed) throw new Error("a mint must disarm");
-      if (now?.armed) {
+      if (!was && now?.state === "armed") throw new Error("armed without a ticket");
+      if (!was && now?.state === "paid" && rgbppInput) throw new Error("a paid cell beside an RGB++ input");
+      if (was?.state === "paid" && now && now.state !== "armed") throw new Error("a paid cell cannot move");
+      if (was && was.state !== "paid" && now?.state === "paid") throw new Error("nothing becomes paid");
+      if (was?.state === "armed" && now?.state === "armed") throw new Error("a mint must disarm");
+
+      if (was && now?.state === "armed") {
         const tip = this.chain.tip;
         if (now.anchor < h0 || now.anchor > tip || tip - now.anchor > GRACE) throw new Error("bad anchor");
-        armedByPromoter.set(promoter, (armedByPromoter.get(promoter) ?? 0) + 1);
+        if (was.state === "idle") {
+          armings.push({ promoter, price: REUSE, paidBy: armingOutputs });
+        } else {
+          // Armed from paid: the creating ticket rides in the btc.fun witness.
+          const seal = sealOf(before[0].output.lock)!;
+          if (seal.vout !== 1 || !btcfun) throw new Error("no creating ticket");
+          const creating = ccc.bytesFrom(btcfun);
+          if (reverse(ccc.hexFrom(sha256(sha256(creating))).slice(2)) !== seal.txid) throw new Error("not the creating ticket");
+          if (inputs.some((c) => { const m = minerData(c.data); return m !== null && m.state !== "paid"; })) {
+            throw new Error("a paid cell is armed alone");
+          }
+          armings.push({ promoter, price: NEW_CELL, paidBy: outputsOf(creating) });
+        }
       }
-      if (was?.armed && now && !now.armed) {
+
+      const mints = was?.state === "armed" && (now ? now.state === "idle" : minted !== 0n);
+      if (mints) {
+        const nonce = now ? now.nonce : btcfun && ccc.bytesFrom(btcfun).length === 8 ? ccc.numLeFromBytes(ccc.bytesFrom(btcfun)) : null;
+        if (nonce === null) throw new Error("a dissolving mint without its nonce");
         const seal = sealOf(before[0].output.lock)!;
         const challenge = sha256(Buffer.concat([Buffer.from(reverse(seal.txid), "hex"), Buffer.from(ccc.numLeToBytes(seal.vout, 4))]));
-        const preimage = Buffer.concat([challenge, Buffer.from(ccc.numLeToBytes(now.nonce, 8))]);
+        const preimage = Buffer.concat([challenge, Buffer.from(ccc.numLeToBytes(nonce, 8))]);
         const clz = clzOf(sha256(sha256(preimage)));
-        const expected = standardReward(clz, h0, was.anchor);
+        const expected = standardReward(clz, h0, was!.anchor);
         if (expected === null) throw new Error("work too weak");
         if (minted !== expected) throw new Error(`wrong amount: ${minted} minted, ${expected} allowed`);
       } else if (minted > 0n) {
         throw new Error("balance increased without a mint");
       }
     }
-    const paidTo = (script: string) => btc.outputs.filter((o) => o.script === script).reduce((n, o) => n + Number(o.amount), 0);
-    const allArmed = [...armedByPromoter.values()].reduce((n, c) => n + c, 0);
-    for (const [promoter, count] of armedByPromoter) {
-      const owed = count * PROMOTER_SHARE + (promoter === PLATFORM_SCRIPT ? allArmed * PLATFORM_FEE : 0);
-      if (paidTo(promoter) < owed) throw new Error("ticket unpaid");
+
+    // Every arming pays its ticket, counted per paying transaction: a payment
+    // is never counted for two cells.
+    const bySource = new Map<Array<{ script: string; amount: number }>, typeof armings>();
+    for (const a of armings) bySource.set(a.paidBy, [...(bySource.get(a.paidBy) ?? []), a]);
+    for (const [paidBy, group] of bySource) {
+      const paidTo = (script: string) => paidBy.filter((o) => o.script === script).reduce((n, o) => n + o.amount, 0);
+      const owed = new Map<string, number>();
+      for (const a of group) {
+        owed.set(a.promoter, (owed.get(a.promoter) ?? 0) + a.price.promoter);
+        owed.set(PLATFORM_SCRIPT, (owed.get(PLATFORM_SCRIPT) ?? 0) + a.price.platform);
+      }
+      for (const [script, due] of owed) if (paidTo(script) < due) throw new Error(script === PLATFORM_SCRIPT ? "platform fee unpaid" : "ticket unpaid");
     }
-    if (allArmed > 0 && paidTo(PLATFORM_SCRIPT) < allArmed * PLATFORM_FEE) throw new Error("platform fee unpaid");
-    armedByPromoter = new Map();
   }
 
   // ── CKB node ───────────────────────────────────────────────────────────
@@ -415,7 +474,7 @@ export class RgbppSim {
             inputs: tx.inputs.map((i) => ({ previous_output: { tx_hash: i.previousOutput.txHash, index: ccc.numToHex(i.previousOutput.index) }, since: "0x0" })),
             outputs: tx.outputs.map(rpcOutput),
             outputs_data: tx.outputsData,
-            witnesses: [],
+            witnesses: tx.witnesses,
             hash,
           },
           tx_status: { status: "committed", block_hash: "0x" + "00".repeat(32), block_number: "0x1", reason: null },

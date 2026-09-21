@@ -46,8 +46,9 @@ export default function OverviewPage() {
         <h2>In one paragraph</h2>
         <p>
           btc.fun is a launchpad for community tokens that all follow the same rules. You buy a <strong>ticket</strong> on
-          Bitcoin for {group(TICKET_SATS)} sats, your browser <strong>mines</strong> against that ticket, and you{" "}
-          <strong>mint</strong> what your best result is worth into a Bitcoin output you control. The token itself is
+          Bitcoin for {group(TICKET_SATS)} sats — the round's one payment, network fees apart — your browser{" "}
+          <strong>mines</strong> against that ticket, and you <strong>mint</strong> what your best result is worth into a
+          Bitcoin output you control, paying only the network. The token itself is
           recorded on a second chain, CKB, and bound to that Bitcoin output, so whoever can spend the output owns the
           tokens. A script on CKB — not this website — decides whether a mint is valid, and anyone can check any mint from
           the two chains.

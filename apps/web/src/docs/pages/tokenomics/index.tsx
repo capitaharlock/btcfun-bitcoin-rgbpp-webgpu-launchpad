@@ -6,8 +6,10 @@ import {
   DECIMALS,
   HALVING_BLOCKS,
   MIN_CLZ,
-  PLATFORM_FEE_SATS,
-  PROMOTER_SATS,
+  NEW_CELL,
+  PAYMASTER_BUDGET_SATS,
+  PLATFORM_PERCENT,
+  REUSE,
   reward,
   terminalHalving,
   TICKET_SATS,
@@ -19,7 +21,8 @@ const tokens = (clz: number, halvings: number) => atoms(reward(clz, 0, halvings 
 const REWARD: DiagramSpec = {
   title: "From a ticket to a reward",
   description:
-    `A ticket costs ${group(TICKET_SATS)} sats: ${group(PROMOTER_SATS)} to the promoter and ${group(PLATFORM_FEE_SATS)} to the platform. ` +
+    `A ticket costs ${group(TICKET_SATS)} sats: ${group(REUSE.promoter)} to the promoter and ${group(REUSE.platform)} to the platform, ` +
+    `or, when it creates the miner cell, ${group(NEW_CELL.paymaster)} to the RGB++ paymaster, ${group(NEW_CELL.platform)} and ${group(NEW_CELL.promoter)}. ` +
     `Its output gives the challenge and its anchor height fixes k, the number of halvings since the launch opened. ` +
     `Mining gives clz, the leading zero bits of the best hash. Below ${MIN_CLZ} bits nothing is mintable; otherwise the reward ` +
     `is 10^8 × clz² / 2^k atoms, rounded down.`,
@@ -31,7 +34,7 @@ const REWARD: DiagramSpec = {
   ],
   nodes: [
     { id: "pay", lane: "ticket", row: 0, kind: "terminal", label: `Pay ${group(TICKET_SATS)} sats`, tone: "amber" },
-    { id: "split", lane: "ticket", row: 1, kind: "process", label: "Split in the same transaction", detail: `${group(PROMOTER_SATS)} promoter · ${group(PLATFORM_FEE_SATS)} platform`, tone: "amber" },
+    { id: "split", lane: "ticket", row: 1, kind: "process", label: "Split in the same transaction", detail: `${group(REUSE.promoter)} promoter · ${group(REUSE.platform)} platform`, tone: "amber" },
     { id: "challenge", lane: "miner", row: 1, kind: "process", label: "Challenge", detail: "hash of the ticket's output", tone: "violet" },
     { id: "anchor", lane: "ticket", row: 2, kind: "process", label: "Anchor", detail: "the block height when you bought", tone: "amber" },
     { id: "clz", lane: "miner", row: 2, kind: "process", label: "clz", detail: "leading zero bits of your best hash", tone: "violet" },
@@ -68,11 +71,27 @@ export default function TokenomicsPage() {
       <section>
         <h2>The ticket</h2>
         <p>
-          A ticket costs <strong>{group(TICKET_SATS)} sats</strong>, paid inside the ticket's own Bitcoin transaction:{" "}
-          <strong>{group(PROMOTER_SATS)} sats</strong> (95 %) to the launch's promoter and{" "}
-          <strong>{group(PLATFORM_FEE_SATS)} sats</strong> (5 %) to the platform. The platform never holds the promoter's
-          money: each ticket pays them directly, in the block it confirms. The mint script arms a ticket only when both
-          payments are present, and the platform's address is fixed in the script, so no launch can redirect it.
+          A ticket costs <strong>{group(TICKET_SATS)} sats</strong>, always, paid inside the ticket's own Bitcoin
+          transaction; network fees are separate. When the round needs a new miner cell,{" "}
+          <strong>{group(PAYMASTER_BUDGET_SATS)} sats</strong> of it pay the RGB++ paymaster for the cell's room on CKB. The
+          platform takes {PLATFORM_PERCENT} % of what remains, rounded down, and the launch's promoter the rest:
+        </p>
+        <ul>
+          <li>
+            a round that creates its miner cell: {group(NEW_CELL.paymaster)} paymaster + {group(NEW_CELL.platform)} platform +{" "}
+            <strong>{group(NEW_CELL.promoter)}</strong> promoter;
+          </li>
+          <li>
+            a round that re-arms the cell it has: {group(REUSE.platform)} platform + <strong>{group(REUSE.promoter)}</strong>{" "}
+            promoter.
+          </li>
+        </ul>
+        <p>
+          A first mint turns the miner cell into your token cell, so a miner's first two rounds create a cell and every
+          round after that re-arms one. The platform never holds the promoter's money: each ticket pays them directly, in
+          the block it confirms. The mint script arms a ticket only when both payments are present, and the platform's
+          address is fixed in the script, so no launch can redirect it. A paymaster asking more than its budget is paid the
+          difference on top of the ticket; the split never moves.
         </p>
         <p>
           A ticket buys a chance, not a result. It does not guarantee tokens worth its cost; there is no reserve, no floor
@@ -129,7 +148,8 @@ k      = halvings between the launch's opening and the ticket's anchor`}</Formul
             <li>
               Constants (<code>PROTOCOL.md</code> §4, <code>lib/standard.ts</code>, <code>contracts/mint-core</code>):
               decimals {DECIMALS}, unit 10^8 atoms, halving {group(HALVING_BLOCKS)} blocks, minimum clz {MIN_CLZ}, ticket{" "}
-              {group(TICKET_SATS)} sats = {group(PROMOTER_SATS)} promoter + {group(PLATFORM_FEE_SATS)} platform, anchor
+              {group(TICKET_SATS)} sats, paymaster budget {group(PAYMASTER_BUDGET_SATS)}, platform {PLATFORM_PERCENT} % of the
+              rest rounded down, anchor
               grace {ANCHOR_GRACE_BLOCKS} blocks. The Rust and TypeScript reward functions pass the same vectors.
             </li>
             <li>
@@ -137,9 +157,9 @@ k      = halvings between the launch's opening and the ticket's anchor`}</Formul
               <code>u64</code>, and dividing by <code>2^k</code> is an exact right shift.
             </li>
             <li>
-              The 5 % fee needed a 10,000-sat ticket: 5 % of 5,000 sats is 250 sats, below the 294-sat dust limit of a
-              P2WPKH output, which Bitcoin nodes will not relay. A transaction arming several miner cells owes the platform
-              one fee per cell.
+              Both shares stay above the 294-sat dust limit of a P2WPKH output, which Bitcoin nodes would not relay: the
+              smaller platform share is {group(NEW_CELL.platform)} sats. The shared vectors check the split to the last
+              satoshi in Rust and TypeScript. A transaction arming several miner cells owes the platform one share per cell.
             </li>
             <li>
               Changing the fee or the platform address is a new script version, visible as a new code hash — never a silent

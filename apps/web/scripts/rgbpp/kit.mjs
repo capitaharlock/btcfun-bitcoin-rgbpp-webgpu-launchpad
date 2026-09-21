@@ -116,6 +116,11 @@ export async function cellsOf(address, terms) {
   return launchCells(await rgbpp.cells(address), terms);
 }
 
+/** The ticket that created a paid miner cell, stripped as its arming carries it. */
+export async function creatingTx(txid) {
+  return bitcoin.strippedTx(await provider.getTxHex(txid, network.ACTIVE));
+}
+
 /** The UTXOs behind `seals`, with their values, from `utxos` or the address's unspent set. */
 export async function sealedUtxos(address, seals, utxos) {
   const set = utxos ?? (await provider.getUtxos(address, network.ACTIVE));
@@ -136,9 +141,9 @@ export async function submit(name, plan, key, free) {
   const [sealed, pool, feeRate] = await Promise.all([
     sealedUtxos(key.address, plan.sealsSpent),
     free ? Promise.resolve(free) : rgbpp.freeUtxos(key.address).then((u) => u.filter((x) => x.confirmed)),
-    provider.getFeeRate(network.ACTIVE),
+    provider.fastFeeRate(network.ACTIVE),
   ]);
-  const signed = bitcoin.signOperation(key, plan, sealed, pool, Math.max(feeRate, 1));
+  const signed = bitcoin.signOperation(key, plan, sealed, pool, feeRate);
   const txid = await rgbpp.broadcast(signed.hex);
   const queue = await rgbpp.enqueue(plan, txid);
   if (free) {

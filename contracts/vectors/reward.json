@@ -1,11 +1,12 @@
 {
- "about": "Reference vectors for PROTOCOL.md \u00a74, computed independently in Python with exact integers and hashlib. Every implementation of the standard reward and challenge must reproduce them.",
+ "about": "Reference vectors for PROTOCOL.md \u00a74, computed independently in Python with exact integers and hashlib. Every implementation of the standard reward and challenge must reproduce them. The split is integer arithmetic: platform = floor((ticket - paymaster) * 11 / 100), promoter = the rest.",
  "constants": {
   "UNIT": "100000000",
   "HALVING_BLOCKS": 1008,
   "MIN_CLZ": 16,
-  "TICKET_SATS": 10000,
-  "PLATFORM_FEE_SATS": 500
+  "TICKET_SATS": 14983,
+  "PAYMASTER_BUDGET_SATS": 7000,
+  "PLATFORM_PERCENT": 11
  },
  "reward": [
   {
@@ -746,5 +747,17 @@
    "hash": "000024c240313d78b3c876bb1438f56370a59ef2add086349e60f8b4ab4498db",
    "clz": 18
   }
- ]
+ ],
+ "split": {
+  "new_cell": {
+   "paymaster": 7000,
+   "platform": 878,
+   "promoter": 7105
+  },
+  "reuse": {
+   "paymaster": 0,
+   "platform": 1648,
+   "promoter": 13335
+  }
+ }
 }

@@ -193,6 +193,12 @@ export class ChainSim {
         : route.fulfill({ status: 404, body: "Transaction not found" });
     }
 
+    const hex = /^\/tx\/([0-9a-f]{64})\/hex$/.exec(path);
+    if (hex) {
+      const found = this.broadcasts.find((b) => b.txid === hex[1]);
+      return found ? route.fulfill({ body: found.hex }) : route.fulfill({ status: 404, body: "Transaction not found" });
+    }
+
     const outspend = /^\/tx\/([0-9a-f]{64})\/outspend\/(\d+)$/.exec(path);
     if (outspend) return route.fulfill({ json: { spent: this.spent.has(`${outspend[1]}:${outspend[2]}`) } });
 

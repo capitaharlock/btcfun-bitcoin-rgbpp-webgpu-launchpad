@@ -1,6 +1,6 @@
 ---
 title: Stack
-updated: 2026-09-24
+updated: 2026-09-25
 status: draft
 ---
 
@@ -12,7 +12,9 @@ status: draft
 | Bitcoin network | testnet3, the only test network | The public RGB++ services verify testnet3 and testnet4 has no SPV client on CKB, so payments, tickets and tokens share testnet3. The earliest ticket experiments ran on testnet4 |
 | Ownership | Bitcoin UTXOs through the RGB++ lock | Commitment implemented in the client and pinned by test to the RGB++ SDK and lock |
 | Token | xUDT, owner mode by input type, owner = mint script hash | 8 decimals for every launch; metadata hashed into the mint script args |
-| Contracts | Rust `no_std`, `ckb-std`, `rgbpp-core`, CKB-VM/RISC-V | 24 CKB-VM tests with `ckb-testtool`; cycles measured per whole transaction; deployed on CKB testnet |
+| Contracts | Rust `no_std`, `ckb-std`, `rgbpp-core`, CKB-VM/RISC-V | 36 CKB-VM tests with `ckb-testtool`; cycles measured per whole transaction; version with paid cells and dissolving first mints deployed on CKB testnet 2026-09-25 (`contracts/deployments/testnet.json`) |
+| Ticket and fees | One payment per round: 14,983 sats (7,000 paymaster when the round creates its cell, 11 % platform, rest promoter); arming and mint pay only the network, at `max(3, fastest)` sat/vB | Split enforced by the mint script and pinned by shared Rust/TS vectors; fees sized by the signing rule. Decision `2026-09-25-one-payment-per-round` |
+| btc.fun witness | The first CKB witness past the inputs carries the creating ticket (arming) or the nonce (first mint) | Assumes the RGB++ queue replaces only sealed inputs' placeholder witnesses: matches the simulator, **unverified on the live queue until the testnet run** |
 | Math | Exact integers; `floor(10^8 × clz² / 2^k)` as a shift | Rust and TypeScript pass the same vectors (`contracts/vectors/reward.json`) |
 | PoW | SHA-256d over a 40-byte preimage (`sha256(txid‖vout)` ‖ nonce) | Hardware concentration still to be measured in pilots |
 | Miner | WebGPU with CPU worker fallback | Every GPU candidate re-hashed on the CPU before use |

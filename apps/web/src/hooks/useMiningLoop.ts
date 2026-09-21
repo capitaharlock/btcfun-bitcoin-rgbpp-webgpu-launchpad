@@ -5,42 +5,64 @@
  * derived step (`lib/mining/loop.ts`) and the same mining session, so they can
  * never disagree about what is happening.
  *
- * Pressing MINE is the one consent the loop asks of a demo-wallet user: that
- * wallet's key is public and shared, so after the press it opens the miner
- * cell and pays the ticket by itself. A wallet of the person's own always
- * waits for a click on the step that spends. A MINE on a launch's card counts
- * as the press. It is kept for the tab (sessionStorage), so a reload in the
- * middle of the loop carries on.
+ * Nothing here signs by itself, whatever the wallet. Each transaction of a
+ * round waits for its own button: the ticket (the round's one payment), the
+ * arming of a cell the ticket created (network fee only), and the mint
+ * (network fee only). For the demo and local wallets the button is the
+ * confirmation; a passkey wallet asks for the passkey when it is pressed —
+ * the same path, through `Vault.use()`.
+ *
+ * Before the ticket is signed the wallet must hold the whole round: the ticket,
+ * its network fee, and the network fees still to come (the arming, when there
+ * is one, and the mint). A ticket paid without the means to mint it would be
+ * lost, so a short wallet signs nothing and is told how much is missing.
+ *
+ * MINE on the header or on a launch's card opens the wizard; that press, and
+ * the hash the person chose to keep, are kept on the device (localStorage) so
+ * a reload or a return visit carries on where the loop stood.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Launch } from "../data/launches";
-import { getFeeRate, InsufficientFunds } from "../lib/bitcoin";
+import { InsufficientFunds } from "../lib/bitcoin";
+import { fastFeeRate, getTxHex } from "../lib/bitcoin/provider";
 import { canMine } from "../lib/launches/featured";
 import { ticketKey } from "../lib/mining";
 import { deriveLoop, inProgress, narrate, type Loop, type Narration } from "../lib/mining/loop";
-import { fundingNeeded, plainFunding } from "../lib/rgbpp/bitcoin";
+import { ARM_SHAPE, fundingNeeded, mintShape, networkFee, plainFunding, shapeOf, strippedTx } from "../lib/rgbpp/bitcoin";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
 import { mintScript } from "../lib/rgbpp/launch";
-import { planMint, planOpen, planTicket, SEAL_SATS, type MinerCell, type Paymaster, type Plan } from "../lib/rgbpp/operations";
-import { reward, TICKET_SATS, ticketChallenge } from "../lib/standard";
+import { planArm, planMint, planTicket, SEAL_SATS, type Paymaster, type Plan } from "../lib/rgbpp/operations";
+import { NEW_CELL, REUSE, reward, TICKET_SATS, ticketChallenge, type Split } from "../lib/standard";
 import { landingTxids, useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
 import { useAnnounce } from "./useAnnounce";
 import { useMiningSession, type MiningTarget, type UseMiningSession } from "./useMiningSession";
 
 const INTENT_KEY = "btcfun:mine-intent:v1";
+const KEEP_KEY = "btcfun:kept-hash:v1";
+/** How often a step short of bitcoin re-reads the wallet's balance. */
+export const FUNDS_POLL_MS = 10_000;
 
-/** Bitcoin the current step needs, against what the wallet can spend on it. */
-export interface Funds {
-  /** About what the step's transaction takes from plain funding, fee included. */
-  needed: number;
+/** What signing the current step costs, and whether the wallet can pay for the rest of the round. */
+export interface Costs {
+  /** The ticket's split, for the ticket step; null for a step that pays only the network. */
+  split: Split | null;
+  /** What the paymaster asks beyond the ticket's budget for it, paid on top. */
+  paymasterExtra: number;
+  /** This transaction's network fee. */
+  network: number;
+  /** Network fees the round still has after this transaction: the arming, if any, and the mint. */
+  later: number;
+  /** Plain sats the wallet must hold before signing: this step and the fees still to come. */
+  reserve: number;
   /** Confirmed plain sats: what an operation can be funded from now. */
   spendable: number;
   /** Plain sats still waiting for a block. */
   pending: number;
   short: boolean;
+  feeRate: number;
 }
 
 export interface MiningLoop {
@@ -48,67 +70,92 @@ export interface MiningLoop {
   narration: Narration | null;
   mining: UseMiningSession;
   challenge: Uint8Array | null;
-  /** True once MINE was pressed on this launch in this tab, or the loop is already under way. */
+  /** True once MINE was pressed on this launch on this device, or the loop is already under way. */
   engaged: boolean;
-  /** The current step signs by itself: a demo wallet after MINE was pressed. */
-  auto: boolean;
   busy: boolean;
   failure: string | null;
-  /** Null when the step spends nothing, or the estimate is not ready. */
-  funds: Funds | null;
-  paymaster: Paymaster | null;
+  /** Null when the step signs nothing, or the estimate is not ready. */
+  costs: Costs | null;
+  /** The person chose the best hash so far: mining stopped, and the mint step is theirs to sign. */
+  keeping: boolean;
   /** What the best hash mints at the ticket's rate; 0 below the minimum. */
   mintable: bigint;
   engage: () => void;
-  open: () => void;
-  pay: (cell: MinerCell) => void;
-  mint: () => void;
+  /** Sign and send the ticket. */
+  signTicket: () => void;
+  /** Sign and send the arming of the paid cell. */
+  signArm: () => void;
+  /** Stop mining and keep the best hash; the mint step signs it. */
+  keep: () => void;
+  /** Mine on: the kept hash is let go. */
+  unkeep: () => void;
+  /** Sign and send the mint. */
+  signMint: () => void;
   again: () => void;
 }
 
-function readIntent(launchId: string): boolean {
+function readStored(key: string): string | null {
   try {
-    return sessionStorage.getItem(`${INTENT_KEY}:${launchId}`) === "1";
+    return localStorage.getItem(key);
   } catch {
-    return false;
+    return null;
   }
 }
 
-function writeIntent(launchId: string): void {
+function writeStored(key: string, value: string | null): void {
   try {
-    sessionStorage.setItem(`${INTENT_KEY}:${launchId}`, "1");
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch {
-    // Storage blocked: the press still holds for this page.
+    // Storage blocked: the choice still holds for this page.
   }
+}
+
+/** A value kept on the device under `key`, read once per key. */
+function useStored(key: string): [string | null, (value: string | null) => void] {
+  const [value, setValue] = useState(() => readStored(key));
+  const set = useCallback(
+    (next: string | null) => {
+      writeStored(key, next);
+      setValue(next);
+    },
+    [key],
+  );
+  return [value, set];
 }
 
 export function useMiningLoop(launch: Launch, tip: number, focus: boolean): MiningLoop {
   const wallet = useWallet();
   const tokens = useTokens();
   const announce = useAnnounce();
-  const [intent, setIntent] = useState(() => readIntent(launch.id));
+  const [intentFlag, setIntent] = useStored(`${INTENT_KEY}:${launch.id}`);
+  const intent = intentFlag === "1";
+  // The ticket (outpoint) whose best hash the person chose to mint.
+  const [kept, setKept] = useStored(`${KEEP_KEY}:${launch.id}`);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ message: string; funds: boolean } | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [feeRate, setFeeRate] = useState<number | null>(null);
   const [paymaster, setPaymaster] = useState<Paymaster | null>(null);
+  const [creating, setCreating] = useState<{ txid: string; bytes: Uint8Array } | null>(null);
 
   const mintHash = useMemo(() => mintScript(ACTIVE_RGBPP, launch.terms).hash(), [launch.terms]);
   const miners = tokens.holdings ? (tokens.holdings.miners.get(mintHash) ?? []) : null;
   const held = tokens.holdings?.tokens.get(launch.tokenId) ?? [];
+  const holding = held[0] ?? null;
   const operations = useMemo(() => tokens.operations.filter((op) => op.launchId === launch.id), [tokens.operations, launch.id]);
 
   // The ticket does not depend on the best hash, so it is derived first and
   // the session keyed by it; the full loop then folds the best hash in.
-  const ticket = deriveLoop({
+  const facts = {
     wallet: wallet.vault?.kind ?? null,
     offered: canMine(launch),
     launchOpen: launch.open,
     miners,
     operations,
-    bestClz: null,
     dismissed,
-  }).ticket;
+  };
+  const ticket = deriveLoop({ ...facts, bestClz: null }).ticket;
   // Keyed by the outpoint string, not the ticket object: that object is rebuilt
   // when a landing ticket settles, and the run must carry on through it.
   const key = ticket ? ticketKey(ticket.txid, ticket.vout) : null;
@@ -120,33 +167,24 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
   const mining = useMiningSession(target);
   const best = mining.progress.best;
 
-  const loop = deriveLoop({
-    wallet: wallet.vault?.kind ?? null,
-    offered: canMine(launch),
-    launchOpen: launch.open,
-    miners,
-    operations,
-    bestClz: best?.clz ?? null,
-    dismissed,
-  });
+  const loop = deriveLoop({ ...facts, bestClz: best?.clz ?? null });
   const { state } = loop;
-  const spends = state.at === "open" || state.at === "pay";
-  const auto = intent && wallet.vault?.kind === "demo";
+  const signs = state.at === "buy" || state.at === "arm" || state.at === "mint";
 
-  // What the spending steps cost: the fee rate and, to open, the paymaster's fee.
+  // The fee rate, fresh for each step that signs.
   useEffect(() => {
-    if (!spends || feeRate !== null) return;
+    if (!signs) return;
     let live = true;
-    void getFeeRate().then(
-      (rate) => live && setFeeRate(rate),
-      () => live && setFeeRate(1),
-    );
+    void fastFeeRate().then((rate) => live && setFeeRate(rate));
     return () => {
       live = false;
     };
-  }, [spends, feeRate]);
+  }, [signs, state.at]);
+
+  // The paymaster's fee, when a ticket creates its cell.
+  const needsPaymaster = state.at === "buy" && state.cell === null;
   useEffect(() => {
-    if (state.at !== "open" || paymaster !== null) return;
+    if (!needsPaymaster || paymaster !== null) return;
     let live = true;
     void tokens.service.paymaster().then(
       (p) => live && setPaymaster(p),
@@ -155,106 +193,114 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
     return () => {
       live = false;
     };
-  }, [state.at, paymaster, tokens.service]);
+  }, [needsPaymaster, paymaster, tokens.service]);
 
-  // Keyed by the cell, not the state object, which is rebuilt on every render.
-  const payCell = state.at === "pay" ? state.cell : null;
-  const opening = state.at === "open";
+  // Arming carries the ticket that created the cell: kept when this browser
+  // signed it, fetched otherwise.
+  const paidTxid = state.at === "arm" ? state.cell.seal.txid : null;
+  const ownHex = operations.find((op) => op.btcTxid === paidTxid)?.hex;
+  useEffect(() => {
+    if (!paidTxid || creating?.txid === paidTxid) return;
+    let live = true;
+    void (ownHex ? Promise.resolve(ownHex) : getTxHex(paidTxid)).then(
+      (hex) => live && setCreating({ txid: paidTxid, bytes: strippedTx(hex) }),
+      (err: unknown) => live && setFailure({ message: `Could not read the ticket transaction: ${String(err)}`, funds: false }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [paidTxid, ownHex, creating]);
+
+  const mintable = best && ticket ? reward(best.clz, launch.h0, ticket.anchor) : 0n;
+
+  // The plan for the step on screen, built exactly as it will be signed.
+  // Keyed by what shapes it — not by `state`, which is rebuilt every render.
+  const buyCell = state.at === "buy" ? state.cell : undefined;
+  const armCell = state.at === "arm" ? state.cell : null;
+  const mintCell = state.at === "mint" ? state.cell : null;
   const plan = useMemo<Plan | null>(() => {
     try {
-      if (opening) return paymaster ? planOpen(ACTIVE_RGBPP, launch.terms, paymaster) : null;
-      if (payCell) return planTicket(ACTIVE_RGBPP, launch.terms, payCell, tip);
+      if (buyCell !== undefined) {
+        if (buyCell === null && !paymaster) return null;
+        return planTicket(ACTIVE_RGBPP, launch.terms, { idle: buyCell, paymaster, tip });
+      }
+      if (armCell) {
+        return creating?.txid === armCell.seal.txid ? planArm(ACTIVE_RGBPP, launch.terms, armCell, creating.bytes, tip) : null;
+      }
+      if (mintCell && best) {
+        return planMint(ACTIVE_RGBPP, launch.terms, { miner: mintCell, held: holding, nonce: best.nonce, reward: mintable });
+      }
     } catch {
       // A tip behind the opening block: the step is not offered, so nothing to price.
     }
     return null;
-  }, [opening, payCell, paymaster, launch.terms, tip]);
+  }, [buyCell, armCell, mintCell, paymaster, creating, launch.terms, tip, holding, best, mintable]);
 
-  const funds = useMemo<Funds | null>(() => {
+  const costs = useMemo<Costs | null>(() => {
     if (!plan || feeRate === null || !wallet.balance) return null;
     const landing = landingTxids(tokens.operations);
     const spendable = plainFunding(wallet.balance.utxos, landing).reduce((n, u) => n + u.value, 0);
-    const pending = wallet.balance.utxos
-      .filter((u) => !u.confirmed && u.value !== SEAL_SATS)
-      .reduce((n, u) => n + u.value, 0);
-    const needed = fundingNeeded(plan, feeRate);
-    return { needed, spendable, pending, short: spendable < needed };
-  }, [plan, feeRate, wallet.balance, tokens.operations]);
+    const pending = wallet.balance.utxos.filter((u) => !u.confirmed && u.value !== SEAL_SATS).reduce((n, u) => n + u.value, 0);
+    const network = networkFee(shapeOf(plan), feeRate);
+    const mintLater = fundingNeeded(mintShape(holding !== null), feeRate);
+    const later = buyCell !== undefined ? (buyCell === null ? fundingNeeded(ARM_SHAPE, feeRate) : 0) + mintLater : armCell ? mintLater : 0;
+    const reserve = fundingNeeded(plan, feeRate) + later;
+    const split = buyCell === undefined ? null : buyCell === null ? NEW_CELL : REUSE;
+    const paymasterExtra = buyCell === null && paymaster ? Math.max(0, paymaster.feeSats - NEW_CELL.paymaster) : 0;
+    return { split, paymasterExtra, network, later, reserve, spendable, pending, short: spendable < reserve, feeRate };
+  }, [plan, feeRate, wallet.balance, tokens.operations, holding, buyCell, armCell, paymaster]);
 
-  // Set when a ticket is sent, so mining starts on it without another click.
-  const mineOn = useRef<string | null>(null);
+  // Short of bitcoin: ask for the balance every 10 s rather than the wallet's
+  // usual pace, so coins from a faucet unlock the step soon after they land.
+  const short = costs?.short ?? false;
+  const { refresh } = wallet;
+  useEffect(() => {
+    if (!short) return;
+    const timer = setInterval(() => void refresh(), FUNDS_POLL_MS);
+    return () => clearInterval(timer);
+  }, [short, refresh]);
 
-  const run = useCallback(
-    async (action: () => Promise<Operation>) => {
-      setBusy(true);
-      setFailure(null);
-      try {
-        return await action();
-      } catch (err) {
-        setFailure({ message: err instanceof Error ? err.message : String(err), funds: err instanceof InsufficientFunds });
-        return null;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [],
-  );
+  const run = useCallback(async (action: () => Promise<Operation>) => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      return await action();
+    } catch (err) {
+      setFailure({ message: err instanceof Error ? err.message : String(err), funds: err instanceof InsufficientFunds });
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
-  const open = useCallback(() => {
-    void run(async () =>
-      tokens.submit(planOpen(ACTIVE_RGBPP, launch.terms, paymaster ?? (await tokens.service.paymaster())), {
-        kind: "open",
-        launchId: launch.id,
-        tokenId: launch.tokenId,
-      }),
-    );
-  }, [run, tokens, launch, paymaster]);
+  const { submit } = tokens;
+  const signTicket = useCallback(() => {
+    if (buyCell === undefined || !plan || !costs || costs.short) return;
+    const meta = { launchId: launch.id, tokenId: launch.tokenId, kind: "ticket", sats: TICKET_SATS, anchor: tip, newCell: buyCell === null } as const;
+    void run(() => submit(plan, meta, { feeRate: costs.feeRate }));
+  }, [buyCell, plan, costs, run, submit, launch.id, launch.tokenId, tip]);
 
-  const pay = useCallback(
-    (cell: MinerCell) => {
-      void run(async () => {
-        const op = await tokens.submit(planTicket(ACTIVE_RGBPP, launch.terms, cell, tip), {
-          kind: "ticket",
-          launchId: launch.id,
-          tokenId: launch.tokenId,
-          sats: TICKET_SATS,
-          anchor: tip,
-        });
-        mineOn.current = op.btcTxid;
-        return op;
-      });
-    },
-    [run, tokens, launch, tip],
-  );
+  const signArm = useCallback(() => {
+    if (!armCell || !plan || !costs || costs.short) return;
+    const meta = { launchId: launch.id, tokenId: launch.tokenId, kind: "arm", anchor: tip } as const;
+    void run(() => submit(plan, meta, { feeRate: costs.feeRate }));
+  }, [armCell, plan, costs, run, submit, launch.id, launch.tokenId, tip]);
 
-  const mint = useCallback(() => {
-    if (state.at !== "mint" || !best) return;
-    const cell = state.cell;
+  const signMint = useCallback(() => {
+    if (!mintCell || !plan || !costs || costs.short) return;
+    const amount = mintable;
     mining.stop();
     void run(async () => {
-      const amount = reward(best.clz, launch.h0, cell.data.anchor);
-      const holding = held[0] ?? null;
-      const op = await tokens.submit(
-        planMint(ACTIVE_RGBPP, launch.terms, {
-          miner: cell,
-          held: holding,
-          nonce: best.nonce,
-          reward: amount,
-          paymaster: holding ? null : await tokens.service.paymaster(),
-        }),
-        { kind: "mint", launchId: launch.id, tokenId: launch.tokenId, atoms: amount.toString() },
-      );
+      const meta = { launchId: launch.id, tokenId: launch.tokenId, kind: "mint", atoms: amount.toString() } as const;
+      const op = await submit(plan, meta, { feeRate: costs.feeRate });
       // The public feed points at the transaction; anyone can check the mint
       // against both chains on the proof page.
       await announce({ kind: "mint", launch: launch.id, amount, ref: op.btcTxid, txid: op.btcTxid });
       return op;
     });
-  }, [state, best, mining, run, launch, held, tokens, announce]);
+  }, [mintCell, plan, costs, mintable, mining, run, submit, announce, launch.id, launch.tokenId]);
 
-  const engage = useCallback(() => {
-    writeIntent(launch.id);
-    setIntent(true);
-  }, [launch.id]);
+  const engage = useCallback(() => setIntent("1"), [setIntent]);
 
   // Arriving from a MINE button (`/launch/<id>/mine`) is the press itself.
   useEffect(() => {
@@ -263,39 +309,23 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
 
   const again = useCallback(() => {
     if (state.at === "minted") setDismissed(state.op.btcTxid);
+    setKept(null);
     setFailure(null);
     engage();
-  }, [state, engage]);
+  }, [state, engage, setKept]);
 
-  // The demo wallet, once MINE is pressed: open and pay without a click. Once
-  // per step and balance, so a refusal is shown rather than retried in a loop;
-  // money arriving is what earns another try.
-  const tried = useRef<string | null>(null);
-  const cellKey = state.at === "pay" ? `${state.cell.seal.txid}:${state.cell.seal.vout}` : "";
-  useEffect(() => {
-    if (!auto || busy || !spends || !funds || funds.short) return;
-    const attempt = `${state.at}:${cellKey}:${funds.spendable}`;
-    if (tried.current === attempt) return;
-    tried.current = attempt;
-    if (state.at === "open") open();
-    else if (state.at === "pay") pay(state.cell);
-  }, [auto, busy, spends, funds, state, cellKey, open, pay]);
+  const keep = useCallback(() => {
+    if (!key) return;
+    mining.stop();
+    setKept(key);
+  }, [key, mining, setKept]);
+  const unkeep = useCallback(() => setKept(null), [setKept]);
+  const keeping = key !== null && kept === key;
 
-  // A ticket just sent: mine it at once. Unconfirmed is fine — its output,
-  // the challenge, exists from the moment the transaction does.
-  useEffect(() => {
-    if (!mineOn.current || !key || !key.startsWith(`${mineOn.current}:`)) return;
-    mineOn.current = null;
-    if (!mining.running) mining.start();
-  }, [key, mining]);
-
-  const mintable = best && ticket ? reward(best.clz, launch.h0, ticket.anchor) : 0n;
-  const funded = funds === null || !funds.short;
   const narration = narrate(state, {
     symbol: launch.symbol,
     running: mining.running,
-    unfunded: (!funded && !busy) || (failure?.funds ?? false),
-    auto,
+    unfunded: (short && !busy) || (failure?.funds ?? false),
     busy,
   });
 
@@ -305,16 +335,17 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
     mining,
     challenge: target?.challenge ?? null,
     engaged: intent || inProgress(state),
-    auto,
     busy,
     failure: failure?.message ?? null,
-    funds: failure?.funds && funds ? { ...funds, short: true } : funds,
-    paymaster,
+    costs: failure?.funds && costs ? { ...costs, short: true } : costs,
+    keeping,
     mintable,
     engage,
-    open,
-    pay,
-    mint,
+    signTicket,
+    signArm,
+    keep,
+    unkeep,
+    signMint,
     again,
   };
 }

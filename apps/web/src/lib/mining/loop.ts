@@ -6,9 +6,12 @@
  * the current ticket. So a reload, a second tab or a mint made elsewhere all
  * land on the same step, and the page keeps no second copy of the truth.
  *
- * Mining can start the moment a ticket is broadcast — its output is the
- * challenge and exists as soon as the transaction does. Minting waits until the
- * armed cell has settled on CKB, because the mint spends that cell.
+ * The ticket is the round's one payment. With an idle miner cell it arms that
+ * cell at once; without one it creates the cell, paid, and a second signature
+ * — which pays only the network — arms it once the ticket has settled.
+ * Mining can start the moment the armed cell's transaction is broadcast: its
+ * output is the challenge and exists as soon as the transaction does. Minting
+ * waits until the armed cell has settled on CKB, because the mint spends it.
  *
  * Each completed step leaves a trace: the Bitcoin transaction it was, and
  * whether it is still landing or has settled. A "round" is one ticket and its
@@ -24,13 +27,15 @@ export type WalletKind = "passkey" | "local" | "demo";
 
 /** An operation as the loop reads it. `state/TokensProvider` `Operation` satisfies it. */
 export interface LoopOperation {
-  kind: "open" | "ticket" | "mint" | "transfer" | "list" | "buy" | "cancel";
+  kind: "open" | "ticket" | "arm" | "mint" | "transfer" | "list" | "buy" | "cancel";
   btcTxid: string;
   stage: "sent" | "queued" | "settled" | "failed";
   ckbTxHash: string | null;
   failure: string | null;
   anchor?: number;
   atoms?: string;
+  /** A ticket that created its miner cell, paid, rather than arming one. */
+  newCell?: boolean;
 }
 
 /** The ticket being mined: its Bitcoin output is the challenge. */
@@ -43,7 +48,7 @@ export interface Ticket {
   settled: boolean;
 }
 
-/** The output of a ticket's transaction the armed miner cell is sealed to (`planTicket`). */
+/** The output of a ticket's (or an arming's) transaction the miner cell is sealed to. */
 export const TICKET_VOUT = 1;
 
 export type TraceStage = "landing" | "settled" | "failed";
@@ -57,8 +62,9 @@ export interface Trace {
 }
 
 export interface Traces {
-  open: Trace | null;
   ticket: Trace | null;
+  /** The arming of a paid cell, in a round that created its miner cell. */
+  arm: Trace | null;
   mint: Trace | null;
 }
 
@@ -70,13 +76,14 @@ export type LoopState =
   | { at: "wallet" }
   /** The wallet is known; its cells are not read yet. */
   | { at: "reading" }
-  /** No miner cell for this launch: open one, once. */
-  | { at: "open" }
-  | { at: "opening"; op: LoopOperation }
+  /** Buy a ticket: re-arming this idle cell, or creating the cell when there is none. */
+  | { at: "buy"; cell: MinerCell | null }
+  /** A ticket that creates its cell is landing; arming waits for it to settle. */
+  | { at: "bought"; op: LoopOperation }
+  /** A paid cell: sign its arming, which pays only the network. */
+  | { at: "arm"; cell: MinerCell }
   /** Something else of this launch is landing; the next step waits for it. */
   | { at: "waiting"; op: LoopOperation }
-  /** An idle miner cell: buy a ticket. */
-  | { at: "pay"; cell: MinerCell }
   /** A ticket to mine. `landing`: minting waits for it to settle; `short`: no hash qualifies yet. */
   | { at: "mine"; ticket: Ticket; blocked: "landing" | "short" }
   | { at: "mint"; ticket: Ticket; cell: MinerCell }
@@ -115,7 +122,7 @@ export interface Loop {
 }
 
 const isLanding = (op: LoopOperation) => op.stage === "sent" || op.stage === "queued";
-const LOOP_KINDS = new Set<LoopOperation["kind"]>(["open", "ticket", "mint"]);
+const LOOP_KINDS = new Set<LoopOperation["kind"]>(["ticket", "arm", "mint"]);
 
 export function traceOf(op: LoopOperation): Trace {
   return {
@@ -126,10 +133,11 @@ export function traceOf(op: LoopOperation): Trace {
   };
 }
 
-/** The ticket to mine: the settled armed cell, or a ticket still landing. */
+/** The ticket to mine: the settled armed cell, or the transaction arming one, still landing. */
 export function currentTicket(armed: MinerCell | null, landing: LoopOperation | undefined): Ticket | null {
   if (armed) return { txid: armed.seal.txid, vout: armed.seal.vout, anchor: armed.data.anchor, settled: true };
-  if (landing?.kind === "ticket" && landing.anchor !== undefined) {
+  const arms = landing?.kind === "arm" || (landing?.kind === "ticket" && !landing.newCell);
+  if (arms && landing.anchor !== undefined) {
     return { txid: landing.btcTxid, vout: TICKET_VOUT, anchor: landing.anchor, settled: false };
   }
   return null;
@@ -139,12 +147,13 @@ export function deriveLoop(input: LoopInput): Loop {
   const { miners, operations } = input;
   const idle = miners?.find((m) => m.data.state === "idle") ?? null;
   const armed = miners?.find((m) => m.data.state === "armed") ?? null;
+  const paid = miners?.find((m) => m.data.state === "paid") ?? null;
   const landing = operations.find(isLanding);
   const ticket = currentTicket(armed, landing);
   const loopOps = operations.filter((op) => LOOP_KINDS.has(op.kind));
   const lastMint = loopOps.find((op) => op.kind === "mint");
 
-  const state = stateOf(input, { idle, armed, landing, ticket, loopOps, lastMint });
+  const state = stateOf(input, { idle, armed, paid, landing, ticket, loopOps, lastMint });
   const roundClosed = state.at === "minting" || state.at === "minted";
 
   // The current round: every loop operation newer than the last mint, or, once
@@ -154,18 +163,18 @@ export function deriveLoop(input: LoopInput): Loop {
   const end = roundClosed ? (secondMint < 0 ? loopOps.length : secondMint) : firstMint < 0 ? loopOps.length : firstMint;
   const round = loopOps.slice(0, end);
 
-  const openOp = round.find((op) => op.kind === "open");
+  const armOp = round.find((op) => op.kind === "arm");
   const ticketOp = round.find((op) => op.kind === "ticket");
   let ticketTrace = ticketOp ? traceOf(ticketOp) : null;
   // A ticket bought in another browser has no operation here; the chain still names it.
-  if (!ticketTrace && ticket) ticketTrace = { txid: ticket.txid, stage: ticket.settled ? "settled" : "landing", ckbTxHash: null, failure: null };
+  if (!ticketTrace && !armOp && ticket) ticketTrace = { txid: ticket.txid, stage: ticket.settled ? "settled" : "landing", ckbTxHash: null, failure: null };
 
   return {
     state,
     step: stepOf(state),
     traces: {
-      open: openOp ? traceOf(openOp) : null,
       ticket: ticketTrace,
+      arm: armOp ? traceOf(armOp) : null,
       mint: roundClosed ? traceOf(state.op) : null,
     },
     ticket,
@@ -177,17 +186,18 @@ function stateOf(
   facts: {
     idle: MinerCell | null;
     armed: MinerCell | null;
+    paid: MinerCell | null;
     landing: LoopOperation | undefined;
     ticket: Ticket | null;
     loopOps: readonly LoopOperation[];
     lastMint: LoopOperation | undefined;
   },
 ): LoopState {
-  const { idle, armed, landing, ticket, lastMint } = facts;
+  const { idle, armed, paid, landing, ticket, lastMint } = facts;
   // A launch the site does not offer mining on stays finishable for a wallet
   // that already paid for a ticket there; before its cells are read, "finish"
   // cannot be told from "closed".
-  const holdsTicket = ticket !== null || landing !== undefined;
+  const holdsTicket = ticket !== null || landing !== undefined || paid !== null;
   if (!input.offered && !holdsTicket && (input.wallet === null || input.miners !== null)) return { at: "closed" };
   if (!input.launchOpen) return { at: "not-open" };
   if (input.wallet === null) return { at: "wallet" };
@@ -199,15 +209,15 @@ function stateOf(
     const qualifies = input.bestClz !== null && input.bestClz >= MIN_CLZ;
     return qualifies && armed ? { at: "mint", ticket, cell: armed } : { at: "mine", ticket, blocked: "short" };
   }
-  if (landing) return landing.kind === "open" ? { at: "opening", op: landing } : { at: "waiting", op: landing };
-  if (!idle) return { at: "open" };
+  if (landing) return landing.kind === "ticket" && landing.newCell ? { at: "bought", op: landing } : { at: "waiting", op: landing };
+  if (paid) return { at: "arm", cell: paid };
   // The last thing this loop did was a mint: the round is complete until the
-  // person asks for the next one.
+  // person asks for the next one. A first mint leaves no miner cell behind.
   const lastLoop = facts.loopOps[0];
   if (lastMint && lastLoop === lastMint && input.dismissed !== lastMint.btcTxid) {
     return { at: "minted", op: lastMint, cell: idle };
   }
-  return { at: "pay", cell: idle };
+  return { at: "buy", cell: idle };
 }
 
 export function stepOf(state: LoopState): LoopStep | null {
@@ -218,10 +228,10 @@ export function stepOf(state: LoopState): LoopStep | null {
     case "wallet":
       return "wallet";
     case "reading":
-    case "open":
-    case "opening":
+    case "buy":
+    case "bought":
+    case "arm":
     case "waiting":
-    case "pay":
       return "ticket";
     case "mine":
       return "mine";
@@ -245,7 +255,7 @@ export function statusOf(step: LoopStep, current: LoopStep | null, state: LoopSt
 
 /** True when the loop has gone past a fresh start, so the page opens on it without a click. */
 export function inProgress(state: LoopState): boolean {
-  return ["opening", "waiting", "mine", "mint", "minting", "minted"].includes(state.at);
+  return ["bought", "arm", "waiting", "mine", "mint", "minting", "minted"].includes(state.at);
 }
 
 /** What is happening now and what comes next, one short line each. */
@@ -259,14 +269,13 @@ export interface NarrationContext {
   running: boolean;
   /** The wallet lacks the bitcoin the current step needs. */
   unfunded: boolean;
-  /** The current step signs by itself (the demo wallet, once MINE is pressed). */
-  auto: boolean;
   busy: boolean;
 }
 
 const LANDING_NAMES: Record<LoopOperation["kind"], string> = {
   open: "miner cell",
   ticket: "ticket",
+  arm: "ticket's arming",
   mint: "mint",
   transfer: "transfer",
   list: "listing",
@@ -276,38 +285,28 @@ const LANDING_NAMES: Record<LoopOperation["kind"], string> = {
 
 /** Null where the loop is not on offer: the page says why in its own words. */
 export function narrate(state: LoopState, ctx: NarrationContext): Narration | null {
-  const signing = ctx.busy || ctx.auto;
   switch (state.at) {
     case "closed":
     case "not-open":
       return null;
     case "wallet":
-      return { now: "You haven't connected a wallet yet", next: "Pick one below — then the ticket" };
+      return { now: "No wallet connected", next: "Pick one — then the ticket" };
     case "reading":
       return { now: "Reading your wallet", next: "Then the ticket" };
-    case "open":
-      if (ctx.unfunded) return { now: "Your wallet needs bitcoin", next: "Fund it — this step goes on by itself" };
-      return {
-        now: signing ? "Opening your miner cell" : "One-time setup: open your miner cell",
-        next: "One Bitcoin block, then the ticket",
-      };
-    case "opening":
-      return { now: "Your miner cell is landing", next: "The ticket, once it settles" };
+    case "buy":
+      if (ctx.unfunded) return { now: "Your wallet needs bitcoin", next: "The ticket unlocks once it arrives" };
+      return { now: ctx.busy ? "Signing the ticket" : "Buy the ticket", next: state.cell ? "Then mine" : "One block, then arm it and mine" };
+    case "bought":
+      return { now: "Your ticket is landing", next: "One Bitcoin block, then arm it" };
+    case "arm":
+      if (ctx.unfunded) return { now: "Your wallet needs bitcoin", next: "Arming unlocks once it arrives" };
+      return { now: ctx.busy ? "Signing the arming" : "Arm your ticket", next: "Then mine" };
     case "waiting":
       return { now: `Your ${LANDING_NAMES[state.op.kind]} is landing`, next: "The ticket, once it settles" };
-    case "pay":
-      if (ctx.unfunded) return { now: "Your wallet needs bitcoin for the ticket", next: "Fund it — this step goes on by itself" };
-      return {
-        now: signing ? "Paying the ticket" : "Pay the ticket to start mining",
-        next: "Mining starts as soon as it is sent",
-      };
     case "mine":
       return {
         now: ctx.running ? `Mining ${ctx.symbol}` : "Mining paused",
-        next:
-          state.blocked === "landing"
-            ? "Minting unlocks when the ticket settles"
-            : `Minting unlocks at ${MIN_CLZ} zero bits`,
+        next: state.blocked === "landing" ? "Minting unlocks when the ticket settles" : `Minting unlocks at ${MIN_CLZ} zero bits`,
       };
     case "mint":
       return { now: "Your hash qualifies", next: "Mint it — or keep mining for a stronger one" };
@@ -315,7 +314,7 @@ export function narrate(state: LoopState, ctx: NarrationContext): Narration | nu
       return { now: `Minting your ${ctx.symbol}`, next: "The tokens arrive after one Bitcoin block" };
     case "minted":
       return state.op.stage === "failed"
-        ? { now: "The mint did not complete", next: "See the transaction below" }
+        ? { now: "The mint did not complete", next: "See the transaction" }
         : { now: `${ctx.symbol} minted`, next: "Mine again with a new ticket" };
   }
 }

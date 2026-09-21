@@ -556,12 +556,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 22px; }
   display: block;
   padding: var(--space-3) var(--space-4);
   /* Neutral by default: most notices here are caveats, not warnings. Colour is
-     reserved for the tones below so a real failure still stands out. The left
-     rule is the tone's status light. */
-  --tone: var(--line-strong);
+     reserved for the tones below so a real failure still stands out, in the
+     whole frame rather than a stripe down one side. */
+  --tone: var(--line);
   background: var(--surface-1);
-  border: var(--border-w) solid var(--line);
-  border-left: var(--frame-w) solid var(--tone);
+  border: var(--border-w) solid color-mix(in oklab, var(--tone) 60%, var(--line));
   border-radius: var(--radius-sm);
   color: var(--ink-dim);
   font-size: var(--text-md);

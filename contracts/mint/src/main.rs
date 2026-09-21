@@ -13,6 +13,20 @@
 //! script reads that same witness — the ticket payment and the confirming
 //! height — and checks that the lock really is the RGB++ lock, so the witness
 //! it reads is one the lock has verified.
+//!
+//! A round starts one of two ways. A miner with an idle cell re-arms it with a
+//! ticket paid in the arming transaction. A miner without one pays the whole
+//! ticket in the transaction that creates the cell, as `Paid`; nothing on CKB
+//! can check that transaction, since it spends no RGB++ input, so the payment
+//! is checked when the cell is armed: the arming transaction spends the paid
+//! cell's seal, and carries the creating transaction in full in its btc.fun
+//! witness, which is authentic when it hashes to the seal's txid.
+//!
+//! The btc.fun witness is the first witness past the inputs. The RGB++ queue
+//! rewrites the witnesses of RGB++ inputs, and only those; one past the inputs
+//! reaches the script as the client wrote it. Nothing it carries needs to be
+//! trusted: a creating transaction is checked against its hash, a nonce
+//! against the work it claims.
 
 #![no_std]
 #![cfg_attr(not(test), no_main)]
@@ -23,13 +37,13 @@ use ckb_std::{
     ckb_types::{bytes::Bytes, packed::Script, prelude::*},
     error::SysError,
     high_level::{
-        load_cell_data, load_cell_lock, load_cell_type, load_script, load_script_hash,
+        load_cell_data, load_cell_lock, load_cell_type, load_input_since, load_script, load_script_hash, load_witness,
         load_witness_args, QueryIter,
     },
 };
 use mint_core::{
-    anchor_valid, pays_tickets, PLATFORM_SCRIPT, reward, ticket_challenge, udt_amount, work_clz, LaunchTerms, MinerCell,
-    MinerState,
+    anchor_valid, pays_tickets, reward, ticket_challenge, txid, udt_amount, work_clz, LaunchTerms, MinerCell,
+    MinerState, Split, NEW_CELL, PAID_SEAL_VOUT, PLATFORM_SCRIPT, REUSE,
 };
 use rgbpp_core::{
     bitcoin::{parse_btc_tx, BTCTx},
@@ -62,6 +76,17 @@ enum Error {
     MintMustDisarm,
     UdtOverflow,
     BadUdtData,
+    /// A paid cell created where an RGB++ input could lend its payment.
+    PaidBesideRgbppInput,
+    /// A paid cell may only be armed or closed.
+    PaidCannotMove,
+    /// No btc.fun witness, or one that is not what this step needs.
+    BadBtcfunWitness,
+    /// The paid cell is not sealed where a ticket seals it, or the creating
+    /// transaction in the witness is not the one the seal names.
+    BadPaidSeal,
+    /// Arming a paid cell beside anything but paid cells.
+    PaidArmedBesideOthers,
 }
 
 impl From<SysError> for Error {
@@ -95,21 +120,44 @@ fn main() -> Result<(), Error> {
     let minted = udt_delta(&load_script_hash()?)?;
 
     match (before, after) {
-        // Open. Owner mode is not active without a miner cell input, so the
-        // xUDT itself already forbids a mint here.
+        // Open idle. Owner mode is not active without a miner cell input, so
+        // the xUDT itself already forbids a mint here.
         (None, Some(MinerState::Idle)) => Ok(()),
+        // Open paid: the ticket transaction creates the cell. Its payment is
+        // checked when the cell is armed. An RGB++ input here would mean the
+        // same Bitcoin transaction also moves other cells — perhaps arming one,
+        // with a payment this cell could later claim as its own.
+        (None, Some(MinerState::Paid)) => {
+            if QueryIter::new(load_cell_lock, Source::Input).any(|lock| is_rgbpp_lock(&lock)) {
+                Err(Error::PaidBesideRgbppInput)
+            } else {
+                Ok(())
+            }
+        }
         (None, Some(MinerState::Armed)) => Err(Error::ArmedWithoutTicket),
         (None, None) => Err(Error::BadMinerState),
-        // Close or move, armed or not: owner mode is active, so this script is
-        // what stops a balance from growing.
-        (Some(_), None) | (Some(MinerState::Idle), Some(MinerState::Idle)) => no_increase(minted),
-        // Ticket: the Bitcoin transaction that moves the cell pays the promoter,
-        // and the armed cell records the height its reward will be priced at.
+        // Ticket on an idle cell: the arming Bitcoin transaction pays it.
         (Some(MinerState::Idle), Some(MinerState::Armed)) => {
             let btc = verified_bitcoin_tx()?;
             arm(&btc, &terms, after_cell.unwrap())?;
+            require_ticket(&btc.tx, &terms, REUSE)?;
             no_increase(minted)
         }
+        // Ticket on a paid cell: the creating transaction paid it.
+        (Some(MinerState::Paid), Some(MinerState::Armed)) => {
+            let btc = verified_bitcoin_tx()?;
+            arm(&btc, &terms, after_cell.unwrap())?;
+            if QueryIter::new(load_cell_data, Source::Input).any(|data| {
+                MinerCell::parse(&data).is_some_and(|cell| cell.state != MinerState::Paid)
+            }) {
+                return Err(Error::PaidArmedBesideOthers);
+            }
+            let creating = creating_tx()?;
+            require_ticket(&creating, &terms, NEW_CELL)?;
+            no_increase(minted)
+        }
+        (Some(MinerState::Paid), Some(_)) => Err(Error::PaidCannotMove),
+        (Some(_), Some(MinerState::Paid)) => Err(Error::BadMinerState),
         // Mint at the consumed ticket's anchor. Nothing here depends on the
         // height this transaction confirms at, so once signed it cannot become
         // invalid — which matters because it may carry the miner's balance.
@@ -119,13 +167,58 @@ fn main() -> Result<(), Error> {
         (Some(MinerState::Armed), Some(MinerState::Idle)) => {
             let (ticket, created) = (before_cell.unwrap(), after_cell.unwrap());
             let expected = mint_amount(&terms, sealed_outpoint()?, created.nonce, ticket.anchor)?;
-            if minted == i128::from(expected) {
-                Ok(())
-            } else {
-                Err(Error::WrongAmount)
-            }
+            exactly(minted, expected)
         }
+        // A first mint dissolves the miner cell into the token cell, whose
+        // capacity it becomes. No cell is left to carry the nonce, so it
+        // travels in the btc.fun witness; a wrong one fails the work check, and
+        // one that moves nothing is a plain close.
+        (Some(MinerState::Armed), None) if minted != 0 => {
+            let ticket = before_cell.unwrap();
+            let expected = mint_amount(&terms, sealed_outpoint()?, witness_nonce()?, ticket.anchor)?;
+            exactly(minted, expected)
+        }
+        // Close or move: owner mode is active, so this script is what stops a
+        // balance from growing.
+        (Some(_), None) | (Some(MinerState::Idle), Some(MinerState::Idle)) => no_increase(minted),
     }
+}
+
+fn exactly(minted: i128, expected: u64) -> Result<(), Error> {
+    if minted == i128::from(expected) {
+        Ok(())
+    } else {
+        Err(Error::WrongAmount)
+    }
+}
+
+/// The btc.fun witness: the first witness past the inputs.
+fn btcfun_witness() -> Result<Bytes, Error> {
+    let inputs = QueryIter::new(load_input_since, Source::Input).count();
+    load_witness(inputs, Source::Input).map(Bytes::from).map_err(|_| Error::BadBtcfunWitness)
+}
+
+/// The nonce a dissolving mint claims: eight bytes, little-endian.
+fn witness_nonce() -> Result<u64, Error> {
+    let witness = btcfun_witness()?;
+    let bytes: [u8; 8] = witness.as_ref().try_into().map_err(|_| Error::BadBtcfunWitness)?;
+    Ok(u64::from_le_bytes(bytes))
+}
+
+/// The Bitcoin transaction that created the paid cell being armed: carried
+/// whole in the btc.fun witness, and authentic because it hashes to the txid
+/// the cell is sealed to — the output the arming transaction spends, which the
+/// RGB++ lock has verified.
+fn creating_tx() -> Result<BTCTx, Error> {
+    let (seal_txid, vout) = sealed_outpoint()?;
+    if vout != PAID_SEAL_VOUT {
+        return Err(Error::BadPaidSeal);
+    }
+    let raw = btcfun_witness()?;
+    if txid(&raw) != seal_txid {
+        return Err(Error::BadPaidSeal);
+    }
+    parse_btc_tx(&raw).map_err(|_| Error::BadBitcoinTx)
 }
 
 /// The single miner cell in `source`, if any. More than one per side would let
@@ -264,10 +357,9 @@ fn rgbpp_unlock(lock: &Script) -> Result<RGBPPUnlock, Error> {
     RGBPPUnlock::from_slice(&field).map_err(|_| Error::BadRgbppWitness)
 }
 
-/// A ticket bought by `btc`: paid, and anchored no later than it confirmed and
-/// at most a day before.
+/// A ticket armed by `btc`: anchored no later than it confirmed and at most a
+/// day before. Who paid for it is the caller's check.
 fn arm(btc: &VerifiedBitcoin, terms: &LaunchTerms, armed: MinerCell) -> Result<(), Error> {
-    require_ticket(&btc.tx, terms)?;
     if anchor_valid(armed.anchor, terms.h0, btc.height) {
         Ok(())
     } else {
@@ -275,10 +367,10 @@ fn arm(btc: &VerifiedBitcoin, terms: &LaunchTerms, armed: MinerCell) -> Result<(
     }
 }
 
-/// The Bitcoin transaction pays one ticket for every miner cell it arms: the
-/// promoter's share across every launch of this script that names the same
+/// `tx` pays one ticket at `price` for every miner cell this transaction arms:
+/// the promoter's share across every launch of this script that names the same
 /// promoter, and the platform's share across every launch.
-fn require_ticket(tx: &BTCTx, terms: &LaunchTerms) -> Result<(), Error> {
+fn require_ticket(tx: &BTCTx, terms: &LaunchTerms, price: Split) -> Result<(), Error> {
     let own = load_script()?;
     let (mut own_armed, mut all_armed) = (0u64, 0u64);
     for (index, type_script) in QueryIter::new(load_cell_type, Source::Output).enumerate() {
@@ -299,7 +391,7 @@ fn require_ticket(tx: &BTCTx, terms: &LaunchTerms) -> Result<(), Error> {
         }
     }
     let outputs = tx.outputs.iter().map(|out| (out.value, out.script.as_ref()));
-    if pays_tickets(outputs, terms.promoter_script, PLATFORM_SCRIPT, own_armed, all_armed) {
+    if pays_tickets(outputs, terms.promoter_script, PLATFORM_SCRIPT, own_armed, all_armed, price) {
         Ok(())
     } else {
         Err(Error::TicketUnpaid)

@@ -1,7 +1,9 @@
 import { Diagram } from "../../../components/diagram/Diagram";
 import { group } from "../../../lib/format";
 import { SEAL_SATS } from "../../../lib/rgbpp/operations";
-import { ANCHOR_GRACE_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, TICKET_SATS } from "../../../lib/standard";
+import { FUNDS_POLL_MS } from "../../../hooks/useMiningLoop";
+import { MIN_FAST_FEE_RATE } from "../../../lib/bitcoin/provider";
+import { ANCHOR_GRACE_BLOCKS, MIN_CLZ, NEW_CELL, PLATFORM_PERCENT, REUSE, TICKET_SATS } from "../../../lib/standard";
 import { DocLink, Technical } from "../../parts";
 import { CIRCUIT, MINER_CELL, MINT_TX, TICKET_TX } from "./diagrams";
 
@@ -9,47 +11,60 @@ export default function MintPage() {
   return (
     <>
       <section>
-        <h2>Four steps</h2>
+        <h2>Four steps, one payment</h2>
         <ol>
           <li>
-            <strong>Open.</strong> Once per launch you open a <em>miner cell</em>: a small record on CKB that belongs to
-            one of your Bitcoin outputs. It holds no tokens; it is the slot a ticket goes into.
+            <strong>Ticket.</strong> You sign one Bitcoin transaction that pays {group(TICKET_SATS)} sats — always the same
+            price — plus the network fee. It is the round's only payment. It moves your <em>miner cell</em>, a small
+            record on CKB that belongs to one of your Bitcoin outputs, to a new output of that transaction: that output is
+            your mining challenge, and nobody could have worked on it before you paid. The first time on a launch you have
+            no miner cell, so the ticket creates it, and {group(NEW_CELL.paymaster)} of the price pays the RGB++ paymaster
+            for its room on CKB.
           </li>
           <li>
-            <strong>Ticket.</strong> You sign one Bitcoin transaction that pays {group(TICKET_SATS)} sats —{" "}
-            {group(PROMOTER_SATS)} to the launch's promoter and {group(PLATFORM_FEE_SATS)} to the platform — and moves
-            your miner cell to a new output of that same transaction. That new output is your mining challenge: it did not
-            exist before you paid, so nobody could have worked on it in advance.
+            <strong>Arm</strong> — only when the ticket created the cell. Nothing on CKB can check a transaction that
+            spends no sealed output, so the new cell starts <em>paid</em>, and a second transaction arms it once the
+            ticket has one confirmation. It pays nothing but the network, and carries the ticket so the mint script can
+            check what it paid.
           </li>
           <li>
             <strong>Mine.</strong> Your browser searches for a number (a <em>nonce</em>) that makes the hash of the
             challenge start with as many zero bits as possible. The page shows what your best hash so far would mint. You
-            can stop after a minute or keep going for days: a ticket has no expiry. <strong>Mine</strong>,{" "}
+            can stop after a minute or keep going for days: a ticket has no expiry. <strong>Start</strong>,{" "}
             <strong>Pause</strong> and <strong>Continue</strong> drive one search: the page keeps, per ticket, how many
             nonces have been tried and the best hash found, so a pause or a reload picks up where it stopped. The challenge
-            is fixed by your ticket; pausing, reloading or restarting never changes it — more time only means more chances
-            at a stronger hash.
+            is fixed by your ticket; more time only means more chances at a stronger hash.
           </li>
           <li>
-            <strong>Mint.</strong> You sign a Bitcoin transaction that spends the ticket output. The tokens it mints are
-            created in an output of that transaction, which you control. The next ticket is a new transaction.
+            <strong>Mint.</strong> You sign a Bitcoin transaction that spends the ticket's output and pays only the
+            network. The tokens it mints are created in an output of that transaction, which you control. On a first mint
+            the miner cell's room becomes your token cell, so the next round's ticket creates a new one; from the third
+            round on, the ticket re-arms the cell you have and no paymaster is paid.
           </li>
         </ol>
         <p>
-          On a launch page these steps are a wizard under the token's header. The big <strong>Mine</strong> button in the
-          header starts it; without a wallet, the first step asks for one in place — your own, behind a passkey, or the
-          shared demo wallet — and the page never leaves the token. Each step is one line saying what is happening now and
-          what comes next, and each finished step keeps its trace: the Bitcoin transaction, a link to it on
-          mempool.space, and whether it is still landing or has settled. The mint's trace also links to its proof.
+          On a launch page the big <strong>Mine</strong> button turns the token's header into a wizard. Its steps —
+          wallet, ticket, mine, mint — sit side by side and one fills the box at a time; a bar under it holds every
+          action: <strong>Back</strong> on the left, and on the right what the step asks for — <strong>Sign ticket</strong>,{" "}
+          <strong>Arm ticket</strong>, <strong>Start mining</strong> or <strong>Pause</strong>,{" "}
+          <strong>Accept · mint</strong>, <strong>Sign mint</strong>. Nothing is signed without that press, whatever the
+          wallet: the demo and browser wallets sign on it, a passkey wallet asks for the passkey. Each finished step keeps
+          its trace: the Bitcoin transaction, a link to it on mempool.space, and whether it is still landing or has
+          settled. The mint's trace also links to its proof.
         </p>
         <p>
-          The step you are on is decided by the chain, not by the page: reload it, open it in another tab or mint
-          elsewhere, and it shows the same step. With a wallet of your own every payment waits for your click on{" "}
-          <strong>Open miner cell</strong> or <strong>Sign and pay</strong>, next to exactly what it pays. The demo wallet's
-          key is public and shared, so once you press <strong>Mine</strong> it opens the cell and pays the ticket by itself,
-          and mining starts the moment the ticket is sent. If the wallet lacks the bitcoin a step needs, the step shows the
-          full address and faucets, and carries on once the coins confirm. The <strong>Mine</strong> button on a launch's box
-          in the catalogue counts as the press and opens the page on the wizard.
+          The ticket step shows the bill before you sign: promoter, platform, paymaster when the round creates the cell,
+          the network fee, the total, and, apart, what the arming and the mint will cost in network fees. The wallet must
+          hold all of it before the ticket can be signed: a ticket paid without the fees to mint it would be lost. If it
+          does not, the step says how much is missing, shows the address and faucets, and re-reads the balance every{" "}
+          {FUNDS_POLL_MS / 1000} seconds. Every mining transaction pays the larger of {MIN_FAST_FEE_RATE} sat/vB and
+          mempool.space's “fastest” rate, and its size is estimated by the same rule that signs it.
+        </p>
+        <p>
+          Mining never waits for a block: the challenge is the armed cell's output and exists as soon as the transaction
+          does. Minting does wait for it, because the mint spends that cell on CKB. The step the loop stands on is decided
+          by the chain, not by the page: reload it or open it in another tab and it shows the same step. Minted tokens
+          show in your wallet as landing until their own block.
         </p>
         <p>
           On this testnet showcase the site offers its miner on one launch, the platform's DEMO, so everyone's tickets and
@@ -61,7 +76,10 @@ export default function MintPage() {
         <p>
           The diamonds are the checks the mint script makes on CKB. The app runs the same arithmetic to show you the
           reward, but it is the script that decides: a ticket that does not pay both shares, or whose anchor is too old, is
-          never armed, and a mint with too little work or the wrong amount mints nothing.
+          never armed, and a mint with too little work or the wrong amount mints nothing. The split is fixed there too:{" "}
+          {PLATFORM_PERCENT} % of what the ticket leaves after the paymaster goes to the platform — {group(NEW_CELL.platform)}{" "}
+          or {group(REUSE.platform)} sats — and the rest, {group(NEW_CELL.promoter)} or {group(REUSE.promoter)}, to the
+          promoter.
         </p>
       </section>
 
@@ -81,9 +99,9 @@ export default function MintPage() {
         <p>
           Between those moments the app shows the operation as <strong>landing</strong>: first “broadcast — waiting for its
           Bitcoin confirmation”, then “the RGB++ queue is completing it on CKB”. How long that takes depends on the next
-          Bitcoin block and on the queue; it has not yet been measured on a live testnet run. Mining can start as soon as the ticket is
-          broadcast, because its output exists from that moment, but minting waits until the armed cell has landed on CKB,
-          because the mint spends it.
+          Bitcoin block and on the queue; it has not yet been measured on a live testnet run. Mining can start as soon as the
+          arming is broadcast, because its output exists from that moment, but minting waits until the armed cell has
+          landed on CKB, because the mint spends it.
         </p>
         <p>
           Nothing in a mint depends on <em>when</em> it confirms. The rate was fixed by the ticket, so a mint that confirms
@@ -96,8 +114,8 @@ export default function MintPage() {
       <section>
         <h2>The miner cell</h2>
         <p>
-          The miner cell is the ticket's memory. Its data is 13 bytes: whether a ticket is loaded, the nonce of your last
-          mint, and the <em>anchor</em> — the block height your current ticket was bought at, which fixes its rate.
+          The miner cell is the ticket's memory. Its data is 13 bytes: whether it is paid, armed or idle, the nonce of your
+          last mint, and the <em>anchor</em> — the block height your current ticket was armed at, which fixes its rate.
         </p>
         <Diagram spec={MINER_CELL} />
       </section>
@@ -124,13 +142,21 @@ export default function MintPage() {
               cell.
             </li>
             <li>
-              Miner cell data: <code>state u8 ‖ nonce u64 LE ‖ anchor u32 LE</code>. The ticket writes <code>state = 1</code>{" "}
-              and <code>anchor</code> = the tip the wallet sees; the script accepts that anchor only if it is no earlier
-              than the launch's opening height, no later than the block that confirms the ticket (proven by the Bitcoin SPV
-              client on CKB), and at most {ANCHOR_GRACE_BLOCKS} blocks before it.
+              Miner cell data: <code>state u8 ‖ nonce u64 LE ‖ anchor u32 LE</code>, state 0 idle, 1 armed, 2 paid. Arming
+              writes <code>state = 1</code> and <code>anchor</code> = the tip the wallet sees; the script accepts that
+              anchor only if it is no earlier than the launch's opening height, no later than the block that confirms the
+              arming (proven by the Bitcoin SPV client on CKB), and at most {ANCHOR_GRACE_BLOCKS} blocks before it.
             </li>
             <li>
-              A mint consumes an armed cell and returns it idle with the nonce. The script recomputes the challenge from
+              A paid cell is created by a ticket that spends no sealed output, so the script cannot check that ticket when
+              the cell appears. It checks it when the cell is armed: the arming spends the paid cell's output 1, and carries
+              the ticket, without its witness data, as the first witness past the inputs — where the RGB++ queue leaves it
+              as written. It must hash to the txid the cell is sealed to and pay the new-cell split. A paid cell cannot
+              move, cannot be created beside an RGB++ input, and is armed alone, so one payment arms one cell.
+            </li>
+            <li>
+              A mint consumes an armed cell and returns it idle with the nonce — or, on a first mint, turns its capacity
+              into the token cell and carries the nonce as the first witness past the inputs. The script recomputes the challenge from
               the outpoint the consumed cell was sealed to, the hash from the nonce, requires at least {MIN_CLZ} leading
               zero bits, and requires the launch's xUDT balance to grow by exactly{" "}
               <DocLink to="tokenomics">the standard reward</DocLink> at the ticket's anchor. A mint that re-arms is
@@ -144,8 +170,9 @@ export default function MintPage() {
               mint.
             </li>
             <li>
-              Opening needs no CKB of your own: the RGB++ paymaster provides the cell's capacity for a fee paid in the same
-              Bitcoin transaction. A first mint uses the paymaster the same way for the new token cell.
+              A first ticket needs no CKB of your own: the RGB++ paymaster provides the cell's capacity for its fee, paid
+              in the same Bitcoin transaction out of the ticket's price. A paymaster asking more than{" "}
+              {group(NEW_CELL.paymaster)} is paid the difference on top, on its own line; the split never changes.
             </li>
             <li>
               The queue waits for the Bitcoin confirmation, attaches the SPV proof, writes the real txid where the plan

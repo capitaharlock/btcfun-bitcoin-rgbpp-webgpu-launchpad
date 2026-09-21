@@ -228,6 +228,8 @@ pub struct Op {
     pub outputs: Vec<Out>,
     /// Witnesses to put in place of the generated ones, by input index.
     pub witness_overrides: Vec<(usize, Bytes)>,
+    /// The btc.fun witness, appended past the inputs' witnesses.
+    pub btcfun_witness: Option<Bytes>,
     /// Bitcoin outputs after the commitment: seals and payments.
     pub btc_outputs: Vec<(i64, Vec<u8>)>,
     pub height: u32,
@@ -235,7 +237,7 @@ pub struct Op {
 
 impl Op {
     pub fn new() -> Self {
-        Op { inputs: vec![], outputs: vec![], witness_overrides: vec![], btc_outputs: vec![], height: H0 }
+        Op { inputs: vec![], outputs: vec![], witness_overrides: vec![], btcfun_witness: None, btc_outputs: vec![], height: H0 }
     }
 
     /// Build the Bitcoin transaction and the CKB transaction committed by it.
@@ -347,6 +349,9 @@ impl Op {
         for (index, witness) in &self.witness_overrides {
             witnesses[*index] = witness.pack();
         }
+        if let Some(witness) = &self.btcfun_witness {
+            witnesses.push(witness.pack());
+        }
 
         let tx = tx
             .as_advanced_builder()
@@ -355,6 +360,24 @@ impl Op {
             .build();
         (tx, btc_txid)
     }
+}
+
+/// A Bitcoin transaction as a ticket that creates a paid miner cell builds it:
+/// commitment at 0, the seal at 1, then `payments`. Returns its serialization
+/// without witness and its txid (internal order).
+pub fn creating_tx(payments: Vec<(i64, Vec<u8>)>) -> (Bytes, [u8; 32]) {
+    let mut outputs = vec![TxOut::new_seal(0, [0x9c; 32]), TxOut { value: 546, script: p2wpkh(0x01).into() }];
+    outputs.extend(payments.into_iter().map(|(value, script)| TxOut { value, script: script.into() }));
+    let btc = BTCTx {
+        txid: [0u8; 32].pack(),
+        version: 2,
+        lock_time: 0,
+        inputs: vec![TxIn { previous_output: ([0x5a; 32].pack(), 0), script: Bytes::new(), sequence: 0xffff_fffd }],
+        outputs,
+    };
+    let raw = encode_btc_tx(btc);
+    let txid = sha2(&sha2(&raw));
+    (raw, txid)
 }
 
 /// A syntactically valid RGB++ unlock for an arbitrary Bitcoin transaction —

@@ -134,8 +134,8 @@ describe("layout", () => {
 
   it("centres the nodes of one row on one line", () => {
     const g = layout(CIRCUIT);
-    const open = g.nodes.find((n) => n.id === "open")!.box;
-    const idle = g.nodes.find((n) => n.id === "idle")!.box;
+    const open = g.nodes.find((n) => n.id === "ticket")!.box;
+    const idle = g.nodes.find((n) => n.id === "ticketTx")!.box;
     expect(open.y + open.h / 2).toBeCloseTo(idle.y + idle.h / 2);
   });
 

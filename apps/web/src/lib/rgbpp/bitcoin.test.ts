@@ -4,10 +4,11 @@ import { deriveKey } from "../bitcoin/keys";
 import { TESTNET3 } from "../bitcoin/network";
 import { InsufficientFunds } from "../bitcoin/payment";
 import type { Utxo } from "../bitcoin/provider";
-import { fundingNeeded, plainFunding, signOperation } from "./bitcoin";
+import { ARM_SHAPE, fundingNeeded, mintShape, networkFee, plainFunding, shapeOf, signOperation, strippedTx } from "./bitcoin";
 import { TESTNET } from "./config";
 import { metadataHash, type LaunchTerms } from "./launch";
-import { planOpen, planTicket, SEAL_SATS, type MinerCell } from "./operations";
+import { displayTxid, planArm, planMint, planTicket, SEAL_SATS, type MinerCell } from "./operations";
+import { NEW_CELL, REUSE } from "../standard";
 
 const key = deriveKey(new Uint8Array(32).fill(7), TESTNET3);
 const terms: LaunchTerms = {
@@ -32,9 +33,19 @@ describe("funding an operation", () => {
     expect(plainFunding(utxos, new Set([landing.txid]))).toEqual([coin(20_000, 1)]);
   });
 
+  const armed: MinerCell = { ...idle, data: { state: "armed", nonce: 0n, anchor: terms.h0 } };
+  const held = { outPoint: { txHash: "0x" + "56".repeat(32), index: 0 }, capacity: 20_000_000_000n, seal: { txid: "78".repeat(32), vout: 2 }, amount: 5n };
+  const heldUtxo: Utxo = { txid: held.seal.txid, vout: 2, value: SEAL_SATS, confirmed: true };
+  const creating = Uint8Array.from([1, 2, 3]);
+  const paid: MinerCell = { ...idle, seal: { txid: displayTxid(creating), vout: 1 }, data: { state: "paid", nonce: 0n, anchor: 0 } };
+  const paidUtxo: Utxo = { txid: paid.seal.txid, vout: 1, value: SEAL_SATS, confirmed: true };
+
   for (const [name, plan, sealed] of [
-    ["a ticket", planTicket(TESTNET, terms, idle, terms.h0), [sealUtxo]],
-    ["an opening", planOpen(TESTNET, terms, paymaster), []],
+    ["a re-arming ticket", planTicket(TESTNET, terms, { idle, paymaster: null, tip: terms.h0 }), [sealUtxo]],
+    ["a ticket that creates its cell", planTicket(TESTNET, terms, { idle: null, paymaster, tip: terms.h0 }), []],
+    ["an arming", planArm(TESTNET, terms, paid, creating, terms.h0), [paidUtxo]],
+    ["a first mint", planMint(TESTNET, terms, { miner: armed, held: null, nonce: 1n, reward: 1n }), [sealUtxo]],
+    ["a later mint", planMint(TESTNET, terms, { miner: armed, held, nonce: 1n, reward: 1n }), [sealUtxo, heldUtxo]],
   ] as const) {
     it(`estimates exactly what signing ${name} takes from one coin`, () => {
       for (const feeRate of [1, 3, 12]) {
@@ -45,10 +56,33 @@ describe("funding an operation", () => {
     });
   }
 
-  it("prices a ticket at its two payments plus the fee, less the seal it spends", () => {
-    const needed = fundingNeeded(planTicket(TESTNET, terms, idle, terms.h0), 1, TESTNET3);
-    // outputs: seal 546 + promoter 9,500 + platform 500; the idle cell's seal brings 546 back.
-    expect(needed).toBeGreaterThan(10_000);
-    expect(needed).toBeLessThan(10_000 + 400);
+  it("sizes an arming and a mint before they exist, by the rule that signs them", () => {
+    const arm = planArm(TESTNET, terms, paid, creating, terms.h0);
+    const first = planMint(TESTNET, terms, { miner: armed, held: null, nonce: 1n, reward: 1n });
+    const later = planMint(TESTNET, terms, { miner: armed, held, nonce: 1n, reward: 1n });
+    for (const rate of [3, 17]) {
+      expect(fundingNeeded(ARM_SHAPE, rate, TESTNET3)).toBe(fundingNeeded(arm, rate, TESTNET3));
+      expect(fundingNeeded(mintShape(false), rate, TESTNET3)).toBe(fundingNeeded(first, rate, TESTNET3));
+      expect(fundingNeeded(mintShape(true), rate, TESTNET3)).toBe(fundingNeeded(later, rate, TESTNET3));
+      expect(fundingNeeded(shapeOf(later), rate, TESTNET3)).toBe(fundingNeeded(later, rate, TESTNET3));
+    }
+    // A mint pays the network and nothing else: its seals come back.
+    expect(fundingNeeded(mintShape(true), 3, TESTNET3)).toBe(networkFee(mintShape(true), 3, TESTNET3));
+  });
+
+  it("prices each ticket at its split plus the network, less the seal it spends", () => {
+    const rearm = planTicket(TESTNET, terms, { idle, paymaster: null, tip: terms.h0 });
+    const create = planTicket(TESTNET, terms, { idle: null, paymaster, tip: terms.h0 });
+    expect(fundingNeeded(rearm, 3, TESTNET3)).toBe(REUSE.platform + REUSE.promoter + networkFee(shapeOf(rearm), 3, TESTNET3));
+    expect(fundingNeeded(create, 3, TESTNET3)).toBe(
+      SEAL_SATS + NEW_CELL.platform + NEW_CELL.promoter + paymaster.feeSats + networkFee(shapeOf(create), 3, TESTNET3),
+    );
+  });
+
+  it("strips a signed segwit transaction to exactly what its txid hashes", () => {
+    const plan = planTicket(TESTNET, terms, { idle: null, paymaster, tip: terms.h0 });
+    const signed = signOperation(key, plan, [], [coin(60_000)], 3, TESTNET3);
+    expect(signed.hex.slice(8, 12)).toBe("0001"); // the segwit marker and flag
+    expect(displayTxid(strippedTx(signed.hex))).toBe(signed.txid);
   });
 });

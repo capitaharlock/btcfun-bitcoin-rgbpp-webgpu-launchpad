@@ -1,14 +1,14 @@
 /* Block height is the clock: halvings, the rate a ticket locks in, and the end. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, buyTicket, MINEABLE, mineUntilMintable, openMiner, platformWallet } from "../support/flows";
+import { announce, bar, block, buyTicket, MINEABLE, mineUntilMintable, mintedShown, platformWallet } from "../support/flows";
 
 test.describe.configure({ timeout: 240_000 });
 
 const WEEK = 1008;
 
-/** The whole-token part of "Mint 1,234.00 SYM", as a number. */
-const whole = (label: string) => Number(label.replace(/^Mint /, "").split(".")[0].replace(/,/g, ""));
+/** The whole-token part of "1,234.00", as a number. */
+const whole = (label: string) => Number(label.split(".")[0].replace(/,/g, ""));
 
 test.describe("time", () => {
   test("a day, a week and day 21: the rate halves by the week, shown before buying", async ({ page, app, sim, ux }) => {
@@ -40,16 +40,15 @@ test.describe("time", () => {
     await platformWallet(app, sim);
     await announce(page, { symbol: MINEABLE });
     await block(page, sim, WEEK - 5); // five blocks before the first halving
-    await openMiner(page, sim);
-    await buyTicket(page); // anchored at the current tip, before the halving
+    await buyTicket(page, sim); // armed at the current tip, before the halving
     await block(page, sim, 10); // now past the halving
     // Once the wizard runs the header is a strip; the schedule lives in "About".
     await expect(page.getByRole("list", { name: "Halving 1" })).toBeAttached();
-    const mint = await mineUntilMintable(page);
-    // DOM text, not rendered text: labels are upper-cased by the theme.
-    const label = (await mint.textContent()) ?? "";
-    await mint.click();
-    await expect(page.getByText(/^Minting /)).toBeVisible();
+    const accept = await mineUntilMintable(page);
+    await accept.click();
+    const label = await mintedShown(page);
+    await bar(page).getByRole("button", { name: "Sign mint", exact: true }).click();
+    await expect(page.getByText(/ minted — landing\.$/)).toBeVisible({ timeout: 30_000 });
     await block(page, sim);
     const job = [...rgbpp.jobs.values()].at(-1)!;
     expect(job.state, job.failure ?? "").toBe("completed");

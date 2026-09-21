@@ -15,13 +15,38 @@ pub const UNIT: u64 = 100_000_000;
 pub const HALVING_BLOCKS: u32 = 1008;
 /// Smallest mintable result.
 pub const MIN_CLZ: u32 = 16;
-/// Price of one ticket, in satoshis, split between the promoter and the platform.
-pub const TICKET_SATS: u64 = 10_000;
-/// The platform's share of a ticket: 5 %. A share of a 5,000-sat ticket would
-/// fall below Bitcoin's dust limit and could not be relayed as its own output.
-pub const PLATFORM_FEE_SATS: u64 = TICKET_SATS / 20;
-/// The promoter's share of a ticket.
-pub const PROMOTER_SATS: u64 = TICKET_SATS - PLATFORM_FEE_SATS;
+/// Price of one ticket, in satoshis, whatever the round: one number a miner
+/// can know before buying. Network fees are not part of it.
+pub const TICKET_SATS: u64 = 14_983;
+/// What a ticket sets aside for the RGB++ paymaster when the round needs a new
+/// miner cell: the paymaster's fee on CKB testnet when this was set. A higher
+/// fee is paid on top of the ticket, never out of the split.
+pub const PAYMASTER_BUDGET_SATS: u64 = 7_000;
+/// The platform's percentage of what the ticket leaves after the paymaster,
+/// rounded down; the promoter receives the rest.
+pub const PLATFORM_PERCENT: u64 = 11;
+
+/// Where a ticket's satoshis go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Split {
+    pub paymaster: u64,
+    pub platform: u64,
+    pub promoter: u64,
+}
+
+/// The split of one ticket: with `new_cell`, the round creates its miner cell
+/// and the paymaster's budget comes off the top.
+pub const fn split(new_cell: bool) -> Split {
+    let paymaster = if new_cell { PAYMASTER_BUDGET_SATS } else { 0 };
+    let shared = TICKET_SATS - paymaster;
+    let platform = shared * PLATFORM_PERCENT / 100;
+    Split { paymaster, platform, promoter: shared - platform }
+}
+
+/// A round that creates its miner cell: 7,000 + 878 + 7,105.
+pub const NEW_CELL: Split = split(true);
+/// A round that re-arms an idle miner cell: 1,648 + 13,335.
+pub const REUSE: Split = split(false);
 /// The platform's fee output: P2WPKH `tb1q7hq7fdm88ewl4g6g7l865ltnau9f0ga76e6gye`
 /// on Bitcoin testnet3. Fixed in the script, not in the launch terms, so no
 /// launch can redirect it. A mainnet build must replace it.
@@ -133,17 +158,27 @@ impl<'a> LaunchTerms<'a> {
 }
 
 /// A miner cell's state.
+///
+/// `Paid` is a cell created by a ticket payment and not armed yet. Creating a
+/// cell spends no RGB++ input, so nothing on CKB verifies the Bitcoin
+/// transaction behind it; the payment is checked when the cell is armed,
+/// against that transaction, which the arming transaction spends. A paid cell
+/// cannot move, so the transaction it names is always the one that created it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MinerState {
     Idle,
     Armed,
+    Paid,
 }
+
+/// The output of a ticket transaction a paid miner cell is sealed to.
+pub const PAID_SEAL_VOUT: u32 = 1;
 
 /// A miner cell's data: its state, the nonce of the last mint, and the height
 /// its ticket is anchored at.
 ///
 /// ```text
-/// state u8 (0 idle, 1 armed) | nonce u64 LE | anchor u32 LE
+/// state u8 (0 idle, 1 armed, 2 paid) | nonce u64 LE | anchor u32 LE
 /// ```
 ///
 /// The nonce lives in the cell a mint creates rather than in a witness. The
@@ -173,6 +208,7 @@ impl MinerCell {
         let state = match data[0] {
             0 => MinerState::Idle,
             1 => MinerState::Armed,
+            2 => MinerState::Paid,
             _ => return None,
         };
         Some(MinerCell {
@@ -187,6 +223,7 @@ impl MinerCell {
         out[0] = match self.state {
             MinerState::Idle => 0,
             MinerState::Armed => 1,
+            MinerState::Paid => 2,
         };
         out[1..9].copy_from_slice(&self.nonce.to_le_bytes());
         out[9..].copy_from_slice(&self.anchor.to_le_bytes());
@@ -204,9 +241,9 @@ pub fn anchor_valid(anchor: u32, h0: u32, confirmed: u32) -> bool {
     anchor >= h0 && anchor <= confirmed && confirmed - anchor <= ANCHOR_GRACE_BLOCKS
 }
 
-/// True when the outputs pay every ticket they arm: the promoter's share for
-/// each of `own` cells armed for this promoter, and the platform's share for
-/// each of `all` cells armed in the transaction.
+/// True when the outputs pay every ticket they arm at `price`: the promoter's
+/// share for each of `own` cells armed for this promoter, and the platform's
+/// share for each of `all` cells armed in the transaction.
 ///
 /// Counted in total rather than per output: one transaction may arm miner
 /// cells of several launches, and each needs its own ticket — a single payment
@@ -218,14 +255,15 @@ pub fn pays_tickets<'o>(
     platform: &[u8],
     own: u64,
     all: u64,
+    price: Split,
 ) -> bool {
     let owed = |script: &[u8]| {
         let mut due = 0i128;
         if script == promoter {
-            due += i128::from(own) * i128::from(PROMOTER_SATS);
+            due += i128::from(own) * i128::from(price.promoter);
         }
         if script == platform {
-            due += i128::from(all) * i128::from(PLATFORM_FEE_SATS);
+            due += i128::from(all) * i128::from(price.platform);
         }
         due
     };
@@ -238,6 +276,12 @@ pub fn pays_tickets<'o>(
             .sum()
     };
     paid(promoter) >= owed(promoter) && paid(platform) >= owed(platform)
+}
+
+/// A Bitcoin transaction's id, in internal byte order, from its serialization
+/// without witnesses — the form RGB++ carries and seals name.
+pub fn txid(raw: &[u8]) -> [u8; 32] {
+    Sha256::digest(Sha256::digest(raw)).into()
 }
 
 /// The amount in an xUDT cell's data: the first 16 bytes, little-endian.

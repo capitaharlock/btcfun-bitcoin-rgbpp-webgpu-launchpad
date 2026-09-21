@@ -35,7 +35,7 @@ test.describe("create wizard", () => {
     await page.getByLabel("One sentence").fill("A community token for mesh relay operators.");
     await page.getByRole("button", { name: "Continue →" }).click();
     await expect(page.getByText("What you do not choose")).toBeVisible();
-    await expect(page.getByText("10,000 sats: 9,500 to your address, 500 to the platform")).toBeVisible();
+    await expect(page.getByText("14,983 sats: 13,335 to your address and 1,648 to the platform; 7,105 and 878 when 7,000 pay for a new miner cell")).toBeVisible();
   });
 
   test("carries project links and a story to the launch page, marked as the creator's word", async ({ page, app, ux }) => {

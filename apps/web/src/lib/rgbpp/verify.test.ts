@@ -27,9 +27,9 @@ function landedMint(claimed: bigint, nonce = BigInt(ticket.nonce)) {
     seal: { txid: ticket.txid, vout: ticket.vout },
     data: { state: "armed" as const, nonce: 0n, anchor },
   };
-  const plan = planMint(TESTNET, terms, { miner, held: null, nonce, reward: 1n, paymaster: { address: "tb1q", feeSats: 7000 } });
+  const plan = planMint(TESTNET, terms, { miner, held: null, nonce, reward: 1n });
   // Overwrite the claimed amount, as a cheating author would.
-  plan.virtualTx.outputsData[1] = encodeAmount(claimed);
+  plan.virtualTx.outputsData[0] = encodeAmount(claimed);
   const withTxid = plan.virtualTx.outputs.map((o) => {
     const cell = ccc.CellOutput.from(o);
     const vout = Number(ccc.numLeFromBytes(ccc.bytesFrom(cell.lock.args).slice(0, 4)));
@@ -39,9 +39,11 @@ function landedMint(claimed: bigint, nonce = BigInt(ticket.nonce)) {
     inputs: [{ previousOutput: miner.outPoint }],
     outputs: withTxid,
     outputsData: plan.virtualTx.outputsData,
+    // The queue fills the input's witness; the nonce rides past it, as signed.
+    witnesses: ["0x", plan.btcfunWitness!],
   });
   const committed = (() => {
-    const { commitment } = planMint(TESTNET, terms, { miner, held: null, nonce, reward: 1n, paymaster: { address: "tb1q", feeSats: 7000 } });
+    const { commitment } = planMint(TESTNET, terms, { miner, held: null, nonce, reward: 1n });
     return commitment;
   })();
   return {
@@ -71,7 +73,7 @@ describe("verifying a mint from chain data", () => {
       seal: { txid: ticket.txid, vout: ticket.vout },
       data: { state: "armed" as const, nonce: 0n, anchor },
     };
-    const plan = planMint(TESTNET, terms, { miner, held: null, nonce: BigInt(ticket.nonce), reward: expected, paymaster: { address: "tb1q", feeSats: 7000 } });
+    const plan = planMint(TESTNET, terms, { miner, held: null, nonce: BigInt(ticket.nonce), reward: expected });
     const ckbTx = ccc.Transaction.from({
       inputs: [{ previousOutput: miner.outPoint }],
       outputs: plan.virtualTx.outputs.map((o) => {
@@ -80,6 +82,7 @@ describe("verifying a mint from chain data", () => {
         return ccc.CellOutput.from({ capacity: cell.capacity, lock: rgbppLock(TESTNET, { txid: btcTxid, vout }), type: cell.type });
       }),
       outputsData: plan.virtualTx.outputsData,
+      witnesses: ["0x", plan.btcfunWitness!],
     });
     const verdict = verifyMint(TESTNET, {
       btcTxid,

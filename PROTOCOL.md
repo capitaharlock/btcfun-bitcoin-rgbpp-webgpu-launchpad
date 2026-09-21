@@ -72,9 +72,10 @@ into the mint script; a launch cannot override them.
 | `UNIT` | 10^8 atoms | reward per `clz²` before halving (one whole token) |
 | `HALVING_BLOCKS` | 1008 | Bitcoin blocks between halvings (about one week) |
 | `MIN_CLZ` | 16 | smallest mintable result |
-| `TICKET_SATS` | 10,000 | price of one ticket, paid in the ticket's Bitcoin transaction |
-| `PLATFORM_FEE_SATS` | 500 | the platform's 5 %, paid to the platform script fixed in the mint script |
-| `PROMOTER_SATS` | 9,500 | the promoter's 95 %, paid to the launch's promoter address |
+| `TICKET_SATS` | 14,983 | price of one ticket, whatever the round; network fees are separate |
+| `PAYMASTER_BUDGET_SATS` | 7,000 | taken first, only when the round creates its miner cell, for the RGB++ paymaster |
+| `PLATFORM_PERCENT` | 11 | the platform's percentage of what remains, rounded down, paid to the platform script fixed in the mint script |
+| promoter share | the rest | 7,105 in a round that creates its cell, 13,335 in one that re-arms |
 | `ANCHOR_GRACE_BLOCKS` | 144 | how far behind its confirming block a ticket's anchor may be |
 
 ### 4.1 Reward
@@ -86,17 +87,18 @@ k         = floor((anchor − h0) / HALVING_BLOCKS)
 reward    = floor(UNIT × clz² / 2^k)      atoms, if clz ≥ MIN_CLZ
 ```
 
-The ticket outpoint is the armed miner cell's Bitcoin UTXO (§4.2): the txid in
+The ticket outpoint is the armed miner cell's Bitcoin UTXO (§4.2) — the output
+of the transaction that armed it: the txid in
 internal byte order followed by the output index as little-endian `u32`. Hashing
 it to 32 bytes keeps the preimage at 40 bytes, one SHA-256 block, which is what
 the GPU kernel grinds. `nonce` is 8 bytes, little-endian. `h0` is fixed when
 the launch is created.
 
-`anchor` is the ticket's height: the ticket fixes the rate its mint is paid at.
-The wallet declares the tip it sees when it buys the ticket, and the mint
-script accepts that declaration only if it is no earlier than `h0`, no later
-than the block that confirms the ticket — proven to the RGB++ lock by the
-Bitcoin SPV client — and at most `ANCHOR_GRACE_BLOCKS` before it.
+`anchor` is the ticket's height: arming fixes the rate its mint is paid at.
+The wallet declares the tip it sees when it arms the cell, and the mint script
+accepts that declaration only if it is no earlier than `h0`, no later than the
+block that confirms the arming — proven to the RGB++ lock by the Bitcoin SPV
+client — and at most `ANCHOR_GRACE_BLOCKS` before it.
 
 Pricing at the ticket rather than at the mint is a safety property, not a
 convenience. Once a Bitcoin transaction spends sealed UTXOs, the CKB
@@ -118,24 +120,47 @@ advantage stays logarithmic.
 
 ### 4.2 Tickets and the challenge
 
-A miner holds one **miner cell** per launch: a CKB cell whose lock is an RGB++
-lock bound to one of the miner's Bitcoin UTXOs and whose type is the launch's
-mint script. It is `idle` or `armed`.
+A miner holds at most one **miner cell** per launch: a CKB cell whose lock is an
+RGB++ lock bound to one of the miner's Bitcoin UTXOs and whose type is the
+launch's mint script. It is `paid`, `armed` or `idle`. A round has one payment,
+the ticket (decision `2026-09-25-one-payment-per-round`).
 
-- **Open.** A CKB-only transaction creates an idle miner cell bound to a UTXO the
-  miner already owns. It needs CKB capacity; whoever provides it (the miner, the
-  promoter or a sponsor) gains no control over it.
-- **Ticket.** A Bitcoin transaction spends the idle cell's UTXO and pays at least
-  `PROMOTER_SATS` to the promoter's address and `PLATFORM_FEE_SATS` to the platform. Its RGB++ commitment moves the cell to
-  a new output of the same transaction and marks it armed. That output is the
-  challenge: it does not exist before the ticket is paid, so work cannot be
-  precomputed, and it can be spent once, so work cannot be reused.
-- **Mint.** A Bitcoin transaction spends the armed cell's UTXO. Its CKB side
-  returns the miner cell to idle carrying the nonce, and increases the miner's
-  xUDT balance by exactly `reward`. The next ticket is its own transaction: a
-  mint that re-armed would bring the anchor check — the one condition that
-  depends on confirmation time — into a transaction that carries the balance.
+- **Ticket, re-arming.** With an idle cell, a Bitcoin transaction spends the
+  cell's UTXO and pays the re-arm split: 13,335 sats to the promoter and 1,648
+  to the platform. Its RGB++ commitment moves the cell to output 1 of the same
+  transaction, armed at the declared anchor.
+- **Ticket, creating.** Without a cell, a Bitcoin transaction pays the new-cell
+  split — 7,105 to the promoter, 878 to the platform, 7,000 to the RGB++
+  paymaster, whose capacity the queue adds — and creates the cell at output 1 in
+  state `paid`. It spends no sealed UTXO, so nothing on CKB verifies it: the
+  script lets anyone create a paid cell, but never beside an RGB++ input, and
+  checks the payment when the cell is armed.
+- **Arm.** A second Bitcoin transaction, paying only the network, spends the
+  paid cell's output 1 and arms the cell at the declared anchor. The creating
+  transaction rides in the *btc.fun witness* — the first witness past the
+  inputs, which the RGB++ queue leaves as written — without its witness data; the
+  script accepts it only if it hashes to the txid the cell is sealed to and pays
+  the new-cell split for every cell the arming arms. A paid cell cannot move and
+  is armed only beside other paid cells, so one payment arms one cell.
+- **The challenge** is the armed cell's output: it does not exist before the
+  cell is armed, so work cannot be precomputed, and it can be spent once, so work
+  cannot be reused. Mining may start as soon as that transaction is broadcast.
+- **Mint.** A Bitcoin transaction, paying only the network, spends the armed
+  cell's UTXO and increases the miner's xUDT balance by exactly `reward`. With a
+  token cell already held, the miner cell returns to idle carrying the nonce and
+  the balance grows in that cell. Without one, the miner cell's capacity becomes
+  the token cell and the nonce travels in the btc.fun witness: the paymaster's
+  one cell cannot hold both, so the next round's ticket creates a new cell.
+  Rounds one and two pay the paymaster; from the third, none. The next ticket
+  is its own transaction: a mint that re-armed would bring the anchor check —
+  the one condition that depends on confirmation time — into a transaction that
+  carries the balance.
 - **Close.** Consuming a miner cell without recreating it returns its capacity.
+
+Before the ticket is signed the wallet must hold the ticket, its network fee
+and the network fees still to come in the round (arming and mint): a ticket
+without the fees to mint it would be lost. Mining transactions pay
+`max(3 sat/vB, mempool.space "fastest")`, sized by the rule that signs them.
 
 A ticket has no expiry: its rate is fixed when it is bought, so a person may
 mine against it for a minute or for ten days. The interface shows the blocks
@@ -162,11 +187,13 @@ between launches.
 
 ### 4.4 Revenue
 
-Each ticket pays `PROMOTER_SATS` to the promoter's Bitcoin address and
-`PLATFORM_FEE_SATS` to the platform, both inside the ticket transaction, and the
-mint script checks both outputs. The platform script is compiled into the mint
-script, so no launch can redirect the fee; a transaction arming several cells
-owes one fee per cell (decision `2026-09-24-platform-fee-per-ticket`). The standard issues
+Each ticket pays the promoter's share to the promoter's Bitcoin address and the
+platform's to the platform, both inside the ticket transaction, and the mint
+script checks both outputs when the cell is armed. The platform script is
+compiled into the mint script, so no launch can redirect the fee; an arming of
+several cells owes one share per cell (decision
+`2026-09-25-one-payment-per-round`, which supersedes
+`2026-09-24-platform-fee-per-ticket`). The standard issues
 no reserve, promises no floor and offers no redemption: a token is worth what
 someone will pay for it. The interface states this wherever a ticket is bought.
 
@@ -252,14 +279,20 @@ carry the launch terms: format version, `h0`, the promoter's Bitcoin
 `scriptPubKey` and the hash of the launch metadata. It validates, per
 transaction:
 
-- open: one idle miner cell created, no xUDT balance change;
-- ticket: idle in, armed out, the Bitcoin transaction pays the promoter
-  `PROMOTER_SATS` for every miner cell of theirs it arms and the platform
-  `PLATFORM_FEE_SATS` for every miner cell it arms, the armed cell's anchor is valid,
-  no xUDT balance change;
-- mint: armed in, idle out carrying the nonce, the xUDT balance under this
-  launch increases by exactly `reward` at the consumed ticket's anchor; a mint
-  that re-arms is refused;
+- create: one idle or paid miner cell, no xUDT balance change; a paid cell only
+  in a transaction with no RGB++ input;
+- re-arm: idle in, armed out, the Bitcoin transaction pays the promoter the
+  re-arm share for every miner cell of theirs it arms and the platform its share
+  for every miner cell it arms, the armed cell's anchor is valid, no xUDT
+  balance change;
+- arm: paid in (sealed to output 1 of its creating ticket), armed out, only
+  paid cells beside it; the creating ticket in the btc.fun witness hashes to the
+  seal's txid and pays the new-cell shares for every cell armed; the anchor is
+  valid; no xUDT balance change; a paid cell may otherwise only close;
+- mint: armed in, and either idle out carrying the nonce or no miner cell out
+  with the nonce in the btc.fun witness; the xUDT balance under this launch
+  increases by exactly `reward` at the consumed ticket's anchor; a mint that
+  re-arms is refused;
 - close: miner cell consumed, xUDT balance does not increase.
 
 The launch's xUDT uses owner mode by input type (`flags & 0x80000000`) with the

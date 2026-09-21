@@ -4,7 +4,9 @@
  * as, every rule the mint script enforced is recomputed here from raw chain
  * data: the commitment ties the two transactions together, the ticket is the
  * Bitcoin output the consumed miner cell was sealed to, the hash is recomputed
- * from the nonce the new miner cell carries, and the minted amount is the
+ * from the nonce the mint claims — carried by the idle miner cell it returns,
+ * or, when a first mint dissolves the miner cell, by the btc.fun witness past
+ * the inputs — and the minted amount is the
  * token balance change. The CKB node already ran the script; this lets anyone
  * see why it passed, with the same functions and no btc.fun server involved.
  *
@@ -94,14 +96,25 @@ export function verifyMint(config: RgbppConfig, evidence: MintEvidence): MintVer
   const terms = decodeTerms(mintType.args);
   const outIndex = tx.outputs.findIndex((output) => output.type?.eq(mintType));
   const created = outIndex >= 0 ? decodeMinerCell(tx.outputsData[outIndex]) : null;
-  add("disarmed", created?.state === "idle", created?.state === "idle"
-    ? "The miner cell is returned idle, carrying the nonce."
-    : "The miner cell is not returned idle.");
+  const witnessNonce = (() => {
+    const witness = tx.witnesses[tx.inputs.length];
+    const bytes = witness ? ccc.bytesFrom(witness) : null;
+    return bytes?.length === 8 ? ccc.numLeFromBytes(bytes) : null;
+  })();
+  const dissolved = outIndex < 0;
+  const disarmed = dissolved ? witnessNonce !== null : created?.state === "idle";
+  add("disarmed", disarmed, dissolved
+    ? witnessNonce !== null
+      ? "A first mint: the miner cell became the token cell, and the nonce is in the btc.fun witness."
+      : "The miner cell is consumed but no nonce is given past the inputs."
+    : created?.state === "idle"
+      ? "The miner cell is returned idle, carrying the nonce."
+      : "The miner cell is not returned idle.");
 
   // 3. The work: the ticket's Bitcoin output is the challenge.
   const ticket = sealFromArgs(minerIn.output.lock.args);
   const challenge = ticketChallenge(ticket.txid, ticket.vout);
-  const nonce = created?.nonce ?? 0n;
+  const nonce = (dissolved ? witnessNonce : created?.nonce) ?? 0n;
   const work = recompute(challenge, nonce);
   add("proof of work", work.clz >= MIN_CLZ, `sha256d(sha256(ticket ${ticket.txid.slice(0, 12)}…:${ticket.vout}) ‖ nonce ${nonce}) = ${work.hash.slice(0, 16)}… — ${work.clz} leading zero bits (minimum ${MIN_CLZ}).`);
 

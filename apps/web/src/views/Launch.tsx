@@ -1,10 +1,12 @@
 /* One launch: a header that says what you can do, the mining loop, and the terms.
  *
  * The page is split by what a person came for. The header names the token and
- * holds the one action — MINE — with a line saying what is happening now and
- * what comes next. Under it, the mining wizard, once it is started. Everything
- * about the token itself (supply, story, terms, schedule) sits below, in its
- * own section, so mining and reading never compete for the same place.
+ * holds the one action — MINE. Pressing it turns the header itself into the
+ * mining wizard: the name shrinks to a strip and the steps take the box, so the
+ * loop happens where the button was rather than somewhere down the page.
+ * Everything about the token itself (supply, story, terms, schedule) sits
+ * below, in its own section, so mining and reading never compete for the same
+ * place.
  *
  * Every figure on this page is either a protocol constant, a function of the
  * Bitcoin tip, or read from CKB. Supply, cells and your balance come from the
@@ -24,8 +26,9 @@ import { addressUrl } from "../lib/bitcoin/network";
 import { featuredLaunch } from "../lib/launches/featured";
 import { ckbMintScriptUrl, ckbTokenUrl } from "../lib/rgbpp/explorer";
 import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
-import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_FEE_SATS, PROMOTER_SATS, reward, TICKET_SATS } from "../lib/standard";
-import { MineButton, MiningWizard } from "../components/mining/MiningWizard";
+import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, NEW_CELL, PLATFORM_PERCENT, REUSE, reward, TICKET_SATS } from "../lib/standard";
+import { MineButton, MiningWizard, useWizardView } from "../components/mining/MiningWizard";
+import { landingMints } from "../components/wallet/Tokens";
 import { useTokens } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
 import { HalvingBar } from "../ui/HalvingBar";
@@ -62,14 +65,12 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
 
       <LaunchHeader launch={launch} ml={ml} />
 
-      {state.at === "closed" ? (
+      {state.at === "closed" && (
         <Notice>
           On this testnet showcase the site offers its miner on one launch, so everyone's tickets and hashes land in the
           same place. That is this site's choice, not a rule of the token: the mint script on CKB accepts a paid ticket and
           a valid hash for any launch.
         </Notice>
-      ) : (
-        ml.engaged && state.at !== "not-open" && <MiningWizard launch={launch} tip={tip} loop={ml} />
       )}
 
       <About launch={launch} />
@@ -77,13 +78,47 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
   );
 }
 
-/** Picture, name, where the schedule stands — and the one action, with what it will do. */
+/**
+ * Picture, name, where the schedule stands — and the one action, with what it
+ * will do. Once the loop is engaged the same box holds the wizard, under a
+ * one-line strip that keeps the token's name in view: the wizard's own bar
+ * carries every action from then on.
+ */
 function LaunchHeader({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
   const synced = useChainSynced();
   const { vault } = useWallet();
   const { state } = ml.loop;
   const role = vault && vault.address === launch.promoter ? "You mine — and, as promoter, tickets pay you" : "You: miner";
-  const said = ml.engaged ? ml.narration : null;
+  const wizard = ml.engaged && state.at !== "closed" && state.at !== "not-open";
+  const view = useWizardView(launch.id, ml);
+
+  if (wizard) {
+    return (
+      <section
+        className={`lh wizard${synced ? "" : " syncing"}`}
+        style={{ "--accent": launch.accent } as React.CSSProperties}
+        aria-labelledby="lh-symbol"
+        aria-busy={!synced}
+      >
+        <div className="lh-strip">
+          <div className="lh-art">
+            <TokenImage art={launch.art} seed={launch.id} accent={launch.accent} symbol={launch.symbol} size="xl" />
+          </div>
+          <div className="lh-title">
+            <div className="eyebrow">{launch.name}</div>
+            <h1 id="lh-symbol">{launch.symbol}</h1>
+          </div>
+          {ml.narration && (
+            <p className="lh-next">
+              <span className="lh-k">Next</span> {ml.narration.next}
+            </p>
+          )}
+          <div className="lh-role">{role}</div>
+        </div>
+        <MiningWizard launch={launch} loop={ml} view={view} />
+      </section>
+    );
+  }
 
   return (
     <section
@@ -127,15 +162,6 @@ function LaunchHeader({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
             <MineButton launch={launch} ml={ml} />
             {state.at === "not-open" ? (
               <p className="lh-say">Nothing to buy until block {group(launch.h0)}.</p>
-            ) : said ? (
-              <div className="lh-say" aria-live="polite">
-                <p>
-                  <span className="lh-k">Now</span> {said.now}
-                </p>
-                <p>
-                  <span className="lh-k">Next</span> {said.next}
-                </p>
-              </div>
             ) : (
               <div className="lh-say">
                 <p>
@@ -175,6 +201,7 @@ function About({ launch }: { launch: Launch }) {
   const { stats, error } = useLaunchStats(launch);
   const tokens = useTokens();
   const mine = (tokens.holdings?.tokens.get(launch.tokenId) ?? []).reduce((n, c) => n + c.amount, 0n);
+  const landing = landingMints(tokens.operations).get(launch.tokenId) ?? 0n;
   const perTicket24 = launch.open ? reward(24, launch.h0, tip) : reward(24, launch.h0, launch.h0);
   const { why, plan } = launch.story;
   const imageCheck = useImageCheck(launch.art, launch.imageHash);
@@ -194,7 +221,13 @@ function About({ launch }: { launch: Launch }) {
           />
           <Stat k="24-bit hash now" v={atoms(perTicket24, DECIMALS, 0)} unit={launch.symbol} hint="What a 24-bit hash mints on a ticket bought now" />
           <Stat k="miner cells" v={stats ? group(stats.minerCells) : "—"} hint="Cells, not people" />
-          <Stat k="you hold" v={atoms(mine, DECIMALS, 2)} unit={launch.symbol} tone="cyan" />
+          <Stat
+            k={landing > 0n ? `you hold · +${atoms(landing, DECIMALS, 2)} landing` : "you hold"}
+            v={atoms(mine, DECIMALS, 2)}
+            unit={launch.symbol}
+            tone="cyan"
+            hint={landing > 0n ? "Minted and in the mempool; added once one Bitcoin block confirms it" : undefined}
+          />
         </div>
         {stats?.truncated && <p className="tiny faint">Counts stop at 2,000 cells; figures are lower bounds.</p>}
         {error && <Notice tone="warn">Could not read CKB: {error}</Notice>}
@@ -256,7 +289,10 @@ function About({ launch }: { launch: Launch }) {
           />
           <More>
             <p>
-              A ticket pays {group(PROMOTER_SATS)} sats to the promoter and {group(PLATFORM_FEE_SATS)} to the platform. A hash
+              A ticket costs {group(TICKET_SATS)} sats plus network fees. When the round needs a new miner cell,{" "}
+              {group(NEW_CELL.paymaster)} of it pays the RGB++ paymaster; the platform takes {PLATFORM_PERCENT} % of the rest
+              ({group(NEW_CELL.platform)} or {group(REUSE.platform)} sats) and the promoter the remainder ({group(NEW_CELL.promoter)}{" "}
+              or {group(REUSE.promoter)}). A hash
               with <i>n</i> leading zero bits mints <i>n²</i> tokens, halved once per {group(HALVING_BLOCKS)} blocks; below{" "}
               {MIN_CLZ} bits it mints nothing.
             </p>

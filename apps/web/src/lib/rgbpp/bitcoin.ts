@@ -136,21 +136,59 @@ export function plainFunding(utxos: readonly Utxo[], landing: ReadonlySet<string
   return utxos.filter((u) => u.confirmed && u.value !== SEAL_SATS && !landing.has(u.txid));
 }
 
+/** What sizes a Bitcoin transaction for fees: the sealed UTXOs it spends and the outputs it pays. */
+export type Shape = Pick<Plan, "btcOutputs"> & { seals: number; commitment?: true };
+
+/** The shape of `plan`'s Bitcoin transaction. */
+export function shapeOf(plan: Plan): Shape {
+  return { seals: plan.sealsSpent.length, btcOutputs: plan.btcOutputs, commitment: true };
+}
+
+/** One seal in, one seal out: an arming transaction, which pays nothing but the network. */
+export const ARM_SHAPE: Shape = { seals: 1, btcOutputs: [{ kind: "seal", value: SEAL_SATS }], commitment: true };
+
+/** A mint's shape: a first mint dissolves the miner cell into one seal; a later one keeps two. */
+export function mintShape(holdsTokens: boolean): Shape {
+  const seal = { kind: "seal", value: SEAL_SATS } as const;
+  return { seals: holdsTokens ? 2 : 1, btcOutputs: holdsTokens ? [seal, seal] : [seal], commitment: true };
+}
+
 /**
- * About how many plain sats signing `plan` will take: its outputs and the fee
- * for one funding input, less what its sealed inputs bring. The same shape
- * `signOperation` builds, so a wallet that has this much can pay; a second
- * funding input adds about 68 vB, which the caller's margin absorbs.
+ * About how many plain sats a transaction of `shape` takes: its outputs and
+ * the fee for one funding input, less what its sealed inputs bring back. It
+ * sizes the transaction with `estimateVsize`, the rule `signOperation` pays
+ * by, so what is shown is what is signed; a second funding input adds about
+ * 68 vB, which is why callers keep a margin.
  */
-export function fundingNeeded(plan: Plan, feeRate: number, network: NetworkConfig = ACTIVE): number {
+export function fundingNeeded(shape: Shape | Plan, feeRate: number, network: NetworkConfig = ACTIVE): number {
+  const s = "virtualTx" in shape ? shapeOf(shape) : shape;
+  return networkFee(s, feeRate, network) + s.btcOutputs.reduce((sum, o) => sum + o.value, 0) - s.seals * SEAL_SATS;
+}
+
+/** The network fee alone for a transaction of `shape`, at `feeRate`. */
+export function networkFee(shape: Shape, feeRate: number, network: NetworkConfig = ACTIVE): number {
   // Every wallet here is P2WPKH; only the length of its script matters to the size.
   const own = new Uint8Array(P2WPKH_SCRIPT_BYTES);
   const scripts = [
-    commitmentScript(plan.commitment).length,
-    ...plan.btcOutputs.map((o) => scriptOf(o, own, network).length),
+    ...(shape.commitment ? [COMMITMENT_SCRIPT_BYTES] : []),
+    ...shape.btcOutputs.map((o) => scriptOf(o, own, network).length),
     P2WPKH_SCRIPT_BYTES,
   ];
-  const spend = plan.btcOutputs.reduce((sum, o) => sum + o.value, 0);
-  const fee = Math.ceil(estimateVsize(plan.sealsSpent.length + 1, scripts) * Math.max(1, feeRate));
-  return Math.max(0, spend + fee - plan.sealsSpent.length * SEAL_SATS);
+  return Math.ceil(estimateVsize(shape.seals + 1, scripts) * Math.max(1, feeRate));
+}
+
+/** `OP_RETURN OP_PUSHBYTES_32 <commitment>`. */
+const COMMITMENT_SCRIPT_BYTES = 34;
+
+/**
+ * A transaction's serialization without witness data — what Bitcoin hashes
+ * into its txid, and what the mint script reads a creating ticket from.
+ */
+export function strippedTx(hex: string): Uint8Array {
+  const tx = Transaction.fromRaw(ccc.bytesFrom(`0x${hex.replace(/^0x/, "")}`), {
+    allowUnknownOutputs: true,
+    allowUnknownInputs: true,
+    disableScriptCheck: true,
+  });
+  return tx.toBytes(true, false);
 }

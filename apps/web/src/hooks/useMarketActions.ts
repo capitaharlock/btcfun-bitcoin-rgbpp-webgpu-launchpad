@@ -50,7 +50,7 @@ export function useMarketActions(): MarketActions {
       const op = await tokens.submit(
         plan,
         { kind: "buy", launchId: launch.id, tokenId: launch.tokenId, atoms: listing.amount, sats: listing.priceSats },
-        (key, _sealed, free, feeRate) => completePurchase(key, listing, plan, free, feeRate),
+        { sign: (key, _sealed, free, feeRate) => completePurchase(key, listing, plan, free, feeRate) },
       );
       // Tells the market where to look for the sale; the transaction itself is
       // what it checks, so this report adds no trust of its own.

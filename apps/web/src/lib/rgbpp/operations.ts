@@ -15,8 +15,9 @@
  */
 
 import { ccc } from "@ckb-ccc/core";
+import { sha256 } from "@noble/hashes/sha2";
 
-import { PLATFORM_FEE_SATS, PROMOTER_SATS } from "../standard";
+import { NEW_CELL, REUSE, type Split } from "../standard";
 import { commitment, type VirtualTx } from "./commitment";
 import type { RgbppConfig } from "./config";
 import { mintScript, tokenScript, type LaunchTerms } from "./launch";
@@ -33,7 +34,15 @@ export const CKB_FEE = 100_000n;
 /** Spare capacity a miner cell is opened with, spent on fees over its life. */
 export const MINER_FEE_RESERVE = ccc.fixedPointFrom(10);
 
-export type MinerStateName = "idle" | "armed";
+/**
+ * `paid`: created by a ticket payment, waiting to be armed (`contracts/mint-core`
+ * `MinerState::Paid`). The payment is checked when it is armed, against the
+ * transaction that created it.
+ */
+export type MinerStateName = "idle" | "armed" | "paid";
+
+const STATE_BYTES: Record<MinerStateName, number> = { idle: 0, armed: 1, paid: 2 };
+const STATE_NAMES: MinerStateName[] = ["idle", "armed", "paid"];
 
 /** A miner cell's data, as `contracts/mint-core` `MinerCell` lays it out. */
 export interface MinerCellData {
@@ -46,15 +55,15 @@ export interface MinerCellData {
 
 export function encodeMinerCell(cell: MinerCellData): ccc.Hex {
   return ccc.hexFrom(
-    ccc.bytesConcat([cell.state === "armed" ? 1 : 0], ccc.numLeToBytes(cell.nonce, 8), ccc.numLeToBytes(cell.anchor, 4)),
+    ccc.bytesConcat([STATE_BYTES[cell.state]], ccc.numLeToBytes(cell.nonce, 8), ccc.numLeToBytes(cell.anchor, 4)),
   );
 }
 
 export function decodeMinerCell(data: ccc.HexLike): MinerCellData | null {
   const bytes = ccc.bytesFrom(data);
-  if (bytes.length !== 13 || bytes[0] > 1) return null;
+  if (bytes.length !== 13 || bytes[0] >= STATE_NAMES.length) return null;
   return {
-    state: bytes[0] === 1 ? "armed" : "idle",
+    state: STATE_NAMES[bytes[0]],
     nonce: ccc.numLeFromBytes(bytes.slice(1, 9)),
     anchor: Number(ccc.numLeFromBytes(bytes.slice(9))),
   };
@@ -102,6 +111,12 @@ export interface Plan {
   /** The queue service adds a paymaster cell for capacity the inputs lack. */
   needPaymasterCell: boolean;
   sumInputsCapacity: bigint;
+  /**
+   * The btc.fun witness, placed past the inputs' witnesses where the queue
+   * leaves it as written: the creating transaction when a paid cell is armed,
+   * the nonce when a first mint dissolves the miner cell (`contracts/mint`).
+   */
+  btcfunWitness?: ccc.Hex;
 }
 
 export interface Paymaster {
@@ -146,61 +161,109 @@ function finish(
   return { ...parts, cellDeps, commitment: commitment(parts.virtualTx) };
 }
 
+/** The output a ticket seals the miner cell to (`contracts/mint-core` `PAID_SEAL_VOUT`). */
+export const TICKET_VOUT = 1;
+
+/** The payments one ticket makes, in the order the Bitcoin transaction lists them. */
+function ticketPayments(config: RgbppConfig, terms: LaunchTerms, price: Split): PlannedOutput[] {
+  return [
+    { kind: "ticket", script: terms.promoterScript, value: price.promoter },
+    { kind: "fee", address: config.platformAddress, value: price.platform },
+  ];
+}
+
+export interface TicketRequest {
+  /** The idle miner cell to re-arm, or null when this wallet has none on the launch. */
+  idle: MinerCell | null;
+  /** The paymaster, for a round that creates its miner cell. */
+  paymaster: Paymaster | null;
+  /** The height a re-armed cell's reward is priced at. */
+  tip: number;
+}
+
 /**
- * Open: an idle miner cell sealed to output 1 of the opening Bitcoin
- * transaction. It has no inputs; the paymaster provides the capacity for a fee
- * in the same Bitcoin transaction, so a person holding only Bitcoin can open one.
+ * The ticket: the round's one payment, and the only transaction in it that
+ * pays anyone but the network.
+ *
+ * With an idle miner cell it re-arms that cell at output 1, anchored at `tip`
+ * — the height its reward will be priced at — and pays the re-arm split. The
+ * script accepts an anchor up to a day behind the block that confirms the
+ * ticket; if the ticket sat unconfirmed longer, only the empty cell is lost.
+ *
+ * Without one it creates the cell, `paid`, at output 1, from the paymaster's
+ * capacity, and pays the new-cell split plus the paymaster. It spends no
+ * sealed UTXO, so nothing on CKB verifies it now; the cell is armed by a
+ * second transaction once this one has settled (`planArm`), and the script
+ * checks this payment then.
  */
-export function planOpen(config: RgbppConfig, terms: LaunchTerms, paymaster: Paymaster): Plan {
+export function planTicket(config: RgbppConfig, terms: LaunchTerms, request: TicketRequest): Plan {
+  const { idle, paymaster, tip } = request;
+  if (tip < terms.h0) throw new RangeError("the launch has not opened yet");
+  const mint = mintScript(config, terms);
+
+  if (idle === null) {
+    if (!paymaster) throw new Error("a ticket that creates its miner cell needs the paymaster");
+    return finish(config, {
+      virtualTx: {
+        inputs: [],
+        outputs: [{ capacity: minerCellCapacity(config, terms), lock: pendingLock(config, TICKET_VOUT), type: mint }],
+        outputsData: [encodeMinerCell({ state: "paid", nonce: 0n, anchor: 0 })],
+      },
+      btcOutputs: [
+        { kind: "seal", value: SEAL_SATS },
+        ...ticketPayments(config, terms, NEW_CELL),
+        { kind: "paymaster", address: paymaster.address, value: paymaster.feeSats },
+      ],
+      sealsSpent: [],
+      needPaymasterCell: true,
+      sumInputsCapacity: 0n,
+    });
+  }
+
+  if (idle.data.state !== "idle") throw new Error("this miner cell already holds a ticket");
   return finish(config, {
     virtualTx: {
-      inputs: [],
-      outputs: [
-        {
-          capacity: minerCellCapacity(config, terms),
-          lock: pendingLock(config, 1),
-          type: mintScript(config, terms),
-        },
-      ],
-      outputsData: [encodeMinerCell({ state: "idle", nonce: 0n, anchor: 0 })],
+      inputs: [idle.outPoint],
+      outputs: [{ capacity: idle.capacity - CKB_FEE, lock: pendingLock(config, TICKET_VOUT), type: mint }],
+      outputsData: [encodeMinerCell({ state: "armed", nonce: idle.data.nonce, anchor: tip })],
     },
-    btcOutputs: [
-      { kind: "seal", value: SEAL_SATS },
-      { kind: "paymaster", address: paymaster.address, value: paymaster.feeSats },
-    ],
-    sealsSpent: [],
-    needPaymasterCell: true,
-    sumInputsCapacity: 0n,
+    btcOutputs: [{ kind: "seal", value: SEAL_SATS }, ...ticketPayments(config, terms, REUSE)],
+    sealsSpent: [idle.seal],
+    needPaymasterCell: false,
+    sumInputsCapacity: idle.capacity,
   });
 }
 
 /**
- * Ticket: pay the promoter, and the miner cell moves to output 1 armed,
- * anchored at `tip` — the height its reward will be priced at. The script
- * accepts an anchor up to a day behind the block that confirms the ticket, so
- * the tip at signing time is right; if the ticket sat unconfirmed for longer,
- * only this empty miner cell would be lost.
+ * Arm a paid miner cell: it moves to output 1 armed at `tip`, and the
+ * transaction pays nothing but the network. The ticket transaction that
+ * created the cell rides in the btc.fun witness — stripped of its witness
+ * data, as Bitcoin hashes it — so the script can check what it paid.
  */
-export function planTicket(config: RgbppConfig, terms: LaunchTerms, miner: MinerCell, tip: number): Plan {
-  if (miner.data.state !== "idle") throw new Error("this miner cell already holds a ticket");
+export function planArm(config: RgbppConfig, terms: LaunchTerms, paid: MinerCell, creating: Uint8Array, tip: number): Plan {
+  if (paid.data.state !== "paid") throw new Error("only a paid miner cell is armed this way");
   if (tip < terms.h0) throw new RangeError("the launch has not opened yet");
+  if (paid.seal.vout !== TICKET_VOUT) throw new Error("a paid cell is sealed to its ticket's output 1");
+  if (displayTxid(creating) !== paid.seal.txid) {
+    throw new Error("the transaction given is not the one that created this miner cell");
+  }
   return finish(config, {
     virtualTx: {
-      inputs: [miner.outPoint],
-      outputs: [
-        { capacity: miner.capacity - CKB_FEE, lock: pendingLock(config, 1), type: mintScript(config, terms) },
-      ],
-      outputsData: [encodeMinerCell({ state: "armed", nonce: miner.data.nonce, anchor: tip })],
+      inputs: [paid.outPoint],
+      outputs: [{ capacity: paid.capacity - CKB_FEE, lock: pendingLock(config, TICKET_VOUT), type: mintScript(config, terms) }],
+      outputsData: [encodeMinerCell({ state: "armed", nonce: 0n, anchor: tip })],
     },
-    btcOutputs: [
-      { kind: "seal", value: SEAL_SATS },
-      { kind: "ticket", script: terms.promoterScript, value: PROMOTER_SATS },
-      { kind: "fee", address: config.platformAddress, value: PLATFORM_FEE_SATS },
-    ],
-    sealsSpent: [miner.seal],
+    btcOutputs: [{ kind: "seal", value: SEAL_SATS }],
+    sealsSpent: [paid.seal],
     needPaymasterCell: false,
-    sumInputsCapacity: miner.capacity,
+    sumInputsCapacity: paid.capacity,
+    btcfunWitness: ccc.hexFrom(creating),
   });
+}
+
+/** A Bitcoin txid as explorers show it, from the transaction without witness data. */
+export function displayTxid(stripped: Uint8Array): string {
+  return ccc.hexFrom(sha256(sha256(stripped)).reverse()).slice(2);
 }
 
 export interface MintRequest {
@@ -210,57 +273,61 @@ export interface MintRequest {
   nonce: bigint;
   /** The standard reward for this nonce at the ticket's anchor (`reward()` in `standard.ts`). */
   reward: bigint;
-  /** Needed only when there is no token cell yet to carry the balance. */
-  paymaster: Paymaster | null;
 }
 
 /**
- * Mint: the miner cell returns to idle at output 1 carrying the nonce, and the
- * balance grows by the reward in a token cell at output 2. The next ticket is
- * a separate transaction: the script refuses a mint that re-arms, so that a
- * transaction carrying a balance never depends on when it confirms.
+ * Mint: pays only the network. The next ticket is a separate transaction: the
+ * script refuses a mint that re-arms, so a transaction carrying a balance
+ * never depends on when it confirms.
+ *
+ * With a token cell already held, the miner cell returns to idle at output 1
+ * carrying the nonce, and the balance grows by the reward in the token cell at
+ * output 2. Without one, the miner cell's capacity becomes the token cell, at
+ * output 1: the paymaster's one cell cannot hold both, and the next round
+ * pays for a new miner cell instead. The nonce then travels in the btc.fun
+ * witness.
  */
 export function planMint(config: RgbppConfig, terms: LaunchTerms, request: MintRequest): Plan {
-  const { miner, held, nonce, reward, paymaster } = request;
+  const { miner, held, nonce, reward } = request;
   if (miner.data.state !== "armed") throw new Error("a mint needs an armed miner cell");
   if (reward <= 0n) throw new RangeError("a mint must mint something");
   const mint = mintScript(config, terms);
   const token = tokenScript(config, mint);
 
-  const needPaymasterCell = held === null;
-  if (needPaymasterCell && !paymaster) {
-    throw new Error("a first mint needs the paymaster to provide the token cell's capacity");
-  }
-
-  const inputs = held ? [miner.outPoint, held.outPoint] : [miner.outPoint];
-  const btcOutputs: PlannedOutput[] = [
-    { kind: "seal", value: SEAL_SATS },
-    { kind: "seal", value: SEAL_SATS },
-  ];
-  if (needPaymasterCell) {
-    btcOutputs.push({ kind: "paymaster", address: paymaster!.address, value: paymaster!.feeSats });
+  if (held === null) {
+    const capacity = miner.capacity - CKB_FEE;
+    const needed = occupied({ lock: pendingLock(config, TICKET_VOUT), type: token }, encodeAmount(reward));
+    if (capacity < needed) throw new Error("this miner cell is too small to become the token cell");
+    return finish(config, {
+      virtualTx: {
+        inputs: [miner.outPoint],
+        outputs: [{ capacity, lock: pendingLock(config, TICKET_VOUT), type: token }],
+        outputsData: [encodeAmount(reward)],
+      },
+      btcOutputs: [{ kind: "seal", value: SEAL_SATS }],
+      sealsSpent: [miner.seal],
+      needPaymasterCell: false,
+      sumInputsCapacity: miner.capacity,
+      btcfunWitness: ccc.hexFrom(ccc.numLeToBytes(nonce, 8)),
+    });
   }
 
   return finish(config, {
     virtualTx: {
-      inputs,
+      inputs: [miner.outPoint, held.outPoint],
       outputs: [
         { capacity: miner.capacity - CKB_FEE, lock: pendingLock(config, 1), type: mint },
-        {
-          capacity: held ? held.capacity : tokenCellCapacity(config, terms),
-          lock: pendingLock(config, 2),
-          type: token,
-        },
+        { capacity: held.capacity, lock: pendingLock(config, 2), type: token },
       ],
-      outputsData: [
-        encodeMinerCell({ state: "idle", nonce, anchor: miner.data.anchor }),
-        encodeAmount((held?.amount ?? 0n) + reward),
-      ],
+      outputsData: [encodeMinerCell({ state: "idle", nonce, anchor: miner.data.anchor }), encodeAmount(held.amount + reward)],
     },
-    btcOutputs,
-    sealsSpent: held ? [miner.seal, held.seal] : [miner.seal],
-    needPaymasterCell,
-    sumInputsCapacity: miner.capacity + (held?.capacity ?? 0n),
+    btcOutputs: [
+      { kind: "seal", value: SEAL_SATS },
+      { kind: "seal", value: SEAL_SATS },
+    ],
+    sealsSpent: [miner.seal, held.seal],
+    needPaymasterCell: false,
+    sumInputsCapacity: miner.capacity + held.capacity,
   });
 }
 

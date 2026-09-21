@@ -131,6 +131,37 @@ export async function getFeeRate(network: NetworkConfig = ACTIVE): Promise<numbe
   }
 }
 
+/** The floor of the mining fee rate: testnet's "fastest" can read 1 sat/vB and still wait. */
+export const MIN_FAST_FEE_RATE = 3;
+
+/**
+ * The fee rate mining transactions pay: the larger of `MIN_FAST_FEE_RATE` and
+ * mempool.space's "fastest". A ticket or a mint that waits in the mempool
+ * holds the whole round up, so these pay to get into the next block.
+ */
+export async function fastFeeRate(network: NetworkConfig = ACTIVE): Promise<number> {
+  try {
+    const response = await request("/v1/fees/recommended", network);
+    const fees = (await response.json()) as Record<string, unknown>;
+    return fastFrom(Number(fees.fastestFee));
+  } catch {
+    return MIN_FAST_FEE_RATE;
+  }
+}
+
+/** `fastFeeRate`'s rule, on a quoted "fastest" rate. */
+export function fastFrom(fastest: number): number {
+  return Number.isFinite(fastest) && fastest > 0 ? Math.max(MIN_FAST_FEE_RATE, Math.ceil(fastest)) : MIN_FAST_FEE_RATE;
+}
+
+/** A transaction's full serialization, witness included, as hex. */
+export async function getTxHex(txid: string, network: NetworkConfig = ACTIVE): Promise<string> {
+  const response = await request(`/tx/${txid}/hex`, network);
+  const hex = (await response.text()).trim();
+  if (!/^([0-9a-f]{2})+$/.test(hex)) throw new ProviderError("Provider returned a malformed transaction");
+  return hex;
+}
+
 /** Publish a signed transaction. Returns its txid as the network computed it. */
 export async function broadcast(rawHex: string, network: NetworkConfig = ACTIVE): Promise<string> {
   const response = await request("/tx", network, {
