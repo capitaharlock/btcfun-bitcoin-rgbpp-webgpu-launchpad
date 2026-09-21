@@ -209,6 +209,7 @@ export default function MarketPage() {
             </li>
             <li>
               A price is at least {group(DUST_SATS)} sats, the dust limit, because the price is its own Bitcoin output.
+              Unlike a ticket, a sale pays no platform share: the market adds nothing to what the two sides agree.
             </li>
             <li>
               Cancelling a listing is spending the listed output: the signature then refers to an output that no longer

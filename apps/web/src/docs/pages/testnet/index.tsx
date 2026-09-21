@@ -53,6 +53,11 @@ export default function TestnetPage() {
             The complete path — ticket, mint, transfer and sale through the RGB++ queue with real wallets — has not yet been
             run end to end on testnet. Until it has, no mint through the app is claimed as done.
           </li>
+          <li>
+            The one-payment mint script (2026-09-25) has not had its live round yet. Its arming and first mint carry data
+            in a witness past the inputs, which the RGB++ queue is expected to leave as written; the simulator does, the
+            real queue is unconfirmed until that round.
+          </li>
           <li>It is not yet confirmed that an RGB++ explorer shows a minted balance under the token's identity.</li>
           <li>
             There is no confirmation policy yet, and no stated treatment of a Bitcoin reorganisation after CKB accepted a

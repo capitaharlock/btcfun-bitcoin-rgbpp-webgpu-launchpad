@@ -27,7 +27,7 @@ const FLOW: DiagramSpec = {
     { id: "prove", lane: "queue", row: 2, kind: "process", label: "Proves it to CKB", detail: "SPV proof, then submits", tone: "cyan" },
     { id: "lock", lane: "ckb", row: 3, kind: "decision", label: "Proof and commitment valid?" },
     { id: "sum", lane: "ckb", row: 4, kind: "decision", label: "No tokens created?" },
-    { id: "rejected", lane: "queue", row: 4, kind: "terminal", label: "Rejected", tone: "rose" },
+    { id: "rejected", lane: "queue", row: 4, kind: "terminal", label: "BTC spent; CKB move rejected", tone: "rose" },
     { id: "done", lane: "ckb", row: 5, kind: "terminal", label: "Recipient holds the tokens", tone: "mint" },
   ],
   edges: [
@@ -106,9 +106,9 @@ export default function TransfersPage() {
           same transaction.
         </p>
         <p>
-          The recipient needs nothing but a Bitcoin address: they do not have to be online, and they do not need CKB. As
-          with every operation here, the tokens are theirs once the Bitcoin transaction confirms and the RGB++ queue has
-          completed the CKB side — see <DocLink to="mint">when tokens are delivered</DocLink>.
+          The recipient can receive while offline, using a Bitcoin address, without holding CKB. They need a wallet that
+          understands RGB++ to find and later spend the tokens. Delivery is complete after the Bitcoin transaction
+          confirms and CKB accepts the matching transaction — see <DocLink to="mint">when tokens are delivered</DocLink>.
         </p>
         <Diagram spec={FLOW} />
       </section>
@@ -131,7 +131,7 @@ export default function TransfersPage() {
             <li>
               A new token cell needs CKB capacity. When the consumed cells do not have enough, the RGB++ paymaster provides
               it for a fee in the same Bitcoin transaction; when they do, the recipient's cell absorbs the spare capacity,
-              less the CKB fee.
+              less the CKB fee. A transfer pays the network like any other operation; only a ticket pays anyone else.
             </li>
             <li>
               Funding coins are only confirmed UTXOs the RGB++ service reports as free of cells, and never a {seal}-sat
