@@ -207,7 +207,8 @@ const steps = {
           // Varied targets make the catalogue look like people mining, and
           // stay under a minute of CPU each.
           const target = 17 + Math.floor(Math.random() * 5);
-          const challenge = standard.ticketChallenge(miner.seal.txid, miner.seal.vout);
+          const { txid: ctxid, vout: cvout } = ops.challengeOutpoint(miner);
+          const challenge = standard.ticketChallenge(ctxid, cvout);
           let best = { clz: -1 };
           for (let nonce = 0n; best.clz < target; nonce++) {
             const found = verify.recompute(challenge, nonce);

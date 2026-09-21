@@ -22,10 +22,11 @@ export default function MintPage() {
             for its room on CKB.
           </li>
           <li>
-            <strong>Arm</strong> — only when the ticket created the cell. Nothing on CKB can check a transaction that
-            spends no sealed output, so the new cell starts <em>paid</em>, and a second transaction arms it once the
-            ticket has one confirmation. It pays nothing but the network, and carries the ticket so the mint script can
-            check what it paid.
+            <strong>Arm</strong> — only when the ticket created the cell, and while you mine. Nothing on CKB can check a
+            transaction that spends no sealed output, so the new cell starts <em>paid</em>, and a second transaction arms
+            it once the ticket has one confirmation. It pays nothing but the network, carries the ticket so the mint
+            script can check what it paid, and names the ticket as the cell's challenge — so the work you did before it
+            still counts.
           </li>
           <li>
             <strong>Mine.</strong> Your browser searches for a number (a <em>nonce</em>) that makes the hash of the
@@ -46,7 +47,7 @@ export default function MintPage() {
           On a launch page the big <strong>Mine</strong> button turns the token's header into a wizard. Its steps —
           wallet, ticket, mine, mint — sit side by side and one fills the box at a time; a bar under it holds every
           action: <strong>Back</strong> on the left, and on the right what the step asks for — <strong>Sign ticket</strong>,{" "}
-          <strong>Arm ticket</strong>, <strong>Start mining</strong> or <strong>Pause</strong>,{" "}
+          <strong>Start mining</strong> or <strong>Pause</strong>, <strong>Arm ticket</strong>,{" "}
           <strong>Accept · mint</strong>, <strong>Sign mint</strong>. Nothing is signed without that press, whatever the
           wallet: the demo and browser wallets sign on it, a passkey wallet asks for the passkey. Each finished step keeps
           its trace: the Bitcoin transaction, a link to it on mempool.space, and whether it is still landing or has
@@ -61,8 +62,11 @@ export default function MintPage() {
           mempool.space's “fastest” rate, and its size is estimated by the same rule that signs it.
         </p>
         <p>
-          Mining never waits for a block: the challenge is the armed cell's output and exists as soon as the transaction
-          does. Minting does wait for it, because the mint spends that cell on CKB. The step the loop stands on is decided
+          Mining never waits for a block: the challenge is the ticket's output 1 and exists as soon as the ticket is
+          broadcast. The wizard keeps the ticket step on screen until you press <strong>Mine</strong>, and the arming,
+          when the round needs one, is offered during mining once the ticket has confirmed. Only minting waits — for the
+          armed cell to land on CKB, because the mint spends it. The frame keeps one height whatever the step, with the
+          bar under it. The step the loop stands on is decided
           by the chain, not by the page: reload it or open it in another tab and it shows the same step. Minted tokens
           show in your wallet as landing until their own block.
         </p>
@@ -100,7 +104,7 @@ export default function MintPage() {
           Between those moments the app shows the operation as <strong>landing</strong>: first “broadcast — waiting for its
           Bitcoin confirmation”, then “the RGB++ queue is completing it on CKB”. How long that takes depends on the next
           Bitcoin block and on the queue; it has not yet been measured on a live testnet run. Mining can start as soon as the
-          arming is broadcast, because its output exists from that moment, but minting waits until the armed cell has
+          ticket is broadcast, because its output exists from that moment, but minting waits until the armed cell has
           landed on CKB, because the mint spends it.
         </p>
         <p>
@@ -115,7 +119,8 @@ export default function MintPage() {
         <h2>The miner cell</h2>
         <p>
           The miner cell is the ticket's memory. Its data is 13 bytes: whether it is paid, armed or idle, the nonce of your
-          last mint, and the <em>anchor</em> — the block height your current ticket was armed at, which fixes its rate.
+          last mint, and the <em>anchor</em> — the block height that fixes your current ticket's rate. A cell armed from
+          paid adds 32: the ticket's txid, whose output 1 is its challenge.
         </p>
         <Diagram spec={MINER_CELL} />
       </section>
@@ -142,8 +147,10 @@ export default function MintPage() {
               cell.
             </li>
             <li>
-              Miner cell data: <code>state u8 ‖ nonce u64 LE ‖ anchor u32 LE</code>, state 0 idle, 1 armed, 2 paid. Arming
-              writes <code>state = 1</code> and <code>anchor</code> = the tip the wallet sees; the script accepts that
+              Miner cell data: <code>state u8 ‖ nonce u64 LE ‖ anchor u32 LE [‖ ticket txid 32]</code>, state 0 idle, 1
+              armed, 2 paid; only an armed cell may carry the ticket txid, and only the arming of a paid cell may write it,
+              equal to that cell's seal. Arming writes <code>state = 1</code> and <code>anchor</code> — the tip the wallet
+              saw at the ticket, or at the arming if that one is too old to confirm in time; the script accepts that
               anchor only if it is no earlier than the launch's opening height, no later than the block that confirms the
               arming (proven by the Bitcoin SPV client on CKB), and at most {ANCHOR_GRACE_BLOCKS} blocks before it.
             </li>
@@ -157,7 +164,7 @@ export default function MintPage() {
             <li>
               A mint consumes an armed cell and returns it idle with the nonce — or, on a first mint, turns its capacity
               into the token cell and carries the nonce as the first witness past the inputs. The script recomputes the challenge from
-              the outpoint the consumed cell was sealed to, the hash from the nonce, requires at least {MIN_CLZ} leading
+              the ticket the consumed cell names, or else the outpoint it was sealed to, the hash from the nonce, requires at least {MIN_CLZ} leading
               zero bits, and requires the launch's xUDT balance to grow by exactly{" "}
               <DocLink to="tokenomics">the standard reward</DocLink> at the ticket's anchor. A mint that re-arms is
               refused: that would bring the anchor check back into a transaction carrying a balance.

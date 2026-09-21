@@ -134,11 +134,14 @@ function standardReward(clz: number, h0: number, anchor: number): bigint | null 
 
 type MinerState = "idle" | "armed" | "paid";
 
-function minerData(data: ccc.Hex): { state: MinerState; nonce: bigint; anchor: number } | null {
+/** `ticket`: the txid (displayed order) an armed-from-paid cell names as its challenge. */
+function minerData(data: ccc.Hex): { state: MinerState; nonce: bigint; anchor: number; ticket: string | null } | null {
   const b = ccc.bytesFrom(data);
-  if (b.length !== 13 || b[0] > 2) return null;
+  if ((b.length !== 13 && b.length !== 45) || b[0] > 2) return null;
   const state = (["idle", "armed", "paid"] as const)[b[0]];
-  return { state, nonce: ccc.numLeFromBytes(b.slice(1, 9)), anchor: Number(ccc.numLeFromBytes(b.slice(9))) };
+  if (b.length === 45 && state !== "armed") return null;
+  const ticket = b.length === 45 ? reverse(ccc.hexFrom(b.slice(13)).slice(2)) : null;
+  return { state, nonce: ccc.numLeFromBytes(b.slice(1, 9)), anchor: Number(ccc.numLeFromBytes(b.slice(9, 13))), ticket };
 }
 
 /** A transaction's outputs as the oracle reads payments: scriptPubKey hex and amount. */
@@ -382,6 +385,7 @@ export class RgbppSim {
         const tip = this.chain.tip;
         if (now.anchor < h0 || now.anchor > tip || tip - now.anchor > GRACE) throw new Error("bad anchor");
         if (was.state === "idle") {
+          if (now.ticket !== null) throw new Error("a re-armed cell names no ticket");
           armings.push({ promoter, price: REUSE, paidBy: armingOutputs });
         } else {
           // Armed from paid: the creating ticket rides in the btc.fun witness.
@@ -389,6 +393,7 @@ export class RgbppSim {
           if (seal.vout !== 1 || !btcfun) throw new Error("no creating ticket");
           const creating = ccc.bytesFrom(btcfun);
           if (reverse(ccc.hexFrom(sha256(sha256(creating))).slice(2)) !== seal.txid) throw new Error("not the creating ticket");
+          if (now.ticket !== seal.txid) throw new Error("an armed paid cell names its ticket");
           if (inputs.some((c) => { const m = minerData(c.data); return m !== null && m.state !== "paid"; })) {
             throw new Error("a paid cell is armed alone");
           }
@@ -400,7 +405,8 @@ export class RgbppSim {
       if (mints) {
         const nonce = now ? now.nonce : btcfun && ccc.bytesFrom(btcfun).length === 8 ? ccc.numLeFromBytes(ccc.bytesFrom(btcfun)) : null;
         if (nonce === null) throw new Error("a dissolving mint without its nonce");
-        const seal = sealOf(before[0].output.lock)!;
+        const sealed = sealOf(before[0].output.lock)!;
+        const seal = was!.ticket ? { txid: was!.ticket, vout: 1 } : sealed;
         const challenge = sha256(Buffer.concat([Buffer.from(reverse(seal.txid), "hex"), Buffer.from(ccc.numLeToBytes(seal.vout, 4))]));
         const preimage = Buffer.concat([challenge, Buffer.from(ccc.numLeToBytes(nonce, 8))]);
         const clz = clzOf(sha256(sha256(preimage)));

@@ -174,11 +174,12 @@ pub enum MinerState {
 /// The output of a ticket transaction a paid miner cell is sealed to.
 pub const PAID_SEAL_VOUT: u32 = 1;
 
-/// A miner cell's data: its state, the nonce of the last mint, and the height
-/// its ticket is anchored at.
+/// A miner cell's data: its state, the nonce of the last mint, the height its
+/// ticket is anchored at, and — only on a cell armed from `Paid` — the txid of
+/// the ticket that paid for it.
 ///
 /// ```text
-/// state u8 (0 idle, 1 armed, 2 paid) | nonce u64 LE | anchor u32 LE
+/// state u8 (0 idle, 1 armed, 2 paid) | nonce u64 LE | anchor u32 LE [| ticket txid 32]
 /// ```
 ///
 /// The nonce lives in the cell a mint creates rather than in a witness. The
@@ -193,41 +194,82 @@ pub const PAID_SEAL_VOUT: u32 = 1;
 /// reward is priced at the ticket's anchor, a value fixed before the mint is
 /// signed, and the only height-dependent check happens when a ticket is bought,
 /// where the most a delay can cost is the empty miner cell.
+///
+/// The ticket txid is why a miner who creates a cell can mine the moment the
+/// ticket is broadcast. The challenge of an armed cell is normally the output
+/// it is sealed to; a cell armed from `Paid` is sealed to the arming
+/// transaction, which can only be signed once the ticket has settled on CKB.
+/// Naming the ticket instead makes its output 1 — which exists as soon as the
+/// ticket does, and not before it is paid — the challenge. The script only
+/// lets the arming of a paid cell write it, equal to that cell's seal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MinerCell {
     pub state: MinerState,
     pub nonce: u64,
     pub anchor: u32,
+    pub ticket: Option<[u8; 32]>,
 }
 
 pub const MINER_CELL_BYTES: usize = 13;
+/// A cell armed from `Paid`: the ticket's txid follows.
+pub const MINER_CELL_TICKET_BYTES: usize = MINER_CELL_BYTES + 32;
+
+/// An encoded miner cell: 13 bytes, or 45 when it names its ticket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EncodedCell {
+    bytes: [u8; MINER_CELL_TICKET_BYTES],
+    len: usize,
+}
+
+impl core::ops::Deref for EncodedCell {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+}
 
 impl MinerCell {
     pub fn parse(data: &[u8]) -> Option<Self> {
-        let data: &[u8; MINER_CELL_BYTES] = data.try_into().ok()?;
-        let state = match data[0] {
+        let (head, ticket) = match data.len() {
+            MINER_CELL_BYTES => (data, None),
+            MINER_CELL_TICKET_BYTES => (&data[..MINER_CELL_BYTES], Some(data[MINER_CELL_BYTES..].try_into().unwrap())),
+            _ => return None,
+        };
+        let state = match head[0] {
             0 => MinerState::Idle,
             1 => MinerState::Armed,
             2 => MinerState::Paid,
             _ => return None,
         };
+        // Only an armed cell mines against a ticket other than its seal.
+        if ticket.is_some() && state != MinerState::Armed {
+            return None;
+        }
         Some(MinerCell {
             state,
-            nonce: u64::from_le_bytes(data[1..9].try_into().unwrap()),
-            anchor: u32::from_le_bytes(data[9..].try_into().unwrap()),
+            nonce: u64::from_le_bytes(head[1..9].try_into().unwrap()),
+            anchor: u32::from_le_bytes(head[9..13].try_into().unwrap()),
+            ticket,
         })
     }
 
-    pub fn encode(self) -> [u8; MINER_CELL_BYTES] {
-        let mut out = [0u8; MINER_CELL_BYTES];
-        out[0] = match self.state {
+    pub fn encode(self) -> EncodedCell {
+        let mut bytes = [0u8; MINER_CELL_TICKET_BYTES];
+        bytes[0] = match self.state {
             MinerState::Idle => 0,
             MinerState::Armed => 1,
             MinerState::Paid => 2,
         };
-        out[1..9].copy_from_slice(&self.nonce.to_le_bytes());
-        out[9..].copy_from_slice(&self.anchor.to_le_bytes());
-        out
+        bytes[1..9].copy_from_slice(&self.nonce.to_le_bytes());
+        bytes[9..13].copy_from_slice(&self.anchor.to_le_bytes());
+        let len = match self.ticket {
+            None => MINER_CELL_BYTES,
+            Some(txid) => {
+                bytes[MINER_CELL_BYTES..].copy_from_slice(&txid);
+                MINER_CELL_TICKET_BYTES
+            }
+        };
+        EncodedCell { bytes, len }
     }
 }
 

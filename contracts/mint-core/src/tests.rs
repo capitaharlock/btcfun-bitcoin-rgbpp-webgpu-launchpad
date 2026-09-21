@@ -139,15 +139,24 @@ fn a_txid_is_the_double_sha256_of_the_stripped_transaction() {
 
 #[test]
 fn a_miner_cell_is_a_state_a_nonce_and_an_anchor() {
-    let armed = MinerCell { state: MinerState::Armed, nonce: 0x0102_0304_0506_0708, anchor: 0x0a0b_0c0d };
+    let armed = MinerCell { state: MinerState::Armed, nonce: 0x0102_0304_0506_0708, anchor: 0x0a0b_0c0d, ticket: None };
     assert_eq!(MinerCell::parse(&armed.encode()), Some(armed));
-    assert_eq!(armed.encode(), [1, 8, 7, 6, 5, 4, 3, 2, 1, 0x0d, 0x0c, 0x0b, 0x0a]);
+    assert_eq!(*armed.encode(), [1, 8, 7, 6, 5, 4, 3, 2, 1, 0x0d, 0x0c, 0x0b, 0x0a]);
     assert_eq!(MinerCell::parse(&[0; 13]).map(|c| c.state), Some(MinerState::Idle));
     assert_eq!(MinerCell::parse(&[]), None);
     assert_eq!(MinerCell::parse(&[0; 12]), None);
     assert_eq!(MinerCell::parse(&[0; 14]), None);
-    let paid = MinerCell { state: MinerState::Paid, nonce: 0, anchor: 0 };
+    let paid = MinerCell { state: MinerState::Paid, nonce: 0, anchor: 0, ticket: None };
     assert_eq!(MinerCell::parse(&paid.encode()), Some(paid));
+    // Only an armed cell names its ticket.
+    let named = MinerCell { ticket: Some([7; 32]), ..armed };
+    assert_eq!(named.encode().len(), 45);
+    assert_eq!(&named.encode()[13..], &[7; 32]);
+    assert_eq!(MinerCell::parse(&named.encode()), Some(named));
+    let mut idle_named = named.encode().to_vec();
+    idle_named[0] = 0;
+    assert_eq!(MinerCell::parse(&idle_named), None);
+    assert_eq!(MinerCell::parse(&[1; 44]), None);
     let mut bad = [0u8; 13];
     bad[0] = 3;
     assert_eq!(MinerCell::parse(&bad), None);

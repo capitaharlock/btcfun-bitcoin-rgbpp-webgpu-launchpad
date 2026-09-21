@@ -27,6 +27,7 @@ const PAID_CANNOT_MOVE: i8 = 19;
 const BAD_BTCFUN_WITNESS: i8 = 20;
 const BAD_PAID_SEAL: i8 = 21;
 const PAID_ARMED_BESIDE_OTHERS: i8 = 22;
+const BAD_TICKET_NAME: i8 = 23;
 
 const IDLE: MinerState = MinerState::Idle;
 const ARMED: MinerState = MinerState::Armed;
@@ -37,7 +38,12 @@ fn cell(state: MinerState, nonce: u64) -> Vec<u8> {
 }
 
 fn anchored(state: MinerState, nonce: u64, anchor: u32) -> Vec<u8> {
-    MinerCell { state, nonce, anchor }.encode().to_vec()
+    MinerCell { state, nonce, anchor, ticket: None }.encode().to_vec()
+}
+
+/// An armed cell naming `ticket` as its challenge, as the arming of a paid cell writes it.
+fn naming(anchor: u32, ticket: [u8; 32]) -> Vec<u8> {
+    MinerCell { state: MinerState::Armed, nonce: 0, anchor, ticket: Some(ticket) }.encode().to_vec()
 }
 const TICKET_TXID: [u8; 32] = [0x71; 32];
 const TICKET_VOUT: u32 = 1;
@@ -580,7 +586,7 @@ impl Launch {
         let (raw, id) = creating_tx(payments);
         let mut op = Op::new();
         op.inputs.push(self.paid_input(id, 1));
-        op.outputs.push(self.miner_out(ARMED));
+        op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(self.mint.clone()), data: naming(H0, id) });
         op.btc_outputs.push((546, p2wpkh(0x01)));
         op.btcfun_witness = witness(raw);
         op
@@ -657,7 +663,7 @@ fn the_creating_transaction_must_be_the_one_the_seal_names() {
     let (raw, id) = creating_tx(new_cell_ticket(&l));
     let mut op = Op::new();
     op.inputs.push(l.paid_input(id, 2));
-    op.outputs.push(l.miner_out(ARMED));
+    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(l.mint.clone()), data: naming(H0, id) });
     op.btc_outputs.push((546, p2wpkh(0x01)));
     op.btcfun_witness = Some(raw);
     let (tx, _) = op.build(&l.env);
@@ -671,7 +677,8 @@ fn a_paid_cell_is_anchored_like_any_ticket() {
         let mut l = Launch::new();
         let payments = new_cell_ticket(&l);
         let mut op = l.arm_paid(payments, Some);
-        op.outputs[0] = l.miner_out_anchored(ARMED, anchor);
+        let seal = op.inputs[0].1.unwrap().0;
+        op.outputs[0].data = naming(anchor, seal);
         op.height = confirmed;
         let (tx, _) = op.build(&l.env);
         if valid { l.env.verify(&tx).unwrap(); } else { expect_code(l.env.verify(&tx), BAD_ANCHOR); }
@@ -762,5 +769,56 @@ fn a_dissolving_mint_is_checked_like_any_mint() {
         op.btcfun_witness = Some(Bytes::from(nonce));
         let (tx, _) = op.build(&l.env);
         expect_code(l.env.verify(&tx), code);
+    }
+}
+
+// ─── Mining on a ticket before it is armed ───────────────────────────────
+
+#[test]
+fn a_paid_cell_is_armed_naming_its_ticket_and_nothing_else() {
+    // Not naming it, or naming another transaction.
+    for data in [cell(ARMED, 0), naming(H0, [0x44; 32])] {
+        let mut l = Launch::new();
+        let payments = new_cell_ticket(&l);
+        let mut op = l.arm_paid(payments, Some);
+        op.outputs[0].data = data;
+        let (tx, _) = op.build(&l.env);
+        expect_code(l.env.verify(&tx), BAD_TICKET_NAME);
+    }
+    // Re-arming an idle cell mines on its own seal: it may not name a ticket.
+    let mut l = Launch::new();
+    let mut op = Op::new();
+    op.inputs.push(l.miner_input(IDLE));
+    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(l.mint.clone()), data: naming(H0, TICKET_TXID) });
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    op.btc_outputs.extend(l.ticket());
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), BAD_TICKET_NAME);
+}
+
+#[test]
+fn a_cell_armed_from_paid_mints_on_its_tickets_output() {
+    // The input cell is sealed to the arming transaction's output, and names
+    // the ticket: the work must be against the ticket, not the seal.
+    let arming = [0x55; 32];
+    let (nonce, clz) = nonce_for(MIN_CLZ, false);
+    let atoms = u128::from(reward(clz, H0, H0).unwrap());
+    let run = |named: [u8; 32]| {
+        let mut l = Launch::new();
+        let lock = l.env.rgbpp_lock(arming, 1);
+        let input = l.env.live(lock, Some(l.mint.clone()), naming(H0, named));
+        let mut op = Op::new();
+        op.inputs.push((input, Some((arming, 1))));
+        op.outputs.push(l.udt_out(atoms));
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        op.btcfun_witness = Some(Bytes::from(nonce.to_le_bytes().to_vec()));
+        let (tx, _) = op.build(&l.env);
+        l.env.verify(&tx)
+    };
+    run(TICKET_TXID).unwrap();
+    // The same nonce against the seal it was not mined on is (almost surely) weak.
+    let seal_clz = work_clz(&ticket_challenge(&arming, 1), nonce);
+    if seal_clz < MIN_CLZ {
+        expect_code(run(arming), WORK_TOO_WEAK);
     }
 }

@@ -88,7 +88,8 @@ export default function TokenomicsPage() {
         </ul>
         <p>
           A first mint turns the miner cell into your token cell, so a miner's first two rounds create a cell and every
-          round after that re-arms one. The platform never holds the promoter's money: each ticket pays them directly, in
+          round after that re-arms one. Either way the ticket is the challenge: mining, and the reward shown for it,
+          starts when the ticket is sent, at the rate of the block it was signed at. The platform never holds the promoter's money: each ticket pays them directly, in
           the block it confirms. The mint script arms a ticket only when both payments are present, and the platform's
           address is fixed in the script, so no launch can redirect it. A paymaster asking more than its budget is paid the
           difference on top of the ticket; the split never moves.

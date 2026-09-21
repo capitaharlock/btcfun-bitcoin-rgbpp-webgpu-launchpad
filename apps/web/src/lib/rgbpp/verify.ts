@@ -111,8 +111,10 @@ export function verifyMint(config: RgbppConfig, evidence: MintEvidence): MintVer
       ? "The miner cell is returned idle, carrying the nonce."
       : "The miner cell is not returned idle.");
 
-  // 3. The work: the ticket's Bitcoin output is the challenge.
-  const ticket = sealFromArgs(minerIn.output.lock.args);
+  // 3. The work: the ticket's Bitcoin output is the challenge — the one the
+  // cell names, when it was armed from a paid cell, or else its own seal.
+  const sealed = sealFromArgs(minerIn.output.lock.args);
+  const ticket = ticketCell?.ticket ? { txid: ticketCell.ticket, vout: 1 } : sealed;
   const challenge = ticketChallenge(ticket.txid, ticket.vout);
   const nonce = (dissolved ? witnessNonce : created?.nonce) ?? 0n;
   const work = recompute(challenge, nonce);

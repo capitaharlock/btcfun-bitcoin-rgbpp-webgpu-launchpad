@@ -86,3 +86,18 @@ wallet.
   live testnet run is what confirms it; until then it is labelled unverified.
 - Nothing a mint checks depends on confirmation time; the arming, like the old
   ticket, is the only height-dependent step, and it carries no balance.
+
+# Amendment (2026-09-25): mining starts at the ticket
+
+In a round that creates its cell, the challenge was the arming's output, so
+mining waited for the ticket to confirm and land on CKB before the arming could
+even be signed. The armed cell now names its ticket — 32 bytes of txid after the
+13 — and the challenge is that ticket's output 1 in every round. The script lets
+only the arming of a paid cell write the name, equal to the paid cell's seal, so
+the challenge still did not exist before the payment and still mints once. The
+miner mines from the moment the ticket is broadcast; the arming is signed during
+mining; only the mint waits for the armed cell. The paid cell carries the
+ticket's anchor, and its capacity is sized for the named form (225 CKB, inside
+the paymaster's cell). Mint script redeployed on CKB testnet
+(`contracts/deployments/testnet.json`); launches announced before it are
+obsolete.

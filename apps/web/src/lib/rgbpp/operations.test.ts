@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ccc } from "@ckb-ccc/core";
 
-import { NEW_CELL, REUSE } from "../standard";
+import { ANCHOR_GRACE_BLOCKS, NEW_CELL, REUSE } from "../standard";
 import { TESTNET } from "./config";
 import { decodeTerms, encodeTerms, metadataHash, mintScript, tokenId, tokenScript, type LaunchTerms } from "./launch";
 import {
+  ARM_ANCHOR_MARGIN,
+  armAnchor,
   CKB_FEE,
   decodeAmount,
   decodeMinerCell,
@@ -63,6 +65,16 @@ describe("launch identity", () => {
 });
 
 describe("miner cell", () => {
+  it("names its ticket only when armed, in the seal's byte order", () => {
+    const named = { state: "armed", nonce: 1n, anchor: 2, ticket: "ab" + "00".repeat(31) } as const;
+    const hex = encodeMinerCell(named);
+    expect(ccc.bytesFrom(hex).length).toBe(45);
+    expect(hex.endsWith("00".repeat(31) + "ab")).toBe(true);
+    expect(decodeMinerCell(hex)).toEqual(named);
+    expect(decodeMinerCell("0x00" + hex.slice(4))).toBeNull();
+    expect(() => encodeMinerCell({ ...named, state: "idle" })).toThrow();
+  });
+
   it("is a state byte, a nonce and an anchor, little-endian, as in mint-core", () => {
     const cell = { state: "armed", nonce: 0x0102030405060708n, anchor: 0x0a0b0c0d } as const;
     expect(encodeMinerCell(cell)).toBe("0x0108070605040302010d0c0b0a");
@@ -112,7 +124,7 @@ describe("plans", () => {
     expect(plan.cellDeps).toContainEqual(TESTNET.paymasterLockDep);
     const lock = ccc.CellOutput.from(plan.virtualTx.outputs[0]).lock;
     expect(sealFromArgs(lock.args)).toEqual({ txid: PLACEHOLDER_TXID, vout: 1 });
-    expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toEqual({ state: "paid", nonce: 0n, anchor: 0 });
+    expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toEqual({ state: "paid", nonce: 0n, anchor: terms.h0 });
     expect(plan.btcOutputs).toEqual([
       { kind: "seal", value: 546 },
       { kind: "ticket", script: terms.promoterScript, value: NEW_CELL.promoter },
@@ -139,7 +151,13 @@ describe("plans", () => {
     const plan = planArm(TESTNET, terms, paid(), creating, terms.h0 + 3);
     expect(plan.btcOutputs).toEqual([{ kind: "seal", value: 546 }]);
     expect(plan.btcfunWitness).toBe(ccc.hexFrom(creating));
-    expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toEqual({ state: "armed", nonce: 0n, anchor: terms.h0 + 3 });
+    // Armed naming its ticket, whose output stays the challenge; a paid cell
+    // with no usable anchor is anchored at the tip.
+    expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toEqual({ state: "armed", nonce: 0n, anchor: terms.h0 + 3, ticket: displayTxid(creating) });
+    const fresh = planArm(TESTNET, terms, { ...paid(), data: { state: "paid", nonce: 0n, anchor: terms.h0 + 1 } }, creating, terms.h0 + 20);
+    expect(decodeMinerCell(fresh.virtualTx.outputsData[0])?.anchor).toBe(terms.h0 + 1);
+    expect(armAnchor(terms.h0 + 1, terms.h0, terms.h0 + 1 + ANCHOR_GRACE_BLOCKS - ARM_ANCHOR_MARGIN)).toBe(terms.h0 + 1);
+    expect(armAnchor(terms.h0 + 1, terms.h0, terms.h0 + 2 + ANCHOR_GRACE_BLOCKS - ARM_ANCHOR_MARGIN)).toBe(terms.h0 + 2 + ANCHOR_GRACE_BLOCKS - ARM_ANCHOR_MARGIN);
     const witnesses = virtualResult(plan).ckbRawTx.witnesses;
     expect(witnesses).toEqual(["0xFF", ccc.hexFrom(creating)]);
     // Only the transaction the seal names, and only a paid cell.

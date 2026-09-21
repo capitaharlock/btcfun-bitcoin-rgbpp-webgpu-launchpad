@@ -6,8 +6,9 @@
  * mempool.space link and whether it is still landing — so the person can see
  * what has happened as well as what is happening.
  *
- * The steps sit side by side and one fills the frame at a time, so the page
- * never grows downwards as the loop advances. Every action lives in one bar
+ * The steps sit side by side and one fills the frame at a time. The frame
+ * keeps one height — the tallest step's, never less than a floor — so the page
+ * neither grows nor shrinks as the loop advances and the bar stays put. Every action lives in one bar
  * under the frame: back on the left, the step's own action and the way
  * forward on the right. Nothing signs without a press of that bar.
  *
@@ -17,7 +18,7 @@
  * ticket someone paid for.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ConnectOptions } from "../wallet/Connect";
 import type { Launch } from "../../data/launches";
@@ -117,18 +118,6 @@ export function MiningWizard({ launch, loop: ml, view: wv }: { launch: Launch; l
   const status = (s: LoopStep): StepStatus => statusOf(s, step, state);
   const index = STEPS.indexOf(wv.view);
 
-  // The frame takes the height of the step on screen, not of the tallest one.
-  const slides = useRef<Array<HTMLLIElement | null>>([]);
-  const [height, setHeight] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const el = slides.current[index];
-    if (!el) return;
-    setHeight(el.offsetHeight);
-    const watch = new ResizeObserver(() => setHeight(el.offsetHeight));
-    watch.observe(el);
-    return () => watch.disconnect();
-  }, [index]);
-
   const bodies: Record<LoopStep, { line: string; body: ReactNode }> = {
     wallet: { line: "", body: <WalletBody /> },
     ticket: { line: ticketLine(state), body: <TicketBody launch={launch} ml={ml} /> },
@@ -166,14 +155,11 @@ export function MiningWizard({ launch, loop: ml, view: wv }: { launch: Launch; l
         </ol>
       </nav>
 
-      <div className="wz-frame" style={height === null ? undefined : { height }}>
+      <div className="wz-frame">
         <ol className="wz-track" style={{ transform: `translateX(-${index * 100}%)` }}>
           {STEPS.map((s) => (
             <Slide
               key={s}
-              ref={(el) => {
-                slides.current[STEPS.indexOf(s)] = el;
-              }}
               n={STEPS.indexOf(s)}
               title={TITLES[s]}
               status={status(s)}
@@ -195,7 +181,6 @@ const statusWord = (s: StepStatus) => (s === "done" ? "done" : s === "active" ? 
 
 /** One step, the width of the frame. Off screen it is inert: no focus, no reading. */
 function Slide({
-  ref,
   n,
   title,
   status,
@@ -203,7 +188,6 @@ function Slide({
   line,
   children,
 }: {
-  ref: Ref<HTMLLIElement>;
   n: number;
   title: string;
   status: StepStatus;
@@ -212,7 +196,7 @@ function Slide({
   children?: ReactNode;
 }) {
   return (
-    <li ref={ref} className={`wz-step ${status}`} inert={!shown} aria-hidden={!shown}>
+    <li className={`wz-step ${status}`} inert={!shown} aria-hidden={!shown}>
       <div className="wz-head">
         <h3>
           <span className="wz-sr">Step {n}: </span>
@@ -240,6 +224,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
   const mining_ = state.at === "mine" || state.at === "mint";
   const qualifies = (mining.progress.best?.clz ?? 0) >= MIN_CLZ;
   const blocked = !ml.costs || ml.costs.short || ml.busy;
+  const armable = state.at === "mine" && state.unarmed?.why === "arm";
   const go = (s: LoopStep) => view.show(s);
 
   let actions: ReactNode = null;
@@ -254,13 +239,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
             {ml.busy ? "Signing…" : "Sign ticket"}
           </Primary>
         );
-      } else if (state.at === "arm") {
-        actions = (
-          <Primary onClick={ml.signArm} disabled={blocked} busy={ml.busy}>
-            {ml.busy ? "Signing…" : "Arm ticket"}
-          </Primary>
-        );
-      } else if (state.at === "bought" || state.at === "waiting" || state.at === "reading") {
+      } else if (state.at === "waiting" || state.at === "reading") {
         actions = <Waiting>Waiting for a block</Waiting>;
       } else if (mining_ || state.at === "minting" || state.at === "minted") {
         actions = (
@@ -280,6 +259,12 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
         const begun = mining.progress.next > 0n;
         actions = (
           <>
+            {armable && (
+              <button className="btn lg" onClick={ml.signArm} disabled={blocked} aria-busy={ml.busy || undefined}>
+                {ml.busy && <span className="wz-spin" aria-hidden="true" />}
+                {ml.busy ? "Signing…" : "Arm ticket"}
+              </button>
+            )}
             {mining.running ? (
               <button className="btn lg" onClick={mining.stop}>
                 Pause
@@ -322,7 +307,13 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
             <button className="btn lg" onClick={() => { ml.unkeep(); go("mine"); }}>
               Keep mining
             </button>
-            <Waiting>Waiting for the ticket</Waiting>
+            {armable ? (
+              <Primary onClick={ml.signArm} disabled={blocked} busy={ml.busy}>
+                {ml.busy ? "Signing…" : "Arm ticket"}
+              </Primary>
+            ) : (
+              <Waiting>Waiting for a block</Waiting>
+            )}
           </>
         );
       } else if (state.at === "minting") {
@@ -401,16 +392,12 @@ function ticketLine(state: LoopState): string {
       return "Reading your wallet…";
     case "buy":
       return state.cell
-        ? "One payment: it arms your miner cell and fixes your challenge and your rate."
-        : "One payment: it creates your miner cell. A second signature, network fee only, arms it.";
-    case "bought":
-      return "Ticket sent. Bitcoin needs one block before it can be armed.";
-    case "arm":
-      return "Your ticket is paid. Arming it fixes your challenge and your rate — network fee only.";
+        ? "One payment: its output is your challenge, and mining starts as soon as it is sent."
+        : "One payment: it creates your miner cell, and mining starts as soon as it is sent.";
     case "waiting":
       return `Waiting for your ${state.op.kind} to land.`;
     default:
-      return "Ticket bought.";
+      return "Ticket sent — mine now, no need to wait for Bitcoin.";
   }
 }
 
@@ -439,28 +426,7 @@ function TicketBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
     );
   }
 
-  if (state.at === "arm") {
-    return (
-      <div className="wz-sent">
-        <TicketArt launch={launch} paid />
-        <div className="stack-sm">
-          {trace}
-          {ml.costs ? (
-            <dl className="wz-bill">
-              <BillRow label={`Network fee · ${ml.costs.feeRate} sat/vB`} sats={ml.costs.network} />
-            </dl>
-          ) : (
-            <Working>Estimating the network fee…</Working>
-          )}
-          {ml.costs && <p className="wz-copy faint">Then the mint costs ≈ {group(ml.costs.later)} sats of network fee.</p>}
-          <Funds costs={ml.costs} />
-          {problem}
-        </div>
-      </div>
-    );
-  }
-
-  if (state.at === "bought" || state.at === "waiting") {
+  if (state.at === "waiting") {
     return (
       <div className="wz-sent">
         <TicketArt launch={launch} paid />
@@ -581,14 +547,58 @@ function mineLine(state: LoopState, ml: MiningLoop): string {
     case "minted":
       return "Done — your hash is in the mint.";
     default:
-      return `Once the ticket is armed. A hash of ${MIN_CLZ}+ zero bits mints.`;
+      return `Once the ticket is sent. A hash of ${MIN_CLZ}+ zero bits mints.`;
   }
 }
 
 function MineBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
   const { state } = ml.loop;
   if (state.at !== "mine" && state.at !== "mint") return null;
-  return <MinePanel mining={ml.mining} challenge={ml.challenge} ticket={ml.loop.ticket} mintable={ml.mintable} symbol={launch.symbol} />;
+  return (
+    <>
+      <MinePanel mining={ml.mining} challenge={ml.challenge} ticket={ml.loop.ticket} mintable={ml.mintable} symbol={launch.symbol} />
+      <Readiness ml={ml} />
+    </>
+  );
+}
+
+/**
+ * Where the ticket stands on the way to a mint, one line: mining never waits
+ * for it, only the mint does. The arming, when it is due, is offered here and
+ * signed from the bar.
+ */
+function Readiness({ ml }: { ml: MiningLoop }) {
+  const { state, traces } = ml.loop;
+  if (state.at !== "mine" && state.at !== "mint") return null;
+  const unarmed = state.at === "mine" ? state.unarmed : null;
+  const trace = unarmed?.why === "arming" ? traces.arm : traces.ticket;
+  let say: ReactNode;
+  switch (unarmed?.why) {
+    case "landing":
+      say = <Working>Ticket in the mempool — minting waits for one Bitcoin block.</Working>;
+      break;
+    case "arm":
+      say = (
+        <p className="wz-copy">
+          <b>Ticket confirmed.</b> Arm it to mint later
+          {ml.costs ? ` — ${group(ml.costs.network)} sats of network fee` : ""}. Mining goes on.
+        </p>
+      );
+      break;
+    case "arming":
+      say = <Working>Arming in the mempool — minting waits for its block.</Working>;
+      break;
+    default:
+      say = <p className="wz-copy faint">Ticket armed: a qualifying hash can be minted.</p>;
+  }
+  return (
+    <div className="wz-ready">
+      {trace && <TraceRow label={unarmed?.why === "arming" ? "Arming" : "Ticket"} trace={trace} />}
+      {say}
+      {unarmed?.why === "arm" && <Funds costs={ml.costs} />}
+      {unarmed?.why === "arm" && ml.failure && <Notice tone="danger">{ml.failure}</Notice>}
+    </div>
+  );
 }
 
 // ── step 3: mint ───────────────────────────────────────────────────────────
@@ -596,7 +606,8 @@ function MineBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
 function mintLine(state: LoopState, ml: MiningLoop, symbol: string): string {
   switch (state.at) {
     case "mine":
-      return ml.keeping ? "Accepted. The mint can be signed once the ticket confirms." : `Accept a hash of ${MIN_CLZ}+ zero bits to mint it.`;
+      if (!ml.keeping) return `Accept a hash of ${MIN_CLZ}+ zero bits to mint it.`;
+      return state.unarmed?.why === "arm" ? "Accepted. Arm your ticket, then sign the mint." : "Accepted. The mint can be signed once the ticket is armed on-chain.";
     case "mint":
       return `Mint ${atoms(ml.mintable, DECIMALS, 2)} ${symbol}. Network fee only.`;
     case "minting":
@@ -639,7 +650,12 @@ function MintBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
             <div className="v">{ml.costs && state.at === "mint" ? group(ml.costs.network) : "—"}<span className="u">sats</span></div>
           </div>
         </div>
-        {state.at === "mine" && <Working>Waiting for your ticket to confirm on Bitcoin — about one block.</Working>}
+        {state.at === "mine" && state.unarmed?.why === "arm" && <Funds costs={ml.costs} />}
+        {state.at === "mine" && state.unarmed?.why !== "arm" && (
+          <Working>
+            {state.unarmed?.why === "arming" ? "Waiting for the arming's Bitcoin block." : "Waiting for your ticket's Bitcoin block."}
+          </Working>
+        )}
         {state.at === "mint" && <Funds costs={ml.costs} />}
         {ml.failure && <Notice tone="danger">{ml.failure}</Notice>}
       </div>

@@ -87,6 +87,9 @@ enum Error {
     BadPaidSeal,
     /// Arming a paid cell beside anything but paid cells.
     PaidArmedBesideOthers,
+    /// An armed cell names a ticket other than the paid cell's seal, or an
+    /// idle cell's arming names one at all.
+    BadTicketName,
 }
 
 impl From<SysError> for Error {
@@ -139,14 +142,24 @@ fn main() -> Result<(), Error> {
         // Ticket on an idle cell: the arming Bitcoin transaction pays it.
         (Some(MinerState::Idle), Some(MinerState::Armed)) => {
             let btc = verified_bitcoin_tx()?;
-            arm(&btc, &terms, after_cell.unwrap())?;
+            let armed = after_cell.unwrap();
+            if armed.ticket.is_some() {
+                return Err(Error::BadTicketName);
+            }
+            arm(&btc, &terms, armed)?;
             require_ticket(&btc.tx, &terms, REUSE)?;
             no_increase(minted)
         }
         // Ticket on a paid cell: the creating transaction paid it.
         (Some(MinerState::Paid), Some(MinerState::Armed)) => {
             let btc = verified_bitcoin_tx()?;
-            arm(&btc, &terms, after_cell.unwrap())?;
+            let armed = after_cell.unwrap();
+            // The ticket's output is the challenge from here on: mining began
+            // on it when it was broadcast (`MinerCell`).
+            if armed.ticket != Some(sealed_outpoint()?.0) {
+                return Err(Error::BadTicketName);
+            }
+            arm(&btc, &terms, armed)?;
             if QueryIter::new(load_cell_data, Source::Input).any(|data| {
                 MinerCell::parse(&data).is_some_and(|cell| cell.state != MinerState::Paid)
             }) {
@@ -166,7 +179,7 @@ fn main() -> Result<(), Error> {
         (Some(MinerState::Armed), Some(MinerState::Armed)) => Err(Error::MintMustDisarm),
         (Some(MinerState::Armed), Some(MinerState::Idle)) => {
             let (ticket, created) = (before_cell.unwrap(), after_cell.unwrap());
-            let expected = mint_amount(&terms, sealed_outpoint()?, created.nonce, ticket.anchor)?;
+            let expected = mint_amount(&terms, challenge_of(&ticket)?, created.nonce, ticket.anchor)?;
             exactly(minted, expected)
         }
         // A first mint dissolves the miner cell into the token cell, whose
@@ -175,7 +188,7 @@ fn main() -> Result<(), Error> {
         // one that moves nothing is a plain close.
         (Some(MinerState::Armed), None) if minted != 0 => {
             let ticket = before_cell.unwrap();
-            let expected = mint_amount(&terms, sealed_outpoint()?, witness_nonce()?, ticket.anchor)?;
+            let expected = mint_amount(&terms, challenge_of(&ticket)?, witness_nonce()?, ticket.anchor)?;
             exactly(minted, expected)
         }
         // Close or move: owner mode is active, so this script is what stops a
@@ -189,6 +202,15 @@ fn exactly(minted: i128, expected: u64) -> Result<(), Error> {
         Ok(())
     } else {
         Err(Error::WrongAmount)
+    }
+}
+
+/// The outpoint an armed cell is mined against: the ticket it names, or else
+/// the output it is sealed to.
+fn challenge_of(armed: &MinerCell) -> Result<([u8; 32], u32), Error> {
+    match armed.ticket {
+        Some(txid) => Ok((txid, PAID_SEAL_VOUT)),
+        None => sealed_outpoint(),
     }
 }
 

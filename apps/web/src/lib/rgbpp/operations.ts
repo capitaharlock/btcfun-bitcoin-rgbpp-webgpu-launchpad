@@ -17,11 +17,11 @@
 import { ccc } from "@ckb-ccc/core";
 import { sha256 } from "@noble/hashes/sha2";
 
-import { NEW_CELL, REUSE, type Split } from "../standard";
+import { ANCHOR_GRACE_BLOCKS, NEW_CELL, REUSE, type Split } from "../standard";
 import { commitment, type VirtualTx } from "./commitment";
 import type { RgbppConfig } from "./config";
 import { mintScript, tokenScript, type LaunchTerms } from "./launch";
-import { pendingLock, type Seal } from "./seal";
+import { pendingLock, reverseHex, type Seal } from "./seal";
 
 /** Every sealed Bitcoin output carries this much; the RGB++ tooling's default. */
 export const SEAL_SATS = 546;
@@ -41,6 +41,10 @@ export const MINER_FEE_RESERVE = ccc.fixedPointFrom(10);
  */
 export type MinerStateName = "idle" | "armed" | "paid";
 
+/** The output a ticket seals the miner cell to (`contracts/mint-core` `PAID_SEAL_VOUT`). */
+export const TICKET_VOUT = 1;
+const PLACEHOLDER_NAME = "0".repeat(64);
+
 const STATE_BYTES: Record<MinerStateName, number> = { idle: 0, armed: 1, paid: 2 };
 const STATE_NAMES: MinerStateName[] = ["idle", "armed", "paid"];
 
@@ -51,22 +55,43 @@ export interface MinerCellData {
   nonce: bigint;
   /** The height the current ticket's reward is priced at. */
   anchor: number;
+  /**
+   * On a cell armed from `paid` only: the ticket's txid (displayed order),
+   * whose output 1 is the challenge instead of the cell's own seal. That is
+   * what lets mining start the moment the ticket is broadcast.
+   */
+  ticket?: string;
 }
 
+/** A miner cell's data size, and the size of one that names its ticket. */
+const CELL_BYTES = 13;
+const NAMED_BYTES = CELL_BYTES + 32;
+
 export function encodeMinerCell(cell: MinerCellData): ccc.Hex {
-  return ccc.hexFrom(
-    ccc.bytesConcat([STATE_BYTES[cell.state]], ccc.numLeToBytes(cell.nonce, 8), ccc.numLeToBytes(cell.anchor, 4)),
-  );
+  const head = ccc.bytesConcat([STATE_BYTES[cell.state]], ccc.numLeToBytes(cell.nonce, 8), ccc.numLeToBytes(cell.anchor, 4));
+  if (cell.ticket === undefined) return ccc.hexFrom(head);
+  if (cell.state !== "armed") throw new Error("only an armed miner cell names its ticket");
+  return ccc.hexFrom(ccc.bytesConcat(head, ccc.bytesFrom(reverseHex(cell.ticket), "hex")));
 }
 
 export function decodeMinerCell(data: ccc.HexLike): MinerCellData | null {
   const bytes = ccc.bytesFrom(data);
-  if (bytes.length !== 13 || bytes[0] >= STATE_NAMES.length) return null;
-  return {
+  if ((bytes.length !== CELL_BYTES && bytes.length !== NAMED_BYTES) || bytes[0] >= STATE_NAMES.length) return null;
+  const cell: MinerCellData = {
     state: STATE_NAMES[bytes[0]],
     nonce: ccc.numLeFromBytes(bytes.slice(1, 9)),
-    anchor: Number(ccc.numLeFromBytes(bytes.slice(9))),
+    anchor: Number(ccc.numLeFromBytes(bytes.slice(9, CELL_BYTES))),
   };
+  if (bytes.length === NAMED_BYTES) {
+    if (cell.state !== "armed") return null;
+    cell.ticket = reverseHex(ccc.hexFrom(bytes.slice(CELL_BYTES)).slice(2));
+  }
+  return cell;
+}
+
+/** The Bitcoin output an armed cell is mined against: the ticket it names, or its own seal. */
+export function challengeOutpoint(cell: MinerCell): Seal {
+  return cell.data.ticket ? { txid: cell.data.ticket, vout: TICKET_VOUT } : cell.seal;
 }
 
 export function encodeAmount(atoms: bigint): ccc.Hex {
@@ -133,10 +158,13 @@ export function occupied(output: ccc.CellOutputLike, data: ccc.HexLike): bigint 
   return ccc.fixedPointFrom(ccc.CellOutput.from({ ...output, capacity: 0 }).occupiedSize + ccc.bytesFrom(data).length);
 }
 
-/** Capacity a miner cell is opened with: what it occupies, plus its fee reserve. */
+/**
+ * Capacity a miner cell is opened with: what it occupies once armed naming its
+ * ticket — the largest it gets — plus its fee reserve.
+ */
 export function minerCellCapacity(config: RgbppConfig, terms: LaunchTerms): bigint {
   const lock = pendingLock(config, 1);
-  const data = encodeMinerCell({ state: "idle", nonce: 0n, anchor: 0 });
+  const data = encodeMinerCell({ state: "armed", nonce: 0n, anchor: 0, ticket: PLACEHOLDER_NAME });
   return occupied({ lock, type: mintScript(config, terms) }, data) + MINER_FEE_RESERVE;
 }
 
@@ -161,8 +189,6 @@ function finish(
   return { ...parts, cellDeps, commitment: commitment(parts.virtualTx) };
 }
 
-/** The output a ticket seals the miner cell to (`contracts/mint-core` `PAID_SEAL_VOUT`). */
-export const TICKET_VOUT = 1;
 
 /** The payments one ticket makes, in the order the Bitcoin transaction lists them. */
 function ticketPayments(config: RgbppConfig, terms: LaunchTerms, price: Split): PlannedOutput[] {
@@ -177,7 +203,7 @@ export interface TicketRequest {
   idle: MinerCell | null;
   /** The paymaster, for a round that creates its miner cell. */
   paymaster: Paymaster | null;
-  /** The height a re-armed cell's reward is priced at. */
+  /** The height the ticket's reward is priced at; a paid cell keeps it for its arming. */
   tip: number;
 }
 
@@ -194,7 +220,8 @@ export interface TicketRequest {
  * capacity, and pays the new-cell split plus the paymaster. It spends no
  * sealed UTXO, so nothing on CKB verifies it now; the cell is armed by a
  * second transaction once this one has settled (`planArm`), and the script
- * checks this payment then.
+ * checks this payment then. Its output 1 is the challenge from the start, so
+ * mining does not wait for either.
  */
 export function planTicket(config: RgbppConfig, terms: LaunchTerms, request: TicketRequest): Plan {
   const { idle, paymaster, tip } = request;
@@ -207,7 +234,7 @@ export function planTicket(config: RgbppConfig, terms: LaunchTerms, request: Tic
       virtualTx: {
         inputs: [],
         outputs: [{ capacity: minerCellCapacity(config, terms), lock: pendingLock(config, TICKET_VOUT), type: mint }],
-        outputsData: [encodeMinerCell({ state: "paid", nonce: 0n, anchor: 0 })],
+        outputsData: [encodeMinerCell({ state: "paid", nonce: 0n, anchor: tip })],
       },
       btcOutputs: [
         { kind: "seal", value: SEAL_SATS },
@@ -235,14 +262,21 @@ export function planTicket(config: RgbppConfig, terms: LaunchTerms, request: Tic
 }
 
 /**
- * Arm a paid miner cell: it moves to output 1 armed at `tip`, and the
- * transaction pays nothing but the network. The ticket transaction that
- * created the cell rides in the btc.fun witness — stripped of its witness
- * data, as Bitcoin hashes it — so the script can check what it paid.
+ * Arm a paid miner cell: it moves to output 1 armed, naming its ticket as the
+ * challenge, and the transaction pays nothing but the network. The ticket
+ * transaction that created the cell rides in the btc.fun witness — stripped
+ * of its witness data, as Bitcoin hashes it — so the script can check what it
+ * paid.
+ *
+ * The anchor is the ticket's, which the miner has been shown the reward at
+ * since the ticket was broadcast, unless it is too close to the day the script
+ * allows between the anchor and the arming's confirmation; then `tip`. The
+ * work carries over either way: the challenge is the ticket's, not the anchor.
  */
 export function planArm(config: RgbppConfig, terms: LaunchTerms, paid: MinerCell, creating: Uint8Array, tip: number): Plan {
   if (paid.data.state !== "paid") throw new Error("only a paid miner cell is armed this way");
   if (tip < terms.h0) throw new RangeError("the launch has not opened yet");
+  const anchor = armAnchor(paid.data.anchor, terms.h0, tip);
   if (paid.seal.vout !== TICKET_VOUT) throw new Error("a paid cell is sealed to its ticket's output 1");
   if (displayTxid(creating) !== paid.seal.txid) {
     throw new Error("the transaction given is not the one that created this miner cell");
@@ -251,7 +285,7 @@ export function planArm(config: RgbppConfig, terms: LaunchTerms, paid: MinerCell
     virtualTx: {
       inputs: [paid.outPoint],
       outputs: [{ capacity: paid.capacity - CKB_FEE, lock: pendingLock(config, TICKET_VOUT), type: mintScript(config, terms) }],
-      outputsData: [encodeMinerCell({ state: "armed", nonce: 0n, anchor: tip })],
+      outputsData: [encodeMinerCell({ state: "armed", nonce: 0n, anchor, ticket: paid.seal.txid })],
     },
     btcOutputs: [{ kind: "seal", value: SEAL_SATS }],
     sealsSpent: [paid.seal],
@@ -259,6 +293,19 @@ export function planArm(config: RgbppConfig, terms: LaunchTerms, paid: MinerCell
     sumInputsCapacity: paid.capacity,
     btcfunWitness: ccc.hexFrom(creating),
   });
+}
+
+/**
+ * Blocks an arming may take to confirm, kept clear of the script's day of
+ * grace (`ANCHOR_GRACE_BLOCKS`): past it the arming would fail and strand the
+ * cell, so an older anchor is replaced by the tip.
+ */
+export const ARM_ANCHOR_MARGIN = 36;
+
+/** The anchor an arming declares: the ticket's while it is safely fresh, else `tip`. */
+export function armAnchor(ticketAnchor: number, h0: number, tip: number): number {
+  const fresh = ticketAnchor >= h0 && tip - ticketAnchor <= ANCHOR_GRACE_BLOCKS - ARM_ANCHOR_MARGIN;
+  return fresh ? ticketAnchor : tip;
 }
 
 /** A Bitcoin txid as explorers show it, from the transaction without witness data. */

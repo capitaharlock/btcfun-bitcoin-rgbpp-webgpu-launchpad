@@ -7,8 +7,9 @@
  *
  * Nothing here signs by itself, whatever the wallet. Each transaction of a
  * round waits for its own button: the ticket (the round's one payment), the
- * arming of a cell the ticket created (network fee only), and the mint
- * (network fee only). For the demo and local wallets the button is the
+ * arming of a cell the ticket created (network fee only, offered while the
+ * miner mines, as soon as the ticket has settled), and the mint (network fee
+ * only). For the demo and local wallets the button is the
  * confirmation; a passkey wallet asks for the passkey when it is pressed —
  * the same path, through `Vault.use()`.
  *
@@ -33,7 +34,7 @@ import { deriveLoop, inProgress, narrate, type Loop, type Narration } from "../l
 import { ARM_SHAPE, fundingNeeded, mintShape, networkFee, plainFunding, shapeOf, strippedTx } from "../lib/rgbpp/bitcoin";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
 import { mintScript } from "../lib/rgbpp/launch";
-import { planArm, planMint, planTicket, SEAL_SATS, type Paymaster, type Plan } from "../lib/rgbpp/operations";
+import { armAnchor, planArm, planMint, planTicket, SEAL_SATS, type Paymaster, type Plan } from "../lib/rgbpp/operations";
 import { NEW_CELL, REUSE, reward, TICKET_SATS, ticketChallenge, type Split } from "../lib/standard";
 import { landingTxids, useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
@@ -169,7 +170,9 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
 
   const loop = deriveLoop({ ...facts, bestClz: best?.clz ?? null });
   const { state } = loop;
-  const signs = state.at === "buy" || state.at === "arm" || state.at === "mint";
+  // A paid cell waiting for its arming, while its ticket is mined.
+  const armCell = state.at === "mine" && state.unarmed?.why === "arm" ? state.unarmed.cell : null;
+  const signs = state.at === "buy" || state.at === "mint" || armCell !== null;
 
   // The fee rate, fresh for each step that signs.
   useEffect(() => {
@@ -179,7 +182,7 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
     return () => {
       live = false;
     };
-  }, [signs, state.at]);
+  }, [signs, state.at, armCell]);
 
   // The paymaster's fee, when a ticket creates its cell.
   const needsPaymaster = state.at === "buy" && state.cell === null;
@@ -197,7 +200,7 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
 
   // Arming carries the ticket that created the cell: kept when this browser
   // signed it, fetched otherwise.
-  const paidTxid = state.at === "arm" ? state.cell.seal.txid : null;
+  const paidTxid = armCell?.seal.txid ?? null;
   const ownHex = operations.find((op) => op.btcTxid === paidTxid)?.hex;
   useEffect(() => {
     if (!paidTxid || creating?.txid === paidTxid) return;
@@ -216,7 +219,6 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
   // The plan for the step on screen, built exactly as it will be signed.
   // Keyed by what shapes it — not by `state`, which is rebuilt every render.
   const buyCell = state.at === "buy" ? state.cell : undefined;
-  const armCell = state.at === "arm" ? state.cell : null;
   const mintCell = state.at === "mint" ? state.cell : null;
   const plan = useMemo<Plan | null>(() => {
     try {
@@ -282,9 +284,9 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
 
   const signArm = useCallback(() => {
     if (!armCell || !plan || !costs || costs.short) return;
-    const meta = { launchId: launch.id, tokenId: launch.tokenId, kind: "arm", anchor: tip } as const;
+    const meta = { launchId: launch.id, tokenId: launch.tokenId, kind: "arm", anchor: armAnchor(armCell.data.anchor, launch.h0, tip) } as const;
     void run(() => submit(plan, meta, { feeRate: costs.feeRate }));
-  }, [armCell, plan, costs, run, submit, launch.id, launch.tokenId, tip]);
+  }, [armCell, plan, costs, run, submit, launch.id, launch.tokenId, launch.h0, tip]);
 
   const signMint = useCallback(() => {
     if (!mintCell || !plan || !costs || costs.short) return;

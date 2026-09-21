@@ -87,15 +87,18 @@ k         = floor((anchor − h0) / HALVING_BLOCKS)
 reward    = floor(UNIT × clz² / 2^k)      atoms, if clz ≥ MIN_CLZ
 ```
 
-The ticket outpoint is the armed miner cell's Bitcoin UTXO (§4.2) — the output
-of the transaction that armed it: the txid in
+The ticket outpoint is output 1 of the ticket transaction (§4.2): the armed
+miner cell's own UTXO when a ticket re-arms it, and the ticket the cell names
+when it was armed from `paid`. It is encoded as the txid in
 internal byte order followed by the output index as little-endian `u32`. Hashing
 it to 32 bytes keeps the preimage at 40 bytes, one SHA-256 block, which is what
 the GPU kernel grinds. `nonce` is 8 bytes, little-endian. `h0` is fixed when
 the launch is created.
 
 `anchor` is the ticket's height: arming fixes the rate its mint is paid at.
-The wallet declares the tip it sees when it arms the cell, and the mint script
+The wallet declares the tip it saw when it signed the ticket (a paid cell keeps
+it for its arming, unless it is too old to confirm in time; then the tip at the
+arming), and the mint script
 accepts that declaration only if it is no earlier than `h0`, no later than the
 block that confirms the arming — proven to the RGB++ lock by the Bitcoin SPV
 client — and at most `ANCHOR_GRACE_BLOCKS` before it.
@@ -136,15 +139,19 @@ the ticket (decision `2026-09-25-one-payment-per-round`).
   script lets anyone create a paid cell, but never beside an RGB++ input, and
   checks the payment when the cell is armed.
 - **Arm.** A second Bitcoin transaction, paying only the network, spends the
-  paid cell's output 1 and arms the cell at the declared anchor. The creating
+  paid cell's output 1 and arms the cell at the declared anchor, naming the
+  ticket's txid in the cell's data (45 bytes instead of 13); the script requires
+  that name to equal the paid cell's seal, and forbids it anywhere else. The creating
   transaction rides in the *btc.fun witness* — the first witness past the
   inputs, which the RGB++ queue leaves as written — without its witness data; the
   script accepts it only if it hashes to the txid the cell is sealed to and pays
   the new-cell split for every cell the arming arms. A paid cell cannot move and
   is armed only beside other paid cells, so one payment arms one cell.
-- **The challenge** is the armed cell's output: it does not exist before the
-  cell is armed, so work cannot be precomputed, and it can be spent once, so work
-  cannot be reused. Mining may start as soon as that transaction is broadcast.
+- **The challenge** is the ticket's output 1: it does not exist before the
+  ticket is paid, so work cannot be precomputed, and one ticket arms one cell
+  that mints once, so work cannot be reused. Mining may start as soon as the
+  ticket is broadcast — also in a round that creates its cell, whose arming
+  happens while the miner mines. Only the mint waits for the armed cell.
 - **Mint.** A Bitcoin transaction, paying only the network, spends the armed
   cell's UTXO and increases the miner's xUDT balance by exactly `reward`. With a
   token cell already held, the miner cell returns to idle carrying the nonce and

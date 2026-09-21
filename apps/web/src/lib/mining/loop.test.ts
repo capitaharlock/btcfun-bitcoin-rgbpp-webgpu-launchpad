@@ -44,29 +44,30 @@ describe("which step of the loop a miner is on", () => {
     expect(loop.step).toBeNull();
   });
 
-  it("without a miner cell, the ticket creates it; the round waits for it to land, then arms it", () => {
+  it("without a miner cell, mines on the ticket the moment it is sent, and arms it while mining", () => {
     expect(at({}).state).toEqual({ at: "buy", cell: null });
-    const bought = op("ticket", "01", "sent", { newCell: true });
+    const bought = op("ticket", "01".repeat(32), "sent", { newCell: true, anchor: 905 });
     const landing = at({ operations: [bought] });
-    expect(landing.state).toEqual({ at: "bought", op: bought });
-    expect(landing.step).toBe("ticket");
-    expect(landing.ticket).toBeNull();
-    expect(landing.traces.ticket).toEqual({ txid: "01", stage: "landing", ckbTxHash: null, failure: null });
+    const ticket = { txid: "01".repeat(32), vout: TICKET_VOUT, anchor: 905, settled: false };
+    expect(landing.state).toEqual({ at: "mine", ticket, unarmed: { why: "landing" } });
+    expect(landing.step).toBe("mine");
+    expect(landing.traces.ticket).toEqual({ txid: "01".repeat(32), stage: "landing", ckbTxHash: null, failure: null });
 
-    const paid = cell("paid", "01".repeat(32));
+    // The paid cell has landed: the arming is due, and the challenge is unchanged.
+    const paid = cell("paid", "01".repeat(32), 905);
     const settled = { ...bought, stage: "settled" as const };
-    const ready = at({ miners: [paid], operations: [settled] });
-    expect(ready.state).toEqual({ at: "arm", cell: paid });
-    expect(ready.traces.ticket?.stage).toBe("settled");
-  });
+    const due = at({ miners: [paid], operations: [settled], bestClz: 40 });
+    expect(due.state).toEqual({ at: "mine", ticket, unarmed: { why: "arm", cell: paid } });
 
-  it("mines on an arming the moment it is broadcast, keeping the ticket's trace", () => {
-    const arming = op("arm", "02", "sent", { anchor: 905 });
-    const loop = at({ miners: [], operations: [arming, op("ticket", "01", "settled", { newCell: true })] });
-    expect(loop.state.at === "mine" && loop.state.blocked).toBe("landing");
-    expect(loop.ticket).toEqual({ txid: "02", vout: TICKET_VOUT, anchor: 905, settled: false });
-    expect(loop.traces.ticket?.txid).toBe("01");
-    expect(loop.traces.arm?.txid).toBe("02");
+    const arming = op("arm", "02".repeat(32), "sent", { anchor: 905 });
+    const signed = at({ miners: [paid], operations: [arming, settled] });
+    expect(signed.state).toEqual({ at: "mine", ticket, unarmed: { why: "arming", op: arming } });
+    expect(signed.traces.arm?.txid).toBe("02".repeat(32));
+
+    // Armed, naming the ticket: same challenge, now mintable.
+    const armed: MinerCell = { ...cell("armed", "02".repeat(32), 905), data: { state: "armed", nonce: 0n, anchor: 905, ticket: "01".repeat(32) } };
+    const ready = at({ miners: [armed], operations: [{ ...arming, stage: "settled" }, settled], bestClz: MIN_CLZ });
+    expect(ready.state).toEqual({ at: "mint", ticket: { ...ticket, settled: true }, cell: armed });
   });
 
   it("with an idle cell, the ticket arms it straight away", () => {
@@ -83,7 +84,7 @@ describe("which step of the loop a miner is on", () => {
       bestClz: 30,
     });
     expect(loop.state.at).toBe("mine");
-    expect(loop.state.at === "mine" && loop.state.blocked).toBe("landing");
+    expect(loop.state.at === "mine" && loop.state.unarmed).toEqual({ why: "landing" });
     expect(loop.ticket).toEqual({ txid: "02", vout: TICKET_VOUT, anchor: 905, settled: false });
     expect(loop.traces.ticket?.stage).toBe("landing");
   });
@@ -92,7 +93,7 @@ describe("which step of the loop a miner is on", () => {
     const armed = cell("armed", "02".repeat(32), 905);
     const operations = [op("ticket", "02".repeat(32), "settled", { anchor: 905 })];
     const short = at({ miners: [armed], operations, bestClz: MIN_CLZ - 1 });
-    expect(short.state.at === "mine" && short.state.blocked).toBe("short");
+    expect(short.state.at === "mine" && short.state.unarmed).toBeNull();
     const ready = at({ miners: [armed], operations, bestClz: MIN_CLZ });
     expect(ready.state).toEqual({ at: "mint", ticket: { txid: armed.seal.txid, vout: 1, anchor: 905, settled: true }, cell: armed });
     expect(ready.step).toBe("mint");
@@ -155,7 +156,7 @@ describe("which step of the loop a miner is on", () => {
     expect(at({ offered: false, miners: null }).state.at).toBe("reading");
     expect(at({ offered: false, miners: [cell("armed")] }).state.at).toBe("mine");
     // A paid ticket is a ticket held: it can still be armed and mined.
-    expect(at({ offered: false, miners: [cell("paid")] }).state.at).toBe("arm");
+    expect(at({ offered: false, miners: [cell("paid")] }).state.at).toBe("mine");
   });
 
   it("marks the steps behind as done and the ones ahead as next", () => {
@@ -179,10 +180,9 @@ describe("what the page says is happening", () => {
 
   it("says what is happening now and what comes next", () => {
     expect(narrate(at({ wallet: null, miners: null }).state, ctx)).toEqual({ now: "No wallet connected", next: "Pick one — then the ticket" });
-    expect(narrate(at({}).state, ctx)).toEqual({ now: "Buy the ticket", next: "One block, then arm it and mine" });
-    expect(narrate(at({ miners: [cell("idle")] }).state, ctx)).toEqual({ now: "Buy the ticket", next: "Then mine" });
+    expect(narrate(at({}).state, ctx)).toEqual({ now: "Buy the ticket", next: "Then mine at once" });
     expect(narrate(at({ miners: [cell("idle")] }).state, { ...ctx, busy: true })?.now).toBe("Signing the ticket");
-    expect(narrate(at({ miners: [cell("paid")] }).state, ctx)?.now).toBe("Arm your ticket");
+    expect(narrate(at({ miners: [cell("paid")] }).state, ctx)?.next).toBe("Arm your ticket — network fee only");
     expect(narrate(at({ miners: [cell("armed")] }).state, { ...ctx, running: true })).toEqual({
       now: "Mining DEMO",
       next: `Minting unlocks at ${MIN_CLZ} zero bits`,

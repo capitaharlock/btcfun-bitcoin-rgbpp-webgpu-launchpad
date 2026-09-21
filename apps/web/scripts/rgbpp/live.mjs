@@ -93,7 +93,8 @@ const steps = {
     const armed = miners.find((m) => m.data?.state === "armed");
     if (!armed) throw new Error("no armed miner cell yet: run `ticket` (and `arm`) and wait for the queue");
     const target = Number(process.env.TARGET_CLZ ?? 20);
-    const challenge = standard.ticketChallenge(armed.seal.txid, armed.seal.vout);
+    const { txid: ctxid, vout: cvout } = ops.challengeOutpoint(armed);
+    const challenge = standard.ticketChallenge(ctxid, cvout);
     const started = Date.now();
     let best = { clz: -1 };
     for (let nonce = 0n; best.clz < target; nonce++) {

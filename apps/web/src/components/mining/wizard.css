@@ -152,10 +152,12 @@
 .wz-tab .wz-status { margin-left: auto; }
 
 /* The frame shows one step; the track holds all four side by side. */
+/* One height for every step — the tallest's, with a floor — so the bar under
+   the frame never moves: content sits at the top of its step. */
 .wz-frame { overflow: hidden; }
 .wz-track {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -167,6 +169,8 @@
 .wz-step {
   flex: 0 0 100%;
   display: grid;
+  align-content: start;
+  min-height: 21rem;
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-4) var(--space-5);
@@ -381,3 +385,6 @@
 @media (max-width: 720px) {
   .wz-mint-sum { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* The ticket on its way to a mint, under the miner's counters. */
+.wz-ready { display: grid; gap: var(--space-2); }

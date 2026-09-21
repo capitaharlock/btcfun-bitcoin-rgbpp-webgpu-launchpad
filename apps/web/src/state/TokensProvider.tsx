@@ -153,6 +153,10 @@ export function TokensProvider({ children }: { children: ReactNode }) {
           }),
         );
         const byTx = new Map(updates.map((op) => [op.btcTxid, op]));
+        // The cells were read before these statuses: one that just settled is
+        // not in them yet, and the page must never show a settled operation
+        // beside the cells it replaced — a paid ticket would look unbought.
+        if (updates.some((op) => op.stage === "settled")) setHoldings(group(await service.cells(address)));
         persist(current.map((op) => byTx.get(op.btcTxid) ?? op));
       }
     } catch (err) {

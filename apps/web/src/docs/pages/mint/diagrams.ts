@@ -16,7 +16,7 @@ export const CIRCUIT: DiagramSpec = {
     `cell directly; without one it creates the cell, paid, and a second transaction — network fee only — arms it once the ` +
     `ticket has confirmed. The mint script checks, when the cell is armed, that the ticket paid the promoter and the platform ` +
     `and that the anchor is at most ${ANCHOR_GRACE_BLOCKS} blocks behind the arming block. You mine in the browser from the ` +
-    `moment the arming is sent, then sign a mint that pays only the network. The mint script accepts it only if the hash has ` +
+    `moment the ticket is sent — its output is the challenge, and a cell armed from paid names it — then sign a mint that pays only the network. The mint script accepts it only if the hash has ` +
     `at least ${MIN_CLZ} leading zero bits and the amount is exactly the standard reward; otherwise nothing mints.`,
   lanes: [
     { id: "you", label: "You · browser", tone: "violet" },
@@ -37,7 +37,7 @@ export const CIRCUIT: DiagramSpec = {
       tone: "amber",
     },
     { id: "paidCell", lane: "ckb", row: 2, kind: "process", label: "Miner cell · paid", detail: "first rounds: created by the ticket", tone: "mint" },
-    { id: "arm", lane: "you", row: 3, kind: "process", label: "Sign the arming", detail: "network fee only", tone: "violet" },
+    { id: "arm", lane: "you", row: 3, kind: "process", label: "Sign the arming", detail: "network fee only · while you mine", tone: "violet" },
     { id: "mine", lane: "you", row: 4, kind: "process", label: "Mine", detail: "the reward for your best hash shows live", tone: "violet" },
     { id: "confirmed", lane: "btc", row: 4, kind: "process", label: "Confirmed in a block", tone: "amber" },
     { id: "prove1", lane: "queue", row: 4, kind: "process", label: "Proves it to CKB", detail: "SPV proof, then submits", tone: "cyan" },
@@ -60,7 +60,7 @@ export const CIRCUIT: DiagramSpec = {
     { from: "ticketTx", to: "paidCell", label: "no cell yet", fromSide: "bottom", toSide: "left" },
     { from: "paidCell", to: "arm", label: "after 1 block", fromSide: "left", toSide: "right" },
     { from: "ticket", to: "arm", label: "idle cell: armed at once" },
-    { from: "arm", to: "mine", label: "mining starts" },
+    { from: "arm", to: "mine", label: "same challenge" },
     { from: "arm", to: "confirmed", fromSide: "right", toSide: "top" },
     { from: "confirmed", to: "prove1" },
     { from: "prove1", to: "paid", fromSide: "right", toSide: "top" },
@@ -97,8 +97,8 @@ export const MINER_CELL: DiagramSpec = {
   title: "The miner cell: paid, armed, then gone or idle",
   description:
     "A miner cell's data is 13 bytes: one byte of state (0 idle, 1 armed, 2 paid), the 8-byte nonce of the last mint and " +
-    "the 4-byte anchor height of the current ticket. A ticket without a cell creates one, paid; arming it records the " +
-    "anchor. A first mint turns the cell's capacity into the token cell, the nonce riding in a witness; a later mint returns " +
+    "the 4-byte anchor height of the current ticket. A ticket without a cell creates one, paid, anchored at the tip it " +
+    "was signed at; arming keeps that anchor and adds the ticket's 32-byte txid, whose output 1 stays the challenge. A first mint turns the cell's capacity into the token cell, the nonce riding in a witness; a later mint returns " +
     "it idle carrying the winning nonce, ready for a ticket that re-arms it.",
   laneWidth: 300,
   lanes: [
@@ -107,8 +107,8 @@ export const MINER_CELL: DiagramSpec = {
     { id: "c", label: "after a later mint", tone: "slate" },
   ],
   nodes: [
-    { id: "paid", lane: "a", row: 0, kind: "cell", label: "Miner cell · paid", tone: "mint", fields: minerCellFields("2", "0", "0"), bytes: MINER_BYTES },
-    { id: "armed", lane: "b", row: 0, kind: "cell", label: "Miner cell · armed", tone: "amber", fields: minerCellFields("1", "kept", "the tip"), bytes: MINER_BYTES },
+    { id: "paid", lane: "a", row: 0, kind: "cell", label: "Miner cell · paid", tone: "mint", fields: minerCellFields("2", "0", "the tip"), bytes: MINER_BYTES },
+    { id: "armed", lane: "b", row: 0, kind: "cell", label: "Miner cell · armed", tone: "amber", fields: minerCellFields("1", "kept", "kept · ticket txid"), bytes: [...MINER_BYTES, { label: "ticket txid", bytes: 32 }] },
     { id: "done", lane: "c", row: 0, kind: "cell", label: "Miner cell · idle", tone: "mint", fields: minerCellFields("0", "winning", "kept"), bytes: MINER_BYTES },
   ],
   edges: [
