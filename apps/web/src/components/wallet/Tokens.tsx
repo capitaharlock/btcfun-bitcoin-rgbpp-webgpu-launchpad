@@ -16,12 +16,13 @@ import { Address } from "@scure/btc-signer";
 import type { Launch } from "../../data/launches";
 import { useLaunchByToken } from "../../hooks/useLaunches";
 import { ACTIVE, matchesNetwork, txUrl } from "../../lib/bitcoin/network";
-import { atoms, group, parseAmount, shortHash } from "../../lib/format";
+import { atoms, parseAmount, shortHash } from "../../lib/format";
 import { ACTIVE_RGBPP } from "../../lib/rgbpp/config";
 import { planTransfer, type TokenCell } from "../../lib/rgbpp/operations";
 import { DECIMALS } from "../../lib/standard";
 import { useTokens, type Holdings, type Operation } from "../../state/TokensProvider";
-import { Field, More, Notice, Panel, Stat } from "../../ui/primitives";
+import { Field, More, Notice, Panel } from "../../ui/primitives";
+import "./tokens.css";
 import { TokenImage } from "../../ui/TokenImage";
 
 export interface Position {
@@ -74,66 +75,78 @@ export function WalletTokens() {
           </p>
         </Panel>
       ) : (
-        positions.map((position) => (
-          <PositionPanel
-            key={position.tokenId}
-            position={position}
-            landing={landing.get(position.tokenId) ?? 0n}
-            launch={launchOf(position.tokenId)}
-          />
-        ))
+        <ul className="tk-grid">
+          {positions.map((position) => (
+            <TokenCard
+              key={position.tokenId}
+              position={position}
+              landing={landing.get(position.tokenId) ?? 0n}
+              launch={launchOf(position.tokenId)}
+            />
+          ))}
+        </ul>
       )}
     </div>
   );
 }
 
-function PositionPanel({ position, landing, launch }: { position: Position; landing: bigint; launch: Launch | undefined }) {
+/**
+ * One token, small: its picture, its name, what is held, and what can be done
+ * with it. Transfer opens its form in the card; Sell goes to the market. Both
+ * stay pale while nothing is settled to move — tokens still landing cannot be
+ * spent yet.
+ */
+function TokenCard({ position, landing, launch }: { position: Position; landing: bigint; launch: Launch | undefined }) {
   const { tokenId, cells, total } = position;
+  const [transferring, setTransferring] = useState(false);
   const symbol = launch?.symbol ?? "tokens";
+  const movable = launch !== undefined && total > 0n;
+  const why = !launch ? "This app has no announcement for this token; any RGB++ wallet can move it." : total === 0n ? "Nothing settled yet: tokens still landing cannot move." : undefined;
+
   return (
-    <Panel
-      eyebrow={launch ? launch.name : "unknown to this app"}
-      title={
-        <span className="row">
-          {launch && <TokenImage art={launch.art} seed={launch.id} accent={launch.accent} symbol={launch.symbol} size="md" />}
-          {launch ? launch.symbol : shortHash(tokenId, 10, 6)}
-        </span>
-      }
-      aside={launch && <a className="btn ghost sm" href={`#/launch/${launch.id}`}>Open launch</a>}
-    >
-      <div className="split">
-        <div className="stack-md">
-          <div className="scoreboard">
-            <Stat k="balance" v={atoms(total, DECIMALS, 2)} unit={symbol} tone="amber" />
-            {landing > 0n && (
-              <Stat
-                k="landing"
-                v={`+${atoms(landing, DECIMALS, 2)}`}
-                unit={symbol}
-                tone="cyan"
-                hint="Minted, in the mempool: added to the balance once one Bitcoin block confirms it"
-              />
-            )}
-            <Stat k="cells" v={group(cells.length)} small />
-          </div>
-          <More>
-            <p>
-              Token id <span className="mono">{shortHash(tokenId, 12, 8)}</span>. Each cell is sealed to one of your Bitcoin
-              outputs; spending that output without moving the cell would lose it, which is why this app never uses those
-              outputs to pay fees.
-            </p>
-          </More>
-        </div>
+    <li className={`tk-card${transferring ? " open" : ""}`}>
+      <div className="tk-head">
         {launch ? (
-          <TransferForm launch={launch} cells={cells} total={total} />
+          <a href={`#/launch/${launch.id}`} className="tk-id" title={`Open ${launch.name}`}>
+            <TokenImage art={launch.art} seed={launch.id} accent={launch.accent} symbol={launch.symbol} size="md" />
+            <span className="tk-name">
+              <b>{launch.symbol}</b>
+              <span>{launch.name}</span>
+            </span>
+          </a>
         ) : (
-          <Notice>
-            This app has no announcement for this token, so it will not build a transfer for it. It is still
-            yours, and any RGB++ wallet can move it.
-          </Notice>
+          <span className="tk-id">
+            <span className="tk-name">
+              <b className="mono">{shortHash(tokenId, 8, 6)}</b>
+              <span>unknown to this app</span>
+            </span>
+          </span>
         )}
       </div>
-    </Panel>
+      <div className="tk-amount">
+        <span className="tk-v">{atoms(total, DECIMALS, 2)}</span> <span className="tk-u">{symbol}</span>
+        {landing > 0n && (
+          <span className="tk-landing" title="Minted, in the mempool: added to the balance once one Bitcoin block confirms it">
+            +{atoms(landing, DECIMALS, 2)} landing
+          </span>
+        )}
+      </div>
+      <div className="tk-actions">
+        <button className="btn sm" disabled={!movable} title={why} aria-expanded={transferring} onClick={() => setTransferring((t) => !t)}>
+          {transferring ? "Close" : "Transfer"}
+        </button>
+        {movable ? (
+          <a className="btn sm" href="#/market">Sell</a>
+        ) : (
+          <button className="btn sm" disabled title={why}>Sell</button>
+        )}
+      </div>
+      {transferring && launch && (
+        <div className="tk-form">
+          <TransferForm launch={launch} cells={cells} total={total} />
+        </div>
+      )}
+    </li>
   );
 }
 

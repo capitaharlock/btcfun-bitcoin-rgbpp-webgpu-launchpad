@@ -1,0 +1,33 @@
+/* The wallet's tokens: small cards — picture, name, amount, actions. */
+.tk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tk-card {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: var(--space-4);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  min-width: 0;
+}
+/* A card with its transfer form open takes the whole row. */
+.tk-card.open { grid-column: 1 / -1; }
+.tk-id { display: flex; align-items: center; gap: var(--space-3); min-width: 0; color: inherit; text-decoration: none; }
+.tk-name { display: grid; min-width: 0; }
+.tk-name b { font-size: var(--text-lg); color: var(--ink); }
+.tk-name span { font-size: var(--text-sm); color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-amount { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); }
+.tk-v { font-family: var(--font-numeric); font-size: var(--text-xl); color: var(--amber); }
+.tk-u { font-size: var(--text-sm); color: var(--ink-dim); }
+.tk-landing { flex-basis: 100%; font-size: var(--text-sm); color: var(--cyan); }
+.tk-actions { display: flex; gap: var(--space-2); }
+.tk-actions .btn { flex: 1; justify-content: center; }
+.tk-actions .btn:disabled { opacity: 0.4; }
+.tk-form { max-width: 560px; padding-top: var(--space-3); border-top: var(--border-w) solid var(--line); }
