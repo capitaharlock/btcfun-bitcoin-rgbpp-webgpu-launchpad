@@ -58,7 +58,7 @@ export default function MintPage() {
         </p>
         <p>
           The ticket step shows the bill before you sign: promoter, platform, paymaster when the round creates the cell,
-          the network fee, the total, and, apart, what the arming and the mint will cost in network fees. The wallet must
+          the network fee and one total, and, apart, what the arming and the mint will cost in network fees. The wallet must
           hold all of it before the ticket can be signed: a ticket paid without the fees to mint it would be lost. If it
           does not, the step says how much is missing, shows the address and faucets, and re-reads the balance every{" "}
           {FUNDS_POLL_MS / 1000} seconds. Every mining transaction pays the larger of {MIN_FAST_FEE_RATE} sat/vB and

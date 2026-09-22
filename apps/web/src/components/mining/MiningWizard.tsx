@@ -552,7 +552,11 @@ function TicketBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
   );
 }
 
-/** The ticket, line by line: its split, the network, the total — and, apart, what the round still costs. */
+/**
+ * The ticket, line by line: who is paid, the network fee, one total — and,
+ * apart, what the round still costs. No subtotal: the ticket's price is on the
+ * ticket drawn beside it.
+ */
 function Bill({ costs, newCell }: { costs: Costs | null; newCell: boolean }) {
   if (!costs || !costs.split) return <Working>Pricing the ticket…</Working>;
   const { split, paymasterExtra, network, later } = costs;
@@ -562,10 +566,9 @@ function Bill({ costs, newCell }: { costs: Costs | null; newCell: boolean }) {
         <BillRow label="Promoter" sats={split.promoter} />
         <BillRow label="Platform" sats={split.platform} />
         {newCell && <BillRow label="Paymaster · new miner cell" sats={split.paymaster} />}
-        <BillRow label="Ticket" sats={TICKET_SATS} strong />
         {paymasterExtra > 0 && <BillRow label="Paymaster, above its budget" sats={paymasterExtra} />}
         <BillRow label={`Network fee · ${costs.feeRate} sat/vB`} sats={network} />
-        <BillRow label="Total now" sats={TICKET_SATS + paymasterExtra + network} strong />
+        <BillRow label="Total" sats={TICKET_SATS + paymasterExtra + network} strong />
       </dl>
       <p className="wz-copy faint">
         Then {newCell ? "the activation and the mint cost" : "the mint costs"} ≈ {group(later)} sats of network fee — no other payment.
