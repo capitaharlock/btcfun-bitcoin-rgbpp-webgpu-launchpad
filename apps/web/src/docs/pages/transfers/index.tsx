@@ -141,7 +141,7 @@ export default function TransfersPage() {
             <li>
               The mint script is not involved: without a miner cell in the transaction, the xUDT's owner mode is off, so the
               total of this token cannot grow. Token cells and miner cells are sealed to different outputs, so a transfer
-              never touches a ticket being mined.
+              never touches a ticket being mined, nor the admission a miner's first arming carries.
             </li>
           </ul>
         </Technical>
