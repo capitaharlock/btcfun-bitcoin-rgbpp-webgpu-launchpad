@@ -123,6 +123,12 @@ export interface Loop {
   traces: Traces;
   /** The ticket to mine against, whatever the step; null when there is none. */
   ticket: Ticket | null;
+  /**
+   * The round has an activation — the arming of a cell its ticket created —
+   * besides the ticket and the mint. The page names it "activation": what it
+   * does for the person is let the ticket be minted.
+   */
+  activates: boolean;
 }
 
 const isLanding = (op: LoopOperation) => op.stage === "sent" || op.stage === "queued";
@@ -188,6 +194,13 @@ export function deriveLoop(input: LoopInput): Loop {
       mint: roundClosed ? traceOf(state.op) : null,
     },
     ticket,
+    activates:
+      armOp !== undefined ||
+      paid !== null ||
+      armed?.data.ticket !== undefined ||
+      ticketOp?.newCell === true ||
+      (state.at === "buy" && state.cell === null) ||
+      (state.at === "mine" && state.unarmed !== null && state.unarmed.why !== "landing"),
   };
 }
 
@@ -289,7 +302,7 @@ export interface NarrationContext {
 const LANDING_NAMES: Record<LoopOperation["kind"], string> = {
   open: "miner cell",
   ticket: "ticket",
-  arm: "ticket's arming",
+  arm: "ticket's activation",
   mint: "mint",
   transfer: "transfer",
   list: "listing",
@@ -299,8 +312,8 @@ const LANDING_NAMES: Record<LoopOperation["kind"], string> = {
 
 const UNARMED_NEXT: Record<Unarmed["why"] | "armed", string> = {
   landing: "Minting waits for one Bitcoin block",
-  arm: "Arm your ticket — network fee only",
-  arming: "Minting waits for the arming's block",
+  arm: "Activate your ticket — network fee only",
+  arming: "Minting waits for the activation's block",
   armed: `Minting unlocks at ${MIN_CLZ} zero bits`,
 };
 
@@ -320,7 +333,7 @@ export function narrate(state: LoopState, ctx: NarrationContext): Narration | nu
     case "waiting":
       return { now: `Your ${LANDING_NAMES[state.op.kind]} is landing`, next: "The ticket, once it settles" };
     case "mine":
-      if (state.unarmed?.why === "arm" && ctx.busy) return { now: "Signing the arming", next: "Mining goes on" };
+      if (state.unarmed?.why === "arm" && ctx.busy) return { now: "Signing the activation", next: "Mining goes on" };
       return { now: ctx.running ? `Mining ${ctx.symbol}` : "Mining paused", next: UNARMED_NEXT[state.unarmed?.why ?? "armed"] };
     case "mint":
       return { now: "Your hash qualifies", next: "Mint it — or keep mining for a stronger one" };

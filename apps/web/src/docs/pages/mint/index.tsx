@@ -46,9 +46,12 @@ export default function MintPage() {
         <p>
           On a launch page the big <strong>Mine</strong> button turns the token's header into a wizard. Its steps —
           wallet, ticket, mine, mint — sit side by side and one fills the box at a time; a bar under it holds every
-          action: <strong>Back</strong> on the left, and on the right what the step asks for — <strong>Sign ticket</strong>,{" "}
-          <strong>Start mining</strong> or <strong>Pause</strong>, <strong>Arm ticket</strong>,{" "}
-          <strong>Accept · mint</strong>, <strong>Sign mint</strong>. Nothing is signed without that press, whatever the
+          action: <strong>Back</strong> on the left, and on the right what the step asks for, each button naming
+          what it authorizes and its cost — <strong>Pay ticket · N sats</strong>, <strong>Start mining</strong> or{" "}
+          <strong>Pause</strong>, <strong>Activate ticket · N sats fee</strong> (the page's name for the arming),{" "}
+          <strong>Use this hash → Mint</strong>, <strong>Mint X tokens · N sats fee</strong>. Each step on the rail says
+          how far it has got — confirmed (green), in the mempool (cyan), waiting for you, or later — and a line under
+          the rail lists the round's transactions the same way, beside the step count. Nothing is signed without that press, whatever the
           wallet: the demo and browser wallets sign on it, a passkey wallet asks for the passkey. Each finished step keeps
           its trace: the Bitcoin transaction, a link to it on mempool.space, and whether it is still landing or has
           settled. The mint's trace also links to its proof.
@@ -63,7 +66,7 @@ export default function MintPage() {
         </p>
         <p>
           Mining never waits for a block: the challenge is the ticket's output 1 and exists as soon as the ticket is
-          broadcast. The wizard keeps the ticket step on screen until you press <strong>Mine</strong>, and the arming,
+          broadcast. The wizard keeps the ticket step on screen until you press <strong>Go mine</strong>, and the arming,
           when the round needs one, is offered during mining once the ticket has confirmed. Only minting waits — for the
           armed cell to land on CKB, because the mint spends it. The frame keeps one height whatever the step, with the
           bar under it. The step the loop stands on is decided

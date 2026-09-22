@@ -182,7 +182,7 @@ describe("what the page says is happening", () => {
     expect(narrate(at({ wallet: null, miners: null }).state, ctx)).toEqual({ now: "No wallet connected", next: "Pick one — then the ticket" });
     expect(narrate(at({}).state, ctx)).toEqual({ now: "Buy the ticket", next: "Then mine at once" });
     expect(narrate(at({ miners: [cell("idle")] }).state, { ...ctx, busy: true })?.now).toBe("Signing the ticket");
-    expect(narrate(at({ miners: [cell("paid")] }).state, ctx)?.next).toBe("Arm your ticket — network fee only");
+    expect(narrate(at({ miners: [cell("paid")] }).state, ctx)?.next).toBe("Activate your ticket — network fee only");
     expect(narrate(at({ miners: [cell("armed")] }).state, { ...ctx, running: true })).toEqual({
       now: "Mining DEMO",
       next: `Minting unlocks at ${MIN_CLZ} zero bits`,

@@ -136,24 +136,29 @@ export function MiningWizard({ launch, loop: ml, view: wv }: { launch: Launch; l
 
       <nav className="wz-rail" aria-label="Steps">
         <ol>
-          {STEPS.map((s, i) => (
-            <li key={s}>
-              <button
-                className={`wz-tab ${status(s)}`}
-                aria-current={wv.view === s ? "step" : undefined}
-                aria-label={`Step ${i}, ${TITLES[s]}: ${statusWord(status(s))}`}
-                onClick={() => wv.show(s)}
-              >
-                <span className="wz-mark" aria-hidden="true">
-                  {status(s) === "done" ? "✓" : i}
-                </span>
-                <span className="wz-tab-title">{TITLES[s]}</span>
-                <span className="wz-status">{statusWord(status(s))}</span>
-              </button>
-            </li>
-          ))}
+          {STEPS.map((s, i) => {
+            const p = progressOf(s, ml);
+            return (
+              <li key={s}>
+                <button
+                  className={`wz-tab ${status(s)} tone-${p.tone}`}
+                  aria-current={wv.view === s ? "step" : undefined}
+                  aria-label={`Step ${i}, ${TITLES[s]}: ${p.word}`}
+                  onClick={() => wv.show(s)}
+                >
+                  <span className="wz-mark" aria-hidden="true">
+                    {p.tone === "done" ? "✓" : p.tone === "wait" ? <span className="wz-spin" /> : i}
+                  </span>
+                  <span className="wz-tab-title">{TITLES[s]}</span>
+                  <span className="wz-status">{p.word}</span>
+                </button>
+              </li>
+            );
+          })}
         </ol>
       </nav>
+
+      <RoundLedger ml={ml} symbol={launch.symbol} />
 
       <div className="wz-frame">
         <ol className="wz-track" style={{ transform: `translateX(-${index * 100}%)` }}>
@@ -172,12 +177,95 @@ export function MiningWizard({ launch, loop: ml, view: wv }: { launch: Launch; l
         </ol>
       </div>
 
-      <WizardBar ml={ml} view={wv} />
+      <WizardBar ml={ml} view={wv} symbol={launch.symbol} />
     </section>
   );
 }
 
-const statusWord = (s: StepStatus) => (s === "done" ? "done" : s === "active" ? "now" : "next");
+/**
+ * How far a step has got, in one word and a tone the rail colours: `done`
+ * (green, confirmed on chain), `wait` (cyan, sent and waiting for a block),
+ * `act` (accent, waiting for the person), `todo` (faint, later).
+ */
+type Tone = "done" | "wait" | "act" | "todo";
+interface Progress {
+  word: string;
+  tone: Tone;
+}
+
+function progressOf(step: LoopStep, ml: MiningLoop): Progress {
+  const { state, traces } = ml.loop;
+  const qualifies = (ml.mining.progress.best?.clz ?? 0) >= MIN_CLZ;
+  const at = statusOf(step, ml.loop.step, state);
+  switch (step) {
+    case "wallet":
+      return state.at === "wallet" ? { word: "connect", tone: "act" } : { word: "connected", tone: "done" };
+    case "ticket": {
+      if (state.at === "buy") return { word: "to pay", tone: "act" };
+      if (state.at === "reading" || state.at === "wallet") return { word: "next", tone: "todo" };
+      if (state.at === "waiting") return { word: "waiting", tone: "wait" };
+      if (state.at === "mine" && state.unarmed?.why === "arm") return { word: "activate", tone: "act" };
+      if (state.at === "mine" && state.unarmed?.why === "arming") return { word: "activating", tone: "wait" };
+      if (traces.ticket?.stage === "landing") return { word: "in mempool", tone: "wait" };
+      if (traces.ticket?.stage === "failed") return { word: "failed", tone: "act" };
+      return { word: "confirmed", tone: "done" };
+    }
+    case "mine":
+      if (state.at === "minting" || state.at === "minted") return { word: "done", tone: "done" };
+      if (state.at !== "mine" && state.at !== "mint") return { word: "next", tone: "todo" };
+      if (ml.keeping) return { word: "hash chosen", tone: "done" };
+      if (qualifies) return { word: "hash ok", tone: "act" };
+      return ml.mining.running ? { word: "mining", tone: "wait" } : { word: "start", tone: "act" };
+    case "mint":
+      if (state.at === "minting") return { word: "in mempool", tone: "wait" };
+      if (state.at === "minted") return state.op.stage === "failed" ? { word: "failed", tone: "act" } : { word: "confirmed", tone: "done" };
+      if (ml.keeping) return { word: "to sign", tone: "act" };
+      return { word: at === "todo" ? "next" : "later", tone: "todo" };
+  }
+}
+
+/**
+ * The round's transactions in one line — what is signed, what Bitcoin has
+ * confirmed, what is still to come — so the person never has to guess which
+ * signature did what.
+ */
+function RoundLedger({ ml, symbol }: { ml: MiningLoop; symbol: string }) {
+  const { state, traces, activates } = ml.loop;
+  const best = ml.mining.progress.best?.clz ?? null;
+  const tx = (trace: Trace | null, before: Progress): Progress =>
+    !trace ? before : trace.stage === "settled" ? { word: "confirmed", tone: "done" } : trace.stage === "failed" ? { word: "failed", tone: "act" } : { word: "in mempool", tone: "wait" };
+  const items: Array<{ label: string; p: Progress }> = [
+    { label: "Ticket payment", p: tx(traces.ticket, state.at === "buy" ? { word: "to sign", tone: "act" } : { word: "not yet", tone: "todo" }) },
+  ];
+  if (activates) {
+    const unarmed = state.at === "mine" ? state.unarmed : null;
+    const before: Progress =
+      unarmed?.why === "arm" ? { word: "to sign", tone: "act" } : unarmed?.why === "landing" ? { word: "after the ticket's block", tone: "todo" } : { word: "not yet", tone: "todo" };
+    items.push({ label: "Activation", p: tx(traces.arm, before) });
+  }
+  items.push({
+    label: "Best hash",
+    p:
+      best === null
+        ? { word: "not yet", tone: "todo" }
+        : best >= MIN_CLZ
+          ? { word: `${best} bits · mintable`, tone: "done" }
+          : { word: `${best} bits · needs ${MIN_CLZ}`, tone: "wait" },
+  });
+  items.push({ label: `Mint of ${symbol}`, p: tx(traces.mint, ml.keeping && state.at === "mint" ? { word: "to sign", tone: "act" } : { word: "not yet", tone: "todo" }) });
+  if (state.at === "wallet" || state.at === "reading") return null;
+  return (
+    <ol className="wz-ledger" aria-label="This round">
+      {items.map(({ label, p }) => (
+        <li key={label} className={`tone-${p.tone}`}>
+          <span className="wz-dot" aria-hidden="true">{p.tone === "done" ? "✓" : p.tone === "wait" ? "◌" : p.tone === "act" ? "●" : "○"}</span>
+          <span className="wz-ledger-k">{label}</span>
+          <span className="wz-ledger-v">{p.word}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 /** One step, the width of the frame. Off screen it is inert: no focus, no reading. */
 function Slide({
@@ -216,7 +304,7 @@ function Slide({
  * on screen asks for — a signature, a pause, the move to the next step. Labels
  * are short: the frame above says what each one does and costs.
  */
-function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
+function WizardBar({ ml, view, symbol }: { ml: MiningLoop; view: WizardView; symbol: string }) {
   const { vault } = useWallet();
   const { state } = ml.loop;
   const { mining } = ml;
@@ -236,7 +324,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
       if (state.at === "buy") {
         actions = (
           <Primary onClick={ml.signTicket} disabled={blocked} busy={ml.busy}>
-            {ml.busy ? "Signing…" : "Sign ticket"}
+            {ml.busy ? "Signing…" : ml.costs?.split ? `Pay ticket · ${group(TICKET_SATS + ml.costs.paymasterExtra + ml.costs.network)} sats` : "Pay ticket"}
           </Primary>
         );
       } else if (state.at === "waiting" || state.at === "reading") {
@@ -249,7 +337,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
               if (mining_ && !mining.running && !ml.keeping && !qualifies) mining.start();
             }}
           >
-            Mine →
+            Go mine →
           </Primary>
         );
       }
@@ -262,7 +350,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
             {armable && (
               <button className="btn lg" onClick={ml.signArm} disabled={blocked} aria-busy={ml.busy || undefined}>
                 {ml.busy && <span className="wz-spin" aria-hidden="true" />}
-                {ml.busy ? "Signing…" : "Arm ticket"}
+                {ml.busy ? "Signing…" : activateLabel(ml)}
               </button>
             )}
             {mining.running ? (
@@ -281,7 +369,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
               }}
               disabled={!qualifies}
             >
-              Accept · mint →
+              Use this hash → Mint
             </Primary>
           </>
         );
@@ -297,7 +385,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
               Keep mining
             </button>
             <Primary onClick={ml.signMint} disabled={blocked} busy={ml.busy}>
-              {ml.busy ? "Signing…" : "Sign mint"}
+              {ml.busy ? "Signing…" : `Mint ${atoms(ml.mintable, DECIMALS, 2)} ${symbol}${ml.costs ? ` · ${group(ml.costs.network)} sats fee` : ""}`}
             </Primary>
           </>
         );
@@ -309,7 +397,7 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
             </button>
             {armable ? (
               <Primary onClick={ml.signArm} disabled={blocked} busy={ml.busy}>
-                {ml.busy ? "Signing…" : "Arm ticket"}
+                {ml.busy ? "Signing…" : activateLabel(ml)}
               </Primary>
             ) : (
               <Waiting>Waiting for a block</Waiting>
@@ -319,11 +407,11 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
       } else if (state.at === "minting") {
         actions = (
           <a className="btn primary lg" href="#/wallet">
-            See wallet
+            See my wallet
           </a>
         );
       } else if (state.at === "minted") {
-        actions = <Primary onClick={() => { ml.again(); go("ticket"); }}>Mine again</Primary>;
+        actions = <Primary onClick={() => { ml.again(); go("ticket"); }}>New round →</Primary>;
       }
       break;
   }
@@ -334,12 +422,20 @@ function WizardBar({ ml, view }: { ml: MiningLoop; view: WizardView }) {
         ← Back
       </button>
       <span className="wz-bar-say" aria-live="polite">
+        {ml.loop.step && ml.loop.step !== "wallet" && (
+          <b className="wz-count">Step {STEPS.indexOf(ml.loop.step)} of 3 · </b>
+        )}
         {ml.narration?.now}
       </span>
       <div className="wz-bar-act">{actions}</div>
     </div>
   );
 
+}
+
+/** The activation's button: what it signs and what it costs. */
+function activateLabel(ml: MiningLoop): string {
+  return ml.costs ? `Activate ticket · ${group(ml.costs.network)} sats fee` : "Activate ticket";
 }
 
 function Primary({ onClick, disabled, busy, children }: { onClick: () => void; disabled?: boolean; busy?: boolean; children: ReactNode }) {
@@ -393,7 +489,7 @@ function ticketLine(state: LoopState): string {
     case "buy":
       return state.cell
         ? "One payment: its output is your challenge, and mining starts as soon as it is sent."
-        : "One payment: it creates your miner cell, and mining starts as soon as it is sent.";
+        : "One payment: it creates your miner cell, and mining starts as soon as it is sent. Later, one small signature activates it for the mint.";
     case "waiting":
       return `Waiting for your ${state.op.kind} to land.`;
     default:
@@ -407,7 +503,7 @@ function TicketBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
   const trace = (
     <div className="wz-traces">
       {traces.ticket && <TraceRow label="Ticket" trace={traces.ticket} />}
-      {traces.arm && <TraceRow label="Arming" trace={traces.arm} />}
+      {traces.arm && <TraceRow label="Activation" trace={traces.arm} />}
     </div>
   );
 
@@ -472,7 +568,7 @@ function Bill({ costs, newCell }: { costs: Costs | null; newCell: boolean }) {
         <BillRow label="Total now" sats={TICKET_SATS + paymasterExtra + network} strong />
       </dl>
       <p className="wz-copy faint">
-        Then {newCell ? "arming and the mint cost" : "the mint costs"} ≈ {group(later)} sats of network fee.
+        Then {newCell ? "the activation and the mint cost" : "the mint costs"} ≈ {group(later)} sats of network fee — no other payment.
       </p>
     </>
   );
@@ -580,20 +676,21 @@ function Readiness({ ml }: { ml: MiningLoop }) {
     case "arm":
       say = (
         <p className="wz-copy">
-          <b>Ticket confirmed.</b> Arm it to mint later
-          {ml.costs ? ` — ${group(ml.costs.network)} sats of network fee` : ""}. Mining goes on.
+          <b>Your ticket is confirmed — activate it.</b> Activation registers the paid ticket on CKB, the chain that holds
+          the tokens, so your hash can be minted. It pays only the network fee
+          {ml.costs ? ` (${group(ml.costs.network)} sats)` : ""} and mining keeps running. Button: “Activate ticket”, below.
         </p>
       );
       break;
     case "arming":
-      say = <Working>Arming in the mempool — minting waits for its block.</Working>;
+      say = <Working>Activation sent — the mint unlocks after its Bitcoin block. Keep mining meanwhile.</Working>;
       break;
     default:
-      say = <p className="wz-copy faint">Ticket armed: a qualifying hash can be minted.</p>;
+      say = <p className="wz-copy faint">Ticket active: any hash of {MIN_CLZ}+ zero bits can be minted.</p>;
   }
   return (
     <div className="wz-ready">
-      {trace && <TraceRow label={unarmed?.why === "arming" ? "Arming" : "Ticket"} trace={trace} />}
+      {trace && <TraceRow label={unarmed?.why === "arming" ? "Activation" : "Ticket"} trace={trace} />}
       {say}
       {unarmed?.why === "arm" && <Funds costs={ml.costs} />}
       {unarmed?.why === "arm" && ml.failure && <Notice tone="danger">{ml.failure}</Notice>}
@@ -607,13 +704,15 @@ function mintLine(state: LoopState, ml: MiningLoop, symbol: string): string {
   switch (state.at) {
     case "mine":
       if (!ml.keeping) return `Accept a hash of ${MIN_CLZ}+ zero bits to mint it.`;
-      return state.unarmed?.why === "arm" ? "Accepted. Arm your ticket, then sign the mint." : "Accepted. The mint can be signed once the ticket is armed on-chain.";
+      return state.unarmed?.why === "arm"
+        ? "Hash chosen. First activate your ticket (network fee only), then sign the mint."
+        : "Hash chosen. The mint unlocks when your ticket is active on-chain — about one Bitcoin block.";
     case "mint":
-      return `Mint ${atoms(ml.mintable, DECIMALS, 2)} ${symbol}. Network fee only.`;
+      return `Last signature: it creates ${atoms(ml.mintable, DECIMALS, 2)} ${symbol} in your wallet. Network fee only.`;
     case "minting":
-      return `${mintedAmount(state.op.atoms)} ${symbol} minted — landing.`;
+      return `Mint sent: ${mintedAmount(state.op.atoms)} ${symbol} arrive after one Bitcoin block. Nothing more to sign.`;
     case "minted":
-      return state.op.stage === "failed" ? "The mint did not complete on CKB." : `Minted ${mintedAmount(state.op.atoms)} ${symbol}.`;
+      return state.op.stage === "failed" ? "The mint did not complete on CKB." : `Done: ${mintedAmount(state.op.atoms)} ${symbol} are confirmed in your wallet.`;
     default:
       return `Accept a hash of ${MIN_CLZ}+ zero bits to mint it.`;
   }
@@ -653,7 +752,7 @@ function MintBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
         {state.at === "mine" && state.unarmed?.why === "arm" && <Funds costs={ml.costs} />}
         {state.at === "mine" && state.unarmed?.why !== "arm" && (
           <Working>
-            {state.unarmed?.why === "arming" ? "Waiting for the arming's Bitcoin block." : "Waiting for your ticket's Bitcoin block."}
+            {state.unarmed?.why === "arming" ? "Waiting for the activation's Bitcoin block." : "Waiting for your ticket's Bitcoin block."}
           </Working>
         )}
         {state.at === "mint" && <Funds costs={ml.costs} />}
@@ -666,7 +765,10 @@ function MintBody({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
       <div className="stack-sm">
         <div className="wz-traces">{traces.mint && <TraceRow label="Mint" trace={traces.mint} proof />}</div>
         {state.at === "minting" && (
-          <Working>In the mempool. Your wallet shows the tokens as landing until one Bitcoin block confirms them.</Working>
+          <Working>
+            Every signature of this round is done. The mint is in the mempool; your wallet shows the tokens as landing
+            until one Bitcoin block confirms them.
+          </Working>
         )}
       </div>
     );

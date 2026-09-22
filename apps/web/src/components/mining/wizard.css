@@ -388,3 +388,38 @@
 
 /* The ticket on its way to a mint, under the miner's counters. */
 .wz-ready { display: grid; gap: var(--space-2); }
+
+/* How far each step has got: green confirmed, cyan waiting for a block,
+   accent waiting for you, faint later. Tones override the rail's position. */
+.wz-tab.tone-done .wz-status { color: var(--positive); }
+.wz-tab.tone-wait .wz-status { color: var(--cyan); }
+.wz-tab.tone-act .wz-status { color: var(--accent); font-weight: 600; }
+.wz-tab.tone-todo .wz-status { color: var(--ink-faint); font-weight: 400; }
+.wz-tab.tone-wait .wz-mark { border-color: var(--cyan); color: var(--cyan); }
+.wz-tab.tone-done .wz-mark {
+  border-color: var(--positive);
+  background: color-mix(in oklab, var(--positive) 14%, transparent);
+  color: var(--positive);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+}
+
+/* The round's transactions, one line. */
+.wz-ledger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.wz-ledger li { display: flex; align-items: baseline; gap: var(--space-2); }
+.wz-ledger li + li::before { content: "→"; color: var(--ink-faint); margin-right: var(--space-3); }
+.wz-ledger-k { color: var(--ink-dim); }
+.wz-ledger-v { font-weight: 600; }
+.wz-ledger .tone-done :is(.wz-dot, .wz-ledger-v) { color: var(--positive); }
+.wz-ledger .tone-wait :is(.wz-dot, .wz-ledger-v) { color: var(--cyan); }
+.wz-ledger .tone-act :is(.wz-dot, .wz-ledger-v) { color: var(--accent); }
+.wz-ledger .tone-todo :is(.wz-dot, .wz-ledger-v) { color: var(--ink-faint); font-weight: 400; }
+.wz-count { color: var(--ink); font-weight: 600; }
