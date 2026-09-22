@@ -20,10 +20,17 @@
  * An image reference travels the same way (`./image.ts`): signed, re-checked
  * on arrival, and outside the token id. Only `imageHash` is in the terms.
  *
- * Creating a launch costs nothing on chain: the mint script is already
- * deployed and permissionless, and the token comes into existence with its
- * first mint. What is published is a signed announcement to the index, so
- * others can find it, and a local copy so the creator sees it immediately.
+ * Creating a launch is paid, once: a Bitcoin transaction pays the platform
+ * `REGISTRATION_SATS` and commits to the launch's terms, btc.fun's signer
+ * checks it and certifies the terms (`./certificate.ts`), and the mint script
+ * lets a miner into a launch only with that certificate. The announcement
+ * carries the registration and the certificate, so every page — and every
+ * miner's first arming — can check them. Then a signed announcement goes to the index, so others can find it, and a
+ * local copy is kept so the creator sees it immediately.
+ *
+ * A registration is paid before it is certified, so it is kept on the device
+ * the moment it is broadcast (`pendingRegistration`): a reload, a failed
+ * certificate request or a second attempt picks it up instead of paying again.
  */
 
 import { canonicalId, type Field } from "../canonical";
@@ -32,7 +39,11 @@ import { record, signActivity } from "../activity";
 import type { Vault } from "../bitcoin";
 import { ACTIVE, matchesNetwork, type NetworkConfig } from "../bitcoin/network";
 import { ACTIVE_RGBPP } from "../rgbpp/config";
-import { metadataHash, promoterScriptFor, tokenId, type LaunchTerms, type TokenMetadata } from "../rgbpp/launch";
+import { encodeTerms, metadataHash, promoterScriptFor, tokenId, type LaunchTerms, type TokenMetadata } from "../rgbpp/launch";
+import { buildPayment } from "../bitcoin/payment";
+import type { Utxo } from "../bitcoin/provider";
+import { bytesToHex } from "@noble/hashes/utils";
+import { admitted, REGISTRATION_SATS, registrationCommitment } from "./certificate";
 import { Address } from "@scure/btc-signer";
 
 const LOCAL_KEY = "btcfun:created-launches:v2";
@@ -88,7 +99,7 @@ export const EXTRAS_WIRE_BUDGET = 2_000;
 
 /** The signed announcement of a launch. */
 export interface LaunchCommitment {
-  v: "btcfun/launch/2";
+  v: "btcfun/launch/3";
   id: string;
   symbol: string;
   name: string;
@@ -100,6 +111,10 @@ export interface LaunchCommitment {
   h0: number;
   /** The Bitcoin address every ticket pays. */
   promoter: string;
+  /** The registration's txid (displayed order); all zeros for a launch the platform admitted itself. */
+  registration: string;
+  /** btc.fun's certificate over the terms and the registration, 64 bytes hex. */
+  certificate: string;
   /** The xUDT type hash the terms produce. */
   tokenId: string;
   /** Identity of the announcer. */
@@ -145,13 +160,15 @@ export const LAUNCH_ID_PATTERN = new RegExp(`^[a-z][a-z0-9]{1,7}-[0-9a-f]{${ID_T
 
 /**
  * True when an announcement's id and token id are the ones its own terms
- * produce. False for anything malformed, rather than throwing: announcements
- * arrive from an index, which is untrusted input.
+ * produce and btc.fun certified those terms — an uncertified launch could
+ * never take a ticket. False for anything malformed, rather than throwing:
+ * announcements arrive from an index, which is untrusted input.
  */
 export function idMatches(c: LaunchCommitment, network: NetworkConfig = ACTIVE): boolean {
   try {
-    const token = tokenId(ACTIVE_RGBPP, termsOf(c, network));
-    return c.tokenId === token && c.id === launchIdFor(c.symbol, token);
+    const terms = termsOf(c, network);
+    const token = tokenId(ACTIVE_RGBPP, terms);
+    return c.tokenId === token && c.id === launchIdFor(c.symbol, token) && admitted(encodeTerms(terms), c.registration, c.certificate);
   } catch {
     return false;
   }
@@ -176,6 +193,8 @@ function fieldsOf(c: LaunchCommitment): Field[] {
     ["imageHash", c.imageHash],
     ["h0", String(c.h0)],
     ["promoter", c.promoter],
+    ["registration", c.registration],
+    ["certificate", c.certificate],
     ["tokenId", c.tokenId],
     ["creator", c.creator],
     ["at", c.at],
@@ -380,27 +399,36 @@ export function isReady(draft: LaunchDraft, network: NetworkConfig = ACTIVE): bo
   return Object.keys(validate(draft, network)).length === 0;
 }
 
-/** The announcement a draft implies, given the height it is signed at. */
-export function commitmentFor(
-  draft: LaunchDraft,
-  creator: string,
-  tipHeight: number,
-  network: NetworkConfig = ACTIVE,
-): LaunchCommitment {
+/** A draft's announcement fields and terms, at the height it opens at. */
+export function draftTerms(draft: LaunchDraft, h0: number, network: NetworkConfig = ACTIVE) {
   const base = {
     symbol: draft.symbol.trim().toUpperCase(),
     name: draft.name.trim(),
     blurb: draft.blurb.trim(),
     imageHash: "",
-    h0: tipHeight + draft.opensInBlocks,
+    h0,
     promoter: draft.promoter.trim(),
   };
+  return { base, args: encodeTerms(termsOf(base, network)) };
+}
+
+/** The announcement a draft implies, once its terms are registered and certified. */
+export function commitmentFor(
+  draft: LaunchDraft,
+  creator: string,
+  registration: Registration,
+  certificate: string,
+  network: NetworkConfig = ACTIVE,
+): LaunchCommitment {
+  const { base } = draftTerms(draft, registration.h0, network);
   const token = tokenId(ACTIVE_RGBPP, termsOf(base, network));
   return {
-    v: "btcfun/launch/2",
+    v: "btcfun/launch/3",
     id: launchIdFor(base.symbol, token),
     ...base,
     accent: draft.accent,
+    registration: registration.txid,
+    certificate,
     tokenId: token,
     creator,
     at: new Date().toISOString(),
@@ -408,13 +436,94 @@ export function commitmentFor(
   };
 }
 
-/** Sign the announcement, keep it locally and publish it to the index. */
-export async function createLaunch(vault: Vault, draft: LaunchDraft, tipHeight: number): Promise<LaunchCommitment> {
+// ── registration ─────────────────────────────────────────────────────────────
+
+/** A registration paid for a draft: its txid and the height the launch opens at, which it committed to. */
+export interface Registration {
+  txid: string;
+  h0: number;
+  /** The commitment it carries, hex: which terms it paid for. */
+  commitment: string;
+}
+
+const REGISTRATION_KEY = "btcfun:registrations:v1";
+
+function readRegistrations(): Registration[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(REGISTRATION_KEY) ?? "[]");
+    return Array.isArray(parsed) ? (parsed as Registration[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The registration already paid for this draft, if any: same identity and
+ * promoter, whatever height it opens at. Paying twice for one launch is the
+ * mistake this exists to prevent.
+ */
+export function pendingRegistration(draft: LaunchDraft, network: NetworkConfig = ACTIVE): Registration | null {
+  for (const r of readRegistrations()) {
+    if (bytesToHex(registrationCommitment(draftTerms(draft, r.h0, network).args)) === r.commitment) return r;
+  }
+  return null;
+}
+
+function keepRegistration(r: Registration): void {
+  try {
+    localStorage.setItem(REGISTRATION_KEY, JSON.stringify([r, ...readRegistrations()].slice(0, 20)));
+  } catch {
+    // Storage blocked: the txid is still shown on screen and in the wallet's activity.
+  }
+}
+
+/** The payment a registration makes: the fee to the platform, committing to the launch. */
+export function registrationPayment(draft: LaunchDraft, h0: number, network: NetworkConfig = ACTIVE) {
+  return { to: ACTIVE_RGBPP.platformAddress, amountSats: REGISTRATION_SATS, memo: registrationCommitment(draftTerms(draft, h0, network).args) };
+}
+
+/**
+ * Pay the registration: sign it with the wallet, broadcast it, and keep it
+ * before anything else can fail. `utxos` must be plain coins — never a sealed
+ * output.
+ */
+export async function payRegistration(
+  vault: Vault,
+  draft: LaunchDraft,
+  h0: number,
+  utxos: readonly Utxo[],
+  feeRate: number,
+  broadcast: (hex: string) => Promise<string>,
+): Promise<Registration> {
+  const payment = registrationPayment(draft, h0);
+  const signed = await vault.use((key) => buildPayment(key, { ...payment, feeRate, utxos }));
+  const txid = await broadcast(signed.hex);
+  const registration = { txid, h0, commitment: bytesToHex(payment.memo) };
+  keepRegistration(registration);
+  return registration;
+}
+
+/** Ask btc.fun's signer for the certificate of a paid registration. */
+export async function requestCertificate(draft: LaunchDraft, registration: Registration): Promise<string> {
+  const { args } = draftTerms(draft, registration.h0);
+  const res = await fetch("/api/certify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ args: bytesToHex(args), registration: registration.txid }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { certificate?: string; error?: string };
+  if (!res.ok || !body.certificate) throw new Error(body.error ?? `The certificate request failed (${res.status}).`);
+  return body.certificate;
+}
+
+/** Sign the announcement of a registered, certified launch, keep it locally and publish it to the index. */
+export async function createLaunch(vault: Vault, draft: LaunchDraft, registration: Registration, certificate: string): Promise<LaunchCommitment> {
   const faults = validate(draft);
   if (Object.keys(faults).length > 0) {
     throw new Error(Object.values(faults)[0] ?? "That launch is not valid.");
   }
-  const commitment = commitmentFor(draft, vault.identity, tipHeight);
+  const commitment = commitmentFor(draft, vault.identity, registration, certificate);
+  if (!idMatches(commitment)) throw new Error("The certificate does not match this launch.");
   const signed = await signActivity(vault, {
     kind: "launch",
     launch: commitment.id,

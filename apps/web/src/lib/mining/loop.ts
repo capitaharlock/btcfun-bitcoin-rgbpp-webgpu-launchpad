@@ -147,7 +147,12 @@ export function traceOf(op: LoopOperation): Trace {
  * The ticket to mine: the armed cell's challenge, the paid cell's ticket, or
  * a ticket still landing. Only an armed cell can be minted (`settled`).
  */
-export function currentTicket(armed: MinerCell | null, paid: MinerCell | null, landing: LoopOperation | undefined): Ticket | null {
+export function currentTicket(
+  armed: MinerCell | null,
+  paid: MinerCell | null,
+  landing: LoopOperation | undefined,
+  roundTicket?: LoopOperation,
+): Ticket | null {
   if (armed) {
     const { txid, vout } = challengeOutpoint(armed);
     return { txid, vout, anchor: armed.data.anchor, settled: true };
@@ -155,6 +160,11 @@ export function currentTicket(armed: MinerCell | null, paid: MinerCell | null, l
   if (paid) return { txid: paid.seal.txid, vout: TICKET_VOUT, anchor: paid.data.anchor, settled: false };
   if (landing?.kind === "ticket" && landing.anchor !== undefined) {
     return { txid: landing.btcTxid, vout: TICKET_VOUT, anchor: landing.anchor, settled: false };
+  }
+  // An activation in flight has spent the paid cell before the armed one is
+  // read: the round's ticket is still the one being mined.
+  if (landing?.kind === "arm" && roundTicket?.anchor !== undefined) {
+    return { txid: roundTicket.btcTxid, vout: TICKET_VOUT, anchor: roundTicket.anchor, settled: false };
   }
   return null;
 }
@@ -165,8 +175,10 @@ export function deriveLoop(input: LoopInput): Loop {
   const armed = miners?.find((m) => m.data.state === "armed") ?? null;
   const paid = miners?.find((m) => m.data.state === "paid") ?? null;
   const landing = operations.find(isLanding);
-  const ticket = currentTicket(armed, paid, landing);
   const loopOps = operations.filter((op) => LOOP_KINDS.has(op.kind));
+  const lastMintAt = loopOps.findIndex((op) => op.kind === "mint");
+  const roundTicket = loopOps.find((op, i) => op.kind === "ticket" && op.stage !== "failed" && (lastMintAt < 0 || i < lastMintAt));
+  const ticket = currentTicket(armed, paid, landing, roundTicket);
   const lastMint = loopOps.find((op) => op.kind === "mint");
 
   const state = stateOf(input, { idle, armed, paid, landing, ticket, loopOps, lastMint });
@@ -232,11 +244,8 @@ function stateOf(
       const qualifies = input.bestClz !== null && input.bestClz >= MIN_CLZ;
       return qualifies ? { at: "mint", ticket, cell: armed } : { at: "mine", ticket, unarmed: null };
     }
-    const unarmed: Unarmed = !paid
-      ? { why: "landing" }
-      : landing?.kind === "arm"
-        ? { why: "arming", op: landing }
-        : { why: "arm", cell: paid };
+    const unarmed: Unarmed =
+      landing?.kind === "arm" ? { why: "arming", op: landing } : !paid ? { why: "landing" } : { why: "arm", cell: paid };
     return { at: "mine", ticket, unarmed };
   }
   if (landing) return { at: "waiting", op: landing };

@@ -16,6 +16,8 @@ const terms: LaunchTerms = {
   metadataHash: metadataHash({ name: "Mesh", symbol: "MESH", description: "", imageHash: "" }),
   promoterScript: Uint8Array.from([0x00, 0x14, ...new Array(20).fill(0xaa)]),
 };
+/** Any 96 bytes: plans carry the admission, the script checks it. */
+const ADMISSION = new Uint8Array(96).fill(3);
 const paymaster = { address: "tb1qt5r7g40j93s46c3mdnycc2qsz2t57xqfjddukj", feeSats: 7000 };
 const idle: MinerCell = {
   outPoint: { txHash: "0x" + "12".repeat(32), index: 0 },
@@ -43,7 +45,7 @@ describe("funding an operation", () => {
   for (const [name, plan, sealed] of [
     ["a re-arming ticket", planTicket(TESTNET, terms, { idle, paymaster: null, tip: terms.h0 }), [sealUtxo]],
     ["a ticket that creates its cell", planTicket(TESTNET, terms, { idle: null, paymaster, tip: terms.h0 }), []],
-    ["an arming", planArm(TESTNET, terms, paid, creating, terms.h0), [paidUtxo]],
+    ["an arming", planArm(TESTNET, terms, paid, creating, terms.h0, ADMISSION), [paidUtxo]],
     ["a first mint", planMint(TESTNET, terms, { miner: armed, held: null, nonce: 1n, reward: 1n }), [sealUtxo]],
     ["a later mint", planMint(TESTNET, terms, { miner: armed, held, nonce: 1n, reward: 1n }), [sealUtxo, heldUtxo]],
   ] as const) {
@@ -57,7 +59,7 @@ describe("funding an operation", () => {
   }
 
   it("sizes an arming and a mint before they exist, by the rule that signs them", () => {
-    const arm = planArm(TESTNET, terms, paid, creating, terms.h0);
+    const arm = planArm(TESTNET, terms, paid, creating, terms.h0, ADMISSION);
     const first = planMint(TESTNET, terms, { miner: armed, held: null, nonce: 1n, reward: 1n });
     const later = planMint(TESTNET, terms, { miner: armed, held, nonce: 1n, reward: 1n });
     for (const rate of [3, 17]) {

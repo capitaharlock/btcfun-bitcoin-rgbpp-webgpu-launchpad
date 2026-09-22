@@ -26,7 +26,7 @@
 import { fileURLToPath } from "node:url";
 import {
   activity, alice, bid, bob, creatingTx, demo, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
-  sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
+  platformAdmission, sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
 } from "./kit.mjs";
 
 const INDEX = (process.env.INDEX ?? "https://btcfun.rjj.workers.dev").replace(/\/$/, "");
@@ -103,7 +103,9 @@ const steps = {
       };
       const faults = create.validate(draft, network.ACTIVE);
       if (Object.keys(faults).length > 0) throw new Error(`${symbol}: ${JSON.stringify(faults)}`);
-      const commitment = create.commitmentFor(draft, identity, tip, network.ACTIVE);
+      const admitted = platformAdmission(draft, tip + draft.opensInBlocks);
+      const commitment = create.commitmentFor(draft, identity, admitted.registration, admitted.certificate, network.ACTIVE);
+      if (!create.idMatches(commitment, network.ACTIVE)) throw new Error(`${symbol}: the certificate does not verify`);
       await publish(alice, {
         kind: "launch",
         launch: commitment.id,

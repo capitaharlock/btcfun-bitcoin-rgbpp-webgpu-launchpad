@@ -1,3 +1,4 @@
+import { certifiedFor } from "./testkit";
 import { describe, expect, it } from "vitest";
 
 import { deriveKey } from "../bitcoin/keys";
@@ -7,7 +8,6 @@ import { tokenId } from "../rgbpp/launch";
 import { ACTIVITY_VERSION } from "../activity";
 import { MAX_META } from "../activity/verify";
 import {
-  commitmentFor,
   commitmentId,
   EXTRAS_WIRE_BUDGET,
   idMatches,
@@ -53,7 +53,7 @@ describe("launch drafts", () => {
 });
 
 describe("launch identity", () => {
-  const c = commitmentFor(draft, "02" + "11".repeat(32), 150_000, TESTNET3);
+  const c = certifiedFor(draft, "02" + "11".repeat(32), 150_000, TESTNET3);
 
   it("derives the id from the token its terms produce", () => {
     expect(c.h0).toBe(150_006);
@@ -71,7 +71,7 @@ describe("launch identity", () => {
   });
 
   it("does not depend on presentation: the accent is not part of the token", () => {
-    expect(commitmentFor({ ...draft, accent: "var(--cyan)" }, "02" + "11".repeat(32), 150_000, TESTNET3).tokenId).toBe(c.tokenId);
+    expect(certifiedFor({ ...draft, accent: "var(--cyan)" }, "02" + "11".repeat(32), 150_000, TESTNET3).tokenId).toBe(c.tokenId);
   });
 });
 
@@ -114,11 +114,11 @@ describe("launch links and story", () => {
   });
 
   it("are optional, and leave an announcement without them exactly as before", () => {
-    const plain = commitmentFor(draft, creator, 150_000, TESTNET3);
+    const plain = certifiedFor(draft, creator, 150_000, TESTNET3);
     expect("links" in plain).toBe(false);
     expect("story" in plain).toBe(false);
     expect("image" in plain).toBe(false);
-    const withExtras = commitmentFor(
+    const withExtras = certifiedFor(
       { ...draft, links: { ...NO_LINKS, x: "@meshwork" }, story: { why: "Relays cost money.", plan: "" } },
       creator,
       150_000,
@@ -171,8 +171,8 @@ describe("launch links and story", () => {
     }
     expect(validate(accepted, TESTNET3)).toEqual({});
     expect(accepted.story.why.length).toBeGreaterThan(0);
-    expect(commitmentFor(accepted, creator, 150_000, TESTNET3).image).toBe(accepted.image);
-    const meta = JSON.stringify(commitmentFor(accepted, creator, 150_000, TESTNET3));
+    expect(certifiedFor(accepted, creator, 150_000, TESTNET3).image).toBe(accepted.image);
+    const meta = JSON.stringify(certifiedFor(accepted, creator, 150_000, TESTNET3));
     expect(meta.length).toBeLessThanOrEqual(MAX_META);
     const request = JSON.stringify({
       body: {

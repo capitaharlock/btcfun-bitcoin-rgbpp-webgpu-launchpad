@@ -30,6 +30,8 @@ const terms: LaunchTerms = {
   metadataHash: metadataHash({ name: "Mesh", symbol: "MESH", description: "", imageHash: "" }),
   promoterScript: Uint8Array.from([0x00, 0x14, ...new Array(20).fill(0xaa)]),
 };
+/** Any 96 bytes: plans carry the admission, the script checks it. */
+const ADMISSION = new Uint8Array(96).fill(3);
 const paymaster = { address: "tb1qt5r7g40j93s46c3mdnycc2qsz2t57xqfjddukj", feeSats: 7000 };
 /** The testnet paymaster cell and the smallest change cell it must keep. */
 const PAYMASTER_CELL = ccc.fixedPointFrom(316);
@@ -101,7 +103,7 @@ describe("plans", () => {
     const plans = [
       planTicket(TESTNET, terms, { idle: null, paymaster, tip: terms.h0 }),
       planTicket(TESTNET, terms, { idle: miner("idle", minerCap), paymaster: null, tip: terms.h0 }),
-      planArm(TESTNET, terms, paid(), creating, terms.h0),
+      planArm(TESTNET, terms, paid(), creating, terms.h0, ADMISSION),
       planMint(TESTNET, terms, { miner: miner("armed", minerCap), held: null, nonce: 1n, reward: 5n }),
       planMint(TESTNET, terms, { miner: miner("armed", minerCap), held: { ...sealed(2, tokenCap), amount: 1n }, nonce: 1n, reward: 5n }),
       planTransfer(TESTNET, terms, { from: [{ ...sealed(2, tokenCap), amount: 9n }], amount: 4n, to: paymaster.address, paymaster }),
@@ -148,21 +150,21 @@ describe("plans", () => {
   });
 
   it("arming a paid cell pays nothing and carries the creating ticket past the inputs", () => {
-    const plan = planArm(TESTNET, terms, paid(), creating, terms.h0 + 3);
+    const plan = planArm(TESTNET, terms, paid(), creating, terms.h0 + 3, ADMISSION);
     expect(plan.btcOutputs).toEqual([{ kind: "seal", value: 546 }]);
-    expect(plan.btcfunWitness).toBe(ccc.hexFrom(creating));
+    expect(plan.btcfunWitness).toBe(ccc.hexFrom(ccc.bytesConcat(ADMISSION, creating)));
     // Armed naming its ticket, whose output stays the challenge; a paid cell
     // with no usable anchor is anchored at the tip.
     expect(decodeMinerCell(plan.virtualTx.outputsData[0])).toEqual({ state: "armed", nonce: 0n, anchor: terms.h0 + 3, ticket: displayTxid(creating) });
-    const fresh = planArm(TESTNET, terms, { ...paid(), data: { state: "paid", nonce: 0n, anchor: terms.h0 + 1 } }, creating, terms.h0 + 20);
+    const fresh = planArm(TESTNET, terms, { ...paid(), data: { state: "paid", nonce: 0n, anchor: terms.h0 + 1 } }, creating, terms.h0 + 20, ADMISSION);
     expect(decodeMinerCell(fresh.virtualTx.outputsData[0])?.anchor).toBe(terms.h0 + 1);
     expect(armAnchor(terms.h0 + 1, terms.h0, terms.h0 + 1 + ANCHOR_GRACE_BLOCKS - ARM_ANCHOR_MARGIN)).toBe(terms.h0 + 1);
     expect(armAnchor(terms.h0 + 1, terms.h0, terms.h0 + 2 + ANCHOR_GRACE_BLOCKS - ARM_ANCHOR_MARGIN)).toBe(terms.h0 + 2 + ANCHOR_GRACE_BLOCKS - ARM_ANCHOR_MARGIN);
     const witnesses = virtualResult(plan).ckbRawTx.witnesses;
-    expect(witnesses).toEqual(["0xFF", ccc.hexFrom(creating)]);
+    expect(witnesses).toEqual(["0xFF", ccc.hexFrom(ccc.bytesConcat(ADMISSION, creating))]);
     // Only the transaction the seal names, and only a paid cell.
-    expect(() => planArm(TESTNET, terms, paid(), Uint8Array.from([9]), terms.h0)).toThrow();
-    expect(() => planArm(TESTNET, terms, { ...paid(), data: { state: "idle", nonce: 0n, anchor: 0 } }, creating, terms.h0)).toThrow();
+    expect(() => planArm(TESTNET, terms, paid(), Uint8Array.from([9]), terms.h0, ADMISSION)).toThrow();
+    expect(() => planArm(TESTNET, terms, { ...paid(), data: { state: "idle", nonce: 0n, anchor: 0 } }, creating, terms.h0, ADMISSION)).toThrow();
   });
 
   it("a first mint turns the miner cell into the token cell and carries the nonce in the witness", () => {

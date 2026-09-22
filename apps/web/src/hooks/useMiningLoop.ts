@@ -227,7 +227,7 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
         return planTicket(ACTIVE_RGBPP, launch.terms, { idle: buyCell, paymaster, tip });
       }
       if (armCell) {
-        return creating?.txid === armCell.seal.txid ? planArm(ACTIVE_RGBPP, launch.terms, armCell, creating.bytes, tip) : null;
+        return creating?.txid === armCell.seal.txid ? planArm(ACTIVE_RGBPP, launch.terms, armCell, creating.bytes, tip, launch.admission) : null;
       }
       if (mintCell && best) {
         return planMint(ACTIVE_RGBPP, launch.terms, { miner: mintCell, held: holding, nonce: best.nonce, reward: mintable });
@@ -236,7 +236,7 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
       // A tip behind the opening block: the step is not offered, so nothing to price.
     }
     return null;
-  }, [buyCell, armCell, mintCell, paymaster, creating, launch.terms, tip, holding, best, mintable]);
+  }, [buyCell, armCell, mintCell, paymaster, creating, launch.terms, launch.admission, tip, holding, best, mintable]);
 
   const costs = useMemo<Costs | null>(() => {
     if (!plan || feeRate === null || !wallet.balance) return null;

@@ -170,3 +170,31 @@ fn an_anchor_is_at_or_shortly_before_the_confirming_block() {
     assert!(!anchor_valid(1001, 1000, 1000), "an anchor after confirmation");
     assert!(!anchor_valid(999, 1000, 1005), "an anchor before the launch opens");
 }
+
+#[test]
+fn an_admission_is_the_platform_signature_over_the_terms_and_the_registration() {
+    let v = &vectors()["admission"];
+    let args = unhex(v["args"].as_str().unwrap());
+    let registration: [u8; 32] = unhex(v["registration"].as_str().unwrap()).try_into().unwrap();
+    let signature = unhex(v["signature"].as_str().unwrap());
+    let key: [u8; 32] = unhex(v["key"].as_str().unwrap()).try_into().unwrap();
+    assert_eq!(key, TEST_CERT_KEY);
+    assert_eq!(hex(&certificate_message(&args, &registration)), v["message"].as_str().unwrap());
+    assert_eq!(hex(&registration_commitment(&args)), v["commitment"].as_str().unwrap());
+    assert_eq!(REGISTRATION_SATS, v["registration_sats"].as_u64().unwrap());
+
+    let admission = [registration.as_slice(), &signature].concat();
+    assert!(admitted(&args, &admission, &key));
+    // Other terms, another registration, a forged signature, another key, a short blob: refused.
+    let mut other = args.clone();
+    other[1] ^= 1;
+    assert!(!admitted(&other, &admission, &key));
+    let mut moved = admission.clone();
+    moved[0] ^= 1;
+    assert!(!admitted(&args, &moved, &key));
+    let mut forged = admission.clone();
+    forged[95] ^= 1;
+    assert!(!admitted(&args, &forged, &key));
+    assert!(!admitted(&args, &admission, &PLATFORM_CERT_KEY));
+    assert!(!admitted(&args, &admission[..95], &key));
+}

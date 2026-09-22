@@ -15,6 +15,7 @@
  * `HEADED=1` shows the browser; `SLOWMO=<ms>` slows it enough to follow.
  */
 
+import { TEST_CERT_KEY } from "./src/lib/launches/certificate";
 import { defineConfig, devices } from "@playwright/test";
 import { PLATFORM_IDENTITY } from "./e2e/support/platform";
 
@@ -76,7 +77,7 @@ export default defineConfig({
     command: `npx vite build --logLevel error && npx vite preview --port ${PORT} --strictPort`,
     // The platform's identity is build configuration; the suite's is the key
     // `e2e/support/platform.ts` restores, so it can announce the DEMO launch.
-    env: { VITE_PLATFORM_IDENTITY: PLATFORM_IDENTITY },
+    env: { VITE_PLATFORM_IDENTITY: PLATFORM_IDENTITY, VITE_PLATFORM_CERT_KEY: TEST_CERT_KEY },
     port: PORT,
     reuseExistingServer: true,
     timeout: 60_000,

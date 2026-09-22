@@ -64,6 +64,10 @@ describe("which step of the loop a miner is on", () => {
     expect(signed.state).toEqual({ at: "mine", ticket, unarmed: { why: "arming", op: arming } });
     expect(signed.traces.arm?.txid).toBe("02".repeat(32));
 
+    // The activation has spent the paid cell before the armed one is read: still mining, still arming.
+    const between = at({ miners: [], operations: [arming, settled] });
+    expect(between.state).toEqual({ at: "mine", ticket, unarmed: { why: "arming", op: arming } });
+
     // Armed, naming the ticket: same challenge, now mintable.
     const armed: MinerCell = { ...cell("armed", "02".repeat(32), 905), data: { state: "armed", nonce: 0n, anchor: 905, ticket: "01".repeat(32) } };
     const ready = at({ miners: [armed], operations: [{ ...arming, stage: "settled" }, settled], bestClz: MIN_CLZ });

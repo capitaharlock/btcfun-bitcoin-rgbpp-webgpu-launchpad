@@ -34,8 +34,12 @@ test.describe("create wizard", () => {
     await page.getByLabel("Name").fill("Meshwork");
     await page.getByLabel("One sentence").fill("A community token for mesh relay operators.");
     await page.getByRole("button", { name: "Continue →" }).click();
-    await expect(page.getByText("What you do not choose")).toBeVisible();
-    await expect(page.getByText("14,983 sats: 13,335 to your address and 1,648 to the platform; 7,105 and 878 when 7,000 pay for a new miner cell")).toBeVisible();
+    // What a launch earns is in view on every step: the share, the fee and the fixed rules.
+    const earn = page.getByRole("region", { name: "What your launch earns" });
+    await expect(earn).toContainText("13,335 sats");
+    await expect(earn).toContainText("7,105 sats on a miner's first two tickets");
+    await expect(earn).toContainText("20,000 sats, once");
+    await expect(earn).toContainText("14,983 sats, fixed");
   });
 
   test("carries project links and a story to the launch page, marked as the creator's word", async ({ page, app, ux }) => {
@@ -126,7 +130,7 @@ test.describe("create wizard", () => {
     await page.getByRole("link", { name: "Connect a wallet" }).click();
     await page.getByRole("button", { name: "Create a browser key" }).click();
     await app.goto("/create");
-    await expect(page.getByRole("button", { name: "Announce TIDE" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Pay registration · / })).toBeVisible();
     ux.note("Leaving the wizard for the wallet and coming back lands on the last step with everything kept.");
   });
 });

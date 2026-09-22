@@ -143,6 +143,8 @@ export default function MintPage() {
             <li>
               Output order in every operation (<code>lib/rgbpp/operations.ts</code>): the commitment at 0, then the seals
               in the order the plan lists them, then payments, then change. Each seal carries {group(SEAL_SATS)} sats.
+              The Bitcoin signer uses one shared <code>commitmentScript</code> encoder for this RGB++ commitment and for
+              market purchases.
             </li>
             <li>
               The miner cell and the tokens are sealed to <em>different</em> outputs. A UTXO carrying both would force
@@ -159,9 +161,12 @@ export default function MintPage() {
             </li>
             <li>
               A paid cell is created by a ticket that spends no sealed output, so the script cannot check that ticket when
-              the cell appears. It checks it when the cell is armed: the arming spends the paid cell's output 1, and carries
-              the ticket, without its witness data, as the first witness past the inputs — where the RGB++ queue leaves it
-              as written. It must hash to the txid the cell is sealed to and pay the new-cell split. A paid cell cannot
+              the cell appears. It checks it when the cell is armed: the arming spends the paid cell's output 1, and carries,
+              as the first witness past the inputs — where the RGB++ queue leaves it as written — the launch's admission
+              (its registration txid and btc.fun's certificate, which must verify against the platform key compiled into
+              the script), then the ticket without its witness data. The ticket must hash to the txid the cell is sealed
+              to and pay the new-cell split. Nobody may create an idle cell, so every mint descends from a certified
+              arming. A paid cell cannot
               move, cannot be created beside an RGB++ input, and is armed alone, so one payment arms one cell.
             </li>
             <li>

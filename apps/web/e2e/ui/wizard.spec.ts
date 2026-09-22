@@ -26,6 +26,8 @@ test.describe("mining wizard", () => {
     await app.restoreKey(PLATFORM_SECRET);
     const id = await announce(page, { symbol: MINEABLE, image: "/tokens/demo.svg" });
     await app.logOut();
+    // The registration is on the simulated chain too; count from here.
+    const base = sim.broadcasts.length;
     sim.fund(DEMO_ADDRESS, 200_000);
     await block(page, sim);
 
@@ -38,60 +40,60 @@ test.describe("mining wizard", () => {
     await wizard.getByRole("button", { name: "Use the demo wallet" }).click();
 
     // Step 1: the bill, then one press. The demo wallet signs nothing before it.
-    const sign = bar(page).getByRole("button", { name: "Sign ticket", exact: true });
+    const sign = bar(page).getByRole("button", { name: /^Pay ticket · [0-9,]+ sats$/ });
     await expect(sign).toBeEnabled({ timeout: 30_000 });
     const bill = wizard.locator(".wz-bill");
     await expect(bill).toContainText("7,105 sats");
     await expect(bill).toContainText("878 sats");
     await expect(bill).toContainText("7,000 sats");
-    await expect(bill).toContainText("14,983 sats");
     await expect(bill).toContainText("3 sat/vB");
-    await expect(wizard.getByText(/^Then arming and the mint cost ≈ [0-9,]+ sats of network fee\.$/)).toBeVisible();
+    await expect(bill).toContainText("Total");
+    await expect(wizard.getByText(/^Then the activation and the mint cost ≈ [0-9,]+ sats of network fee — no other payment\.$/)).toBeVisible();
     if (test.info().project.name === "ui") {
       // A laptop screen holds the whole step and its bar.
       await expect(bar(page)).toBeInViewport({ ratio: 1 });
     }
     await page.waitForTimeout(1500);
-    expect(sim.broadcasts, "nothing is signed without the press").toHaveLength(0);
+    expect(sim.broadcasts, "nothing is signed without the press").toHaveLength(base);
     await sign.click();
 
     await expect(wizard.getByRole("link", { name: "Ticket transaction on mempool.space" })).toBeVisible({ timeout: 30_000 });
-    expect(sim.broadcasts).toHaveLength(1);
-    const ticket = sim.broadcasts[0];
+    expect(sim.broadcasts).toHaveLength(base + 1);
+    const ticket = sim.broadcasts[base];
     expect(ticket.outputs.filter((o) => Number(o.amount) === NEW_CELL.promoter)).toHaveLength(1);
     expect(ticket.outputs.filter((o) => o.address === PLATFORM_ADDRESS && Number(o.amount) === NEW_CELL.platform)).toHaveLength(1);
     expect(ticket.outputs.filter((o) => o.address === PAYMASTER_ADDRESS && Number(o.amount) === NEW_CELL.paymaster)).toHaveLength(1);
-    await expect(bar(page).getByRole("button", { name: "Waiting for a block" })).toBeVisible();
-    await block(page, sim);
 
-    // Arming the new cell: a second press, network fee only.
-    const arm = bar(page).getByRole("button", { name: "Arm ticket", exact: true });
-    await expect(arm).toBeEnabled({ timeout: 30_000 });
-    await page.waitForTimeout(1000);
-    expect(sim.broadcasts).toHaveLength(1);
-    await arm.click();
-    await expect(wizard.getByRole("link", { name: "Arming transaction on mempool.space" })).toBeVisible({ timeout: 30_000 });
-    const arming = sim.broadcasts[1];
-    expect(arming.outputs.some((o) => o.address === PLATFORM_ADDRESS || o.address === PAYMASTER_ADDRESS)).toBe(false);
-
-    // Step 2: mining starts when the person says so, on the arming still in the mempool.
-    await bar(page).getByRole("button", { name: "Mine →" }).click();
+    // Step 2: mining starts on the ticket still in the mempool, when the person says so.
+    await bar(page).getByRole("button", { name: "Go mine →" }).click();
     await expect(bar(page).getByRole("button", { name: "Pause", exact: true })).toBeVisible();
     if (test.info().project.name === "ui") await expect(bar(page)).toBeInViewport({ ratio: 1 });
+
+    // The ticket's block: the activation is offered while mining — a second press, network fee only.
+    await block(page, sim);
+    const arm = bar(page).getByRole("button", { name: /^Activate ticket · [0-9,]+ sats fee$/ });
+    await expect(arm).toBeEnabled({ timeout: 30_000 });
+    await page.waitForTimeout(1000);
+    expect(sim.broadcasts).toHaveLength(base + 1);
+    await arm.click();
+    await expect(wizard.getByRole("link", { name: "Activation transaction on mempool.space" })).toBeVisible({ timeout: 30_000 });
+    const arming = sim.broadcasts[base + 1];
+    expect(arming.outputs.some((o) => o.address === PLATFORM_ADDRESS || o.address === PAYMASTER_ADDRESS)).toBe(false);
+
     const accept = await mineUntilMintable(page);
     await accept.click();
 
-    // Step 3: the arming has not settled, so the mint waits — and still signs nothing by itself.
-    await expect(bar(page).getByRole("button", { name: "Waiting for the ticket" })).toBeVisible();
+    // Step 3: the activation has not settled, so the mint waits — and still signs nothing by itself.
+    await expect(bar(page).getByRole("button", { name: "Waiting for a block" })).toBeVisible();
     const minted = await mintedShown(page);
     await block(page, sim);
-    const signMint = bar(page).getByRole("button", { name: "Sign mint", exact: true });
+    const signMint = bar(page).getByRole("button", { name: /^Mint .+ fee$/ });
     await expect(signMint).toBeEnabled({ timeout: 30_000 });
     await page.waitForTimeout(1000);
-    expect(sim.broadcasts).toHaveLength(2);
+    expect(sim.broadcasts).toHaveLength(base + 2);
     await signMint.click();
-    await expect(page.getByText(/ minted — landing\.$/)).toBeVisible({ timeout: 30_000 });
-    const mint = sim.broadcasts[2];
+    await expect(page.getByText(/^Mint sent: /)).toBeVisible({ timeout: 30_000 });
+    const mint = sim.broadcasts[base + 2];
     expect(mint.outputs.some((o) => o.address === PLATFORM_ADDRESS || o.address === PAYMASTER_ADDRESS)).toBe(false);
 
     // The tokens show as landing in the wallet before their block.
@@ -99,16 +101,17 @@ test.describe("mining wizard", () => {
     await block(page, sim);
     await expect(wizard.getByRole("link", { name: "Mint transaction on mempool.space" })).toHaveAttribute("href", new RegExp(`${mint.txid}$`), { timeout: 30_000 });
     await expect(wizard.getByRole("link", { name: "Proof" })).toHaveAttribute("href", `#/proof/${mint.txid}`);
-    await expect(bar(page).getByRole("button", { name: "Mine again", exact: true })).toBeVisible();
+    await expect(bar(page).getByRole("button", { name: "New round →", exact: true })).toBeVisible();
     await showStep(page, "Ticket");
     await expect(wizard.getByRole("link", { name: "Ticket transaction on mempool.space" })).toHaveAttribute("href", new RegExp(`${ticket.txid}$`));
-    ux.note("A first round is three presses that sign — ticket, arming, mint — and one payment; the mint pays only the network.");
+    ux.note("A first round is three presses that sign — ticket, activation, mint — and one payment; the mint pays only the network.");
   });
 
   test("with a passkey: each signing press asks for the passkey", async ({ page, app, sim }) => {
     await app.restoreKey(PLATFORM_SECRET);
     await announce(page, { symbol: MINEABLE });
     await app.logOut();
+    const base = sim.broadcasts.length;
     await block(page, sim);
 
     const cdp = await page.context().newCDPSession(page);
@@ -138,21 +141,22 @@ test.describe("mining wizard", () => {
     await pressMine(page);
     await showStep(page, "Ticket");
 
-    const sign = bar(page).getByRole("button", { name: "Sign ticket", exact: true });
+    const sign = bar(page).getByRole("button", { name: /^Pay ticket/ });
     await expect(sign).toBeEnabled({ timeout: 30_000 });
     const before = asked;
     await page.waitForTimeout(1000);
-    expect(sim.broadcasts).toHaveLength(0);
+    expect(sim.broadcasts).toHaveLength(base);
     await sign.click();
     await expect(page.getByRole("link", { name: "Ticket transaction on mempool.space" })).toBeVisible({ timeout: 30_000 });
     expect(asked, "the press opened the passkey").toBe(before + 1);
-    expect(sim.broadcasts).toHaveLength(1);
+    expect(sim.broadcasts).toHaveLength(base + 1);
   });
 
   test("a wallet that cannot pay for the whole round signs nothing, says what is missing, and unlocks when coins arrive", async ({ page, app, sim }) => {
     await app.restoreKey(PLATFORM_SECRET);
     await announce(page, { symbol: MINEABLE });
     await app.logOut();
+    const base = sim.broadcasts.length;
     const wallet = await app.createBrowserKey();
     // Enough for the ticket alone, not for the fees the round still has.
     sim.fund(wallet.address, 16_000);
@@ -162,15 +166,15 @@ test.describe("mining wizard", () => {
     await showStep(page, "Ticket");
 
     await expect(page.getByText(/^[0-9,]+ sats missing\./)).toBeVisible({ timeout: 30_000 });
-    await expect(bar(page).getByRole("button", { name: "Sign ticket", exact: true })).toBeDisabled();
+    await expect(bar(page).getByRole("button", { name: /^Pay ticket/ })).toBeDisabled();
     await expect(page.locator(".wz-fund .wz-spin")).toBeVisible();
     await expect(page.locator(".wz-fund")).toContainText("checking the address every 10 seconds");
-    expect(sim.broadcasts).toHaveLength(0);
+    expect(sim.broadcasts).toHaveLength(base);
 
     // The address is re-read every 10 s: confirmed coins unlock the step without a reload.
     sim.fund(wallet.address, 50_000);
     sim.advance(1);
-    await expect(bar(page).getByRole("button", { name: "Sign ticket", exact: true })).toBeEnabled({ timeout: 25_000 });
+    await expect(bar(page).getByRole("button", { name: /^Pay ticket/ })).toBeEnabled({ timeout: 25_000 });
     await expect(page.getByText(/sats missing\./)).toHaveCount(0);
   });
 });

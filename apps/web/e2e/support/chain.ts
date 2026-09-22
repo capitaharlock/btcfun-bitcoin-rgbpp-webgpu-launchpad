@@ -42,6 +42,8 @@ function addressOf(script: string): string | null {
   }
 }
 
+const SIMS = new WeakMap<Page, ChainSim>();
+
 export class ChainSim {
   tip: number;
   /** UTXOs per address. Absent means an empty wallet. */
@@ -82,17 +84,29 @@ export class ChainSim {
     return this.tip;
   }
 
+  private funded = 0;
+
   fund(address: string, ...values: number[]): void {
     const list = this.utxos.get(address) ?? [];
     for (const value of values) {
-      const txid = createHash("sha256").update(`fund-${address}-${list.length}-${value}`).digest("hex");
+      // A counter, not the list's length: spent coins leave the list, and a
+      // second coin must never reuse the txid of one already spent.
+      const txid = createHash("sha256").update(`fund-${address}-${this.funded++}-${value}`).digest("hex");
       list.push({ txid, vout: 0, value, confirmed: true });
     }
     this.utxos.set(address, list);
   }
 
   async install(page: Page): Promise<void> {
+    SIMS.set(page, this);
     await page.route(`${API}/**`, (route) => this.answer(route));
+  }
+
+  /** The simulator installed on `page`, for flows that must fund what they spend. */
+  static of(page: Page): ChainSim {
+    const sim = SIMS.get(page);
+    if (!sim) throw new Error("no chain simulator on this page");
+    return sim;
   }
 
   /** Accept a raw transaction as a node would. Returns its txid, or an error. */

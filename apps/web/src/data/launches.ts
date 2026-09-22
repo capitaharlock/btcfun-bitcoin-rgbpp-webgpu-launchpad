@@ -14,6 +14,7 @@
 
 import { blocksToNextHalving, halvingsAt } from "../lib/standard";
 import { publicExtras, termsOf, type LaunchCommitment, type LaunchLinks, type LaunchStory } from "../lib/launches/create";
+import { admissionBytes } from "../lib/launches/certificate";
 import { artFor, type TokenArt } from "../lib/launches/image";
 import { halvingPosition, TERMINAL_HALVING, type HalvingPosition } from "../lib/launches/progress";
 import type { LaunchTerms } from "../lib/rgbpp/launch";
@@ -35,6 +36,14 @@ export interface LaunchSpec {
   /** xUDT type hash: the token's permanent identifier. */
   tokenId: string;
   terms: LaunchTerms;
+  /**
+   * btc.fun's admission of the launch — registration txid and certificate —
+   * as the first arming of every miner's cell carries it
+   * (`lib/launches/certificate.ts`).
+   */
+  admission: Uint8Array;
+  /** The registration's txid; all zeros when the platform admitted the launch itself. */
+  registration: string;
   /** Identity that announced it. */
   creator: string;
   announcedAt: string;
@@ -84,6 +93,8 @@ export function specFor(c: LaunchCommitment): LaunchSpec {
     promoter: c.promoter,
     tokenId: c.tokenId,
     terms: termsOf(c),
+    admission: admissionBytes(c.registration, c.certificate),
+    registration: c.registration,
     creator: c.creator,
     announcedAt: c.at,
     ...publicExtras(c),

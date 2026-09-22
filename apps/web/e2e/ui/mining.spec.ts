@@ -14,8 +14,7 @@ import {
   mintOnce,
   platformWallet,
   pressMine,
-  showStep,
-} from "../support/flows";
+  showStep, activate } from "../support/flows";
 import { PLATFORM_SECRET } from "../support/platform";
 import { PAYMASTER_ADDRESS, PLATFORM_ADDRESS } from "../support/rgbpp";
 
@@ -28,6 +27,7 @@ test.describe("mining", () => {
   test("three rounds with a key of one's own: the paymaster is paid in the first two, and from the third the ticket re-arms", async ({ page, app, sim, rgbpp, ux }) => {
     await platformWallet(app, sim, 400_000);
     const id = await announce(page, { symbol: MINEABLE });
+    const registered = sim.broadcasts.length;
     await block(page, sim);
     const wizard = page.getByRole("region", { name: `Mine ${MINEABLE}` });
     await expect(wizard).toHaveCount(0);
@@ -41,7 +41,7 @@ test.describe("mining", () => {
       // A first round's ticket, arming and mint; a re-arming round has no arming.
       expect(sim.broadcasts.length - before).toBe(round < 3 ? 3 : 2);
       await expect(page.getByText("you hold").locator("..")).toContainText(total.toLocaleString("en-US"));
-      if (round < 3) await bar(page).getByRole("button", { name: "Mine again", exact: true }).click();
+      if (round < 3) await bar(page).getByRole("button", { name: "New round →", exact: true }).click();
     }
 
     const paid = (tx: (typeof tickets)[number], address: string) => tx.outputs.filter((o) => o.address === address).reduce((n, o) => n + Number(o.amount), 0);
@@ -49,7 +49,7 @@ test.describe("mining", () => {
     expect(tickets.map((t) => paid(t, PLATFORM_ADDRESS))).toEqual([878, 878, 1_648]);
     expect(tickets[2].outputs.filter((o) => Number(o.amount) === 13_335)).toHaveLength(1);
     // Only tickets pay anyone but the network.
-    const others = sim.broadcasts.filter((b) => !tickets.includes(b));
+    const others = sim.broadcasts.slice(registered).filter((b) => !tickets.includes(b));
     for (const tx of others) expect(paid(tx, PLATFORM_ADDRESS) + paid(tx, PAYMASTER_ADDRESS)).toBe(0);
 
     // Every operation settled under the script's rules, and each mint is on the public feed.
@@ -67,17 +67,17 @@ test.describe("mining", () => {
     await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     await buyTicket(page, sim);
-    await block(page, sim);
+    await activate(page, sim);
     await mineUntilMintable(page);
     const shownBefore = await page.getByText("mintable now").locator("..").innerText();
     await page.reload();
-    const accept = bar(page).getByRole("button", { name: "Accept · mint →" });
+    const accept = bar(page).getByRole("button", { name: "Use this hash → Mint" });
     await expect(accept).toBeEnabled({ timeout: 30_000 });
     expect(await page.getByText("mintable now").locator("..").innerText()).toBe(shownBefore);
     await accept.click();
     const minted = await mintedShown(page);
-    await bar(page).getByRole("button", { name: "Sign mint", exact: true }).click();
-    await expect(page.getByText(/ minted — landing\.$/)).toBeVisible({ timeout: 30_000 });
+    await bar(page).getByRole("button", { name: /^Mint .+ fee$/ }).click();
+    await expect(page.getByText(/^Mint sent: /)).toBeVisible({ timeout: 30_000 });
     await block(page, sim);
     for (const job of rgbpp.jobs.values()) expect(job.state, job.failure ?? "").toBe("completed");
     await expect(page.getByText("you hold").locator("..")).toContainText(minted.split(".")[0]);
@@ -140,25 +140,26 @@ test.describe("mining", () => {
       await announce(page, { symbol: MINEABLE, opensInBlocks: 10 });
       await expect(page.locator(".lh").getByRole("button", { name: "Not open yet" })).toBeDisabled();
       await expect(page.locator(".lh-status").getByText(/^Opens in 10 blocks/)).toBeVisible();
-      await expect(page.getByRole("button", { name: "Sign ticket" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^Pay ticket/ })).toHaveCount(0);
     });
 
     test("an empty wallet is told what to send where, waits with a loader, and the step unlocks once coins arrive — no reload", async ({ page, app, sim }) => {
       const wallet = await app.restoreKey(PLATFORM_SECRET);
       await announce(page, { symbol: MINEABLE });
+      const base = sim.broadcasts.length;
       await block(page, sim);
       await pressMine(page);
       await expect(page.getByText(/^[0-9,]+ sats missing\./)).toBeVisible({ timeout: 30_000 });
       await expect(page.locator(".wz-fund .copyable code")).toHaveText(wallet.address);
-      await expect(bar(page).getByRole("button", { name: "Sign ticket" })).toBeDisabled();
+      await expect(bar(page).getByRole("button", { name: /^Pay ticket/ })).toBeDisabled();
       await expect(bar(page)).toContainText("Your wallet needs bitcoin");
       await expect(page.locator(".wz-fund .wz-spin")).toBeVisible();
-      expect(sim.broadcasts).toHaveLength(0);
+      expect(sim.broadcasts).toHaveLength(base);
 
       // The address is re-read every 10 s: confirmed coins unlock the step by themselves.
       sim.fund(wallet.address, 200_000);
       sim.advance(1);
-      await expect(bar(page).getByRole("button", { name: "Sign ticket" })).toBeEnabled({ timeout: 25_000 });
+      await expect(bar(page).getByRole("button", { name: /^Pay ticket/ })).toBeEnabled({ timeout: 25_000 });
       await expect(page.getByText(/sats missing\./)).toHaveCount(0);
     });
 
@@ -167,14 +168,14 @@ test.describe("mining", () => {
       await announce(page, { symbol: MINEABLE });
       await block(page, sim);
       await pressMine(page);
-      await bar(page).getByRole("button", { name: "Sign ticket" }).click();
+      await bar(page).getByRole("button", { name: /^Pay ticket/ }).click();
       await expect(page.getByRole("link", { name: "Ticket transaction on mempool.space" })).toBeVisible({ timeout: 30_000 });
       rgbpp.stalled = true;
       await block(page, sim);
-      // Confirmed on Bitcoin, not completed on CKB: still landing, and nothing to arm yet.
-      await expect(bar(page).getByRole("button", { name: "Waiting for a block" })).toBeVisible({ timeout: 30_000 });
+      // Confirmed on Bitcoin, not completed on CKB: still landing, mineable, and nothing to activate yet.
+      await expect(bar(page).getByRole("button", { name: "Go mine →" })).toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole("link", { name: "Ticket transaction on mempool.space" }).locator("..")).toContainText("landing", { timeout: 30_000 });
-      await expect(bar(page).getByRole("button", { name: "Arm ticket" })).toHaveCount(0);
+      await expect(bar(page).getByRole("button", { name: /^Activate ticket/ })).toHaveCount(0);
     });
 
     test("on any launch but DEMO the site offers no miner, says why, and points at DEMO", async ({ page, app, sim }) => {
@@ -185,10 +186,10 @@ test.describe("mining", () => {
       await block(page, sim);
       await expect(page.getByRole("heading", { name: "Mining is open on DEMO" })).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText(/the mint script on CKB accepts a paid ticket and a valid hash for any launch/)).toBeVisible();
-      await expect(page.getByRole("button", { name: "Sign ticket" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^Pay ticket/ })).toHaveCount(0);
       await page.getByRole("link", { name: "▶ Mine DEMO" }).click();
       await expect(page).toHaveURL(new RegExp(`#/launch/${demo}/mine$`));
-      await expect(bar(page).getByRole("button", { name: "Sign ticket" })).toBeVisible({ timeout: 30_000 });
+      await expect(bar(page).getByRole("button", { name: /^Pay ticket/ })).toBeVisible({ timeout: 30_000 });
     });
   });
 });

@@ -18,7 +18,8 @@ test.describe("holdings", () => {
     sim.track(bob.address);
 
     await app.goto("/holdings");
-    await expect(page.getByRole("heading", { name: new RegExp(MINEABLE) })).toBeVisible();
+    const card = page.locator(".tk-card").filter({ hasText: MINEABLE });
+    await card.getByRole("button", { name: "Transfer" }).click();
     await page.getByLabel("Send to").fill(bob.address);
     await page.getByLabel(`Amount (${MINEABLE})`).fill("100");
     await page.getByRole("button", { name: "Send" }).click();
@@ -26,11 +27,11 @@ test.describe("holdings", () => {
     await block(page, sim);
 
     // The sender keeps the change; the recipient sees the rest.
-    await expect(page.getByText(`${(total - 100).toLocaleString("en-US")}.00`).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText((total - 100).toLocaleString("en-US")).first()).toBeVisible({ timeout: 30_000 });
     await bobPage.goto("/#/holdings");
-    await expect(bobPage.getByText("100.00").first()).toBeVisible({ timeout: 30_000 });
+    await expect(bobPage.getByText("100", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     await bobPage.goto(`/#/launch/${id}`);
-    await expect(bobPage.getByText("you hold").locator("..")).toContainText("100.00");
+    await expect(bobPage.getByText("you hold").locator("..")).toContainText("100");
     await bobPage.context().close();
     ux.note("The recipient's balance appears on their own holdings page after one block, without any action from them.");
   });
@@ -43,6 +44,7 @@ test.describe("holdings", () => {
       const minted = await mintOnce(page, sim);
       const total = Number(minted.split(" ")[0].replace(/,/g, ""));
       await app.goto("/holdings");
+      await page.locator(".tk-card").filter({ hasText: MINEABLE }).getByRole("button", { name: "Transfer" }).click();
 
       await page.getByLabel("Send to").fill("tb1qt5r7g40j93s46c3mdnycc2qsz2t57xqfjddukj");
       await page.getByLabel(`Amount (${MINEABLE})`).fill(String(total + 1));

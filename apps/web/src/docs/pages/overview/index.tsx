@@ -51,7 +51,8 @@ export default function OverviewPage() {
           Bitcoin output you control, paying only the network. The token itself is
           recorded on a second chain, CKB, and bound to that Bitcoin output, so whoever can spend the output owns the
           tokens. A script on CKB — not this website — decides whether a mint is valid, and anyone can check any mint from
-          the two chains.
+          the two chains. A launch is registered once, for a fee paid on Bitcoin, and admitted by btc.fun's
+          certificate, which the mint script requires before any miner can enter it.
         </p>
         <p>
           Everything here runs on <strong>test networks</strong>: the coins and tokens have no value. See{" "}

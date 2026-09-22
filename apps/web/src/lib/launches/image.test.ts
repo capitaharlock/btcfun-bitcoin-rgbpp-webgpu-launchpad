@@ -1,10 +1,11 @@
+import { certifiedFor } from "./testkit";
 import { sha256 } from "@noble/hashes/sha2";
 import { describe, expect, it } from "vitest";
 
 import { bytesToHex } from "../bytes";
 import { deriveKey } from "../bitcoin/keys";
 import { TESTNET3 } from "../bitcoin/network";
-import { commitmentFor, commitmentId, idMatches, NO_LINKS, NO_STORY } from "./create";
+import { commitmentId, idMatches, NO_LINKS, NO_STORY } from "./create";
 import { artFor, imageFor, imageMatches, MAX_IMAGE_LENGTH, PLATFORM_IMAGES } from "./image";
 
 describe("image references", () => {
@@ -57,7 +58,7 @@ describe("which picture a launch shows", () => {
 
   it("is signed with the announcement but leaves the token id alone", () => {
     const promoter = deriveKey(new Uint8Array(32).fill(7), TESTNET3).address;
-    const plain = commitmentFor(
+    const plain = certifiedFor(
       { symbol: "MESH", name: "Meshwork", blurb: "Community token for a mesh-relay group.", accent: "var(--cyan)", promoter, opensInBlocks: 6, links: NO_LINKS, story: NO_STORY, image: "" },
       "02".padEnd(66, "a"),
       150_000,

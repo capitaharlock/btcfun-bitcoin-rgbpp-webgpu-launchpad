@@ -6,6 +6,7 @@ members = ["mint-core", "mint", "tests"]
 ckb-std = "0.15.1"
 rgbpp-core = { git = "https://github.com/utxostack/rgbpp.git", rev = "4abd216dbd5d25b8f59e843de39643f9b7513f9d" }
 sha2 = { version = "0.10", default-features = false }
+k256 = { version = "0.13", default-features = false, features = ["schnorr"] }
 
 # No LTO: with it the linker lays out writes that CKB-VM rejects as
 # MemWriteOnExecutablePage. The size saving is not worth a custom linker script.

@@ -33,6 +33,7 @@ import { activityId, faultIn } from "../../src/lib/activity/verify";
 import type { SignedActivity } from "../../src/lib/activity/types";
 import { readFileSync } from "node:fs";
 import type { ChainSim } from "./chain";
+import { admitted, registrationFault, signCertificate, TEST_CERT_KEY, TEST_CERT_SECRET } from "../../src/lib/launches/certificate";
 
 // Restated rather than imported from the app's config, which reads
 // `import.meta.env` and so only loads under Vite. They are the defaults the
@@ -173,6 +174,19 @@ export class RgbppSim {
     await page.route(`${SERVICE}/**`, (route) => this.service(route));
     await page.route(`${CKB_RPC}**`, (route) => this.rpc(route));
     await page.route("**/api/activity**", (route) => this.index(route));
+    await page.route("**/api/certify", (route) => this.certify(route));
+  }
+
+  /** btc.fun's signer, as the Worker runs it, over the simulated chain and with the test key. */
+  private async certify(route: Route): Promise<void> {
+    const { args, registration } = JSON.parse(route.request().postData() ?? "{}") as { args: string; registration: string };
+    const tx = this.chain.broadcasts.find((b) => b.txid === registration);
+    if (!tx) return route.fulfill({ status: 404, json: { error: "That registration transaction is not known to Bitcoin yet." } });
+    const bytes = Uint8Array.from(Buffer.from(args, "hex"));
+    const fault = registrationFault(tx.outputs.map((o) => ({ scriptHex: o.script, value: Number(o.amount) })), bytes, PLATFORM_SCRIPT);
+    if (fault) return route.fulfill({ status: 422, json: { error: `That transaction does not register this launch: ${fault}.` } });
+    const certificate = signCertificate(bytes, registration, Uint8Array.from(Buffer.from(TEST_CERT_SECRET, "hex")));
+    return route.fulfill({ json: { certificate: Buffer.from(certificate).toString("hex") } });
   }
 
   // ── service ────────────────────────────────────────────────────────────
@@ -376,6 +390,7 @@ export class RgbppSim {
       const minted = sum(outputs.map((o, i) => ({ type: o.type, data: data[i] }))) - sum(inputs.map((c) => ({ type: c.output.type, data: c.data })));
 
       if (!was && now?.state === "armed") throw new Error("armed without a ticket");
+      if (!was && now?.state === "idle") throw new Error("nobody opens an idle cell");
       if (!was && now?.state === "paid" && rgbppInput) throw new Error("a paid cell beside an RGB++ input");
       if (was?.state === "paid" && now && now.state !== "armed") throw new Error("a paid cell cannot move");
       if (was && was.state !== "paid" && now?.state === "paid") throw new Error("nothing becomes paid");
@@ -388,10 +403,15 @@ export class RgbppSim {
           if (now.ticket !== null) throw new Error("a re-armed cell names no ticket");
           armings.push({ promoter, price: REUSE, paidBy: armingOutputs });
         } else {
-          // Armed from paid: the creating ticket rides in the btc.fun witness.
+          // Armed from paid: the admission, then the creating ticket, ride in the btc.fun witness.
           const seal = sealOf(before[0].output.lock)!;
           if (seal.vout !== 1 || !btcfun) throw new Error("no creating ticket");
-          const creating = ccc.bytesFrom(btcfun);
+          const witness = ccc.bytesFrom(btcfun);
+          const registration = Buffer.from(witness.slice(0, 32)).reverse().toString("hex");
+          const certificate = Buffer.from(witness.slice(32, 96)).toString("hex");
+          const args = ccc.bytesFrom(before[0].output.type!.args);
+          if (!admitted(args, registration, certificate, TEST_CERT_KEY)) throw new Error("not certified");
+          const creating = witness.slice(96);
           if (reverse(ccc.hexFrom(sha256(sha256(creating))).slice(2)) !== seal.txid) throw new Error("not the creating ticket");
           if (now.ticket !== seal.txid) throw new Error("an armed paid cell names its ticket");
           if (inputs.some((c) => { const m = minerData(c.data); return m !== null && m.state !== "paid"; })) {

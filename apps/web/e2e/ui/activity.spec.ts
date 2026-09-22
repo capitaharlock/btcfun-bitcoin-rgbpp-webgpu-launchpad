@@ -67,11 +67,11 @@ test.describe("activity", () => {
 
     await app.goto("/activity");
     const mint = page.locator(".feedrow").filter({ hasText: "mined" });
-    await expect(mint).toContainText("12.5000 LINK");
+    await expect(mint).toContainText("12.5 LINK");
     await expect(mint.getByRole("link", { name: /Bitcoin transaction a1a1a1…a1a1/ })).toHaveAttribute("href", `https://mempool.space/testnet/tx/${mintTx}`);
     await expect(mint.getByRole("link", { name: "proof" })).toHaveAttribute("href", `#/proof/${mintTx}`);
 
-    const sent = page.locator(".feedrow").filter({ hasText: "3.0000 LINK" });
+    const sent = page.locator(".feedrow").filter({ hasText: "3 LINK" });
     await expect(sent.getByRole("link", { name: /Bitcoin transaction b2b2b2…b2b2/ })).toHaveAttribute("href", `https://mempool.space/testnet/tx/${sendTx}`);
     await expect(sent.getByRole("link", { name: "proof" })).toHaveCount(0);
     // Linked, not proven: the row still makes no claim beyond its signature.

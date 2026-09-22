@@ -25,7 +25,7 @@
 import { fileURLToPath } from "node:url";
 import {
   alice as aliceKey, bob, cellsOf, cfg, close, creatingTx, demo, launch, network, ops, provider, rgbpp, sale, sealedUtxos,
-  savedTerms, standard, stateFile, submit as send, termsFrom, verify,
+  certificate, platformCertificate, savedTerms, standard, stateFile, submit as send, termsFrom, verify,
 } from "./kit.mjs";
 
 /** Who mines: Alice, or the shared demo wallet. */
@@ -51,11 +51,13 @@ const steps = {
   async launch() {
     const tip = await provider.getTipHeight(network.ACTIVE);
     const meta = { name: "Live QA", symbol: "LIVEQA", description: "The btc.fun live testnet run.", imageHash: "" };
-    const terms = {
+    const unsigned = {
       h0: tip,
       metadataHash: launch.metadataHash(meta),
+      registration: certificate.NO_REGISTRATION,
       promoterScript: launch.promoterScriptFor(bob.address, network.ACTIVE),
     };
+    const terms = { ...unsigned, certificate: platformCertificate(unsigned) };
     state.launch = {
       meta,
       terms: savedTerms(terms),

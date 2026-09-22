@@ -16,7 +16,7 @@ import { close, loadAll } from "../e2e/load.mjs";
 
 const WALLET = fileURLToPath(new URL("../../.e2e-wallet.json", import.meta.url));
 
-export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment] =
+export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment, certificate] =
   await loadAll(
     "lib/bitcoin/network.ts",
     "lib/bitcoin/keys.ts",
@@ -36,6 +36,7 @@ export const [network, keys, provider, standard, config, launch, ops, bitcoin, s
     "lib/activity/verify.ts",
     "lib/launches/image.ts",
     "lib/bitcoin/payment.ts",
+    "lib/launches/certificate.ts",
   );
 export { close };
 
@@ -81,6 +82,8 @@ export function termsFrom(saved) {
     h0: saved.h0,
     metadataHash: Uint8Array.from(Buffer.from(saved.metadataHash, "hex")),
     promoterScript: Uint8Array.from(Buffer.from(saved.promoterScript, "hex")),
+    registration: saved.registration,
+    certificate: Uint8Array.from(Buffer.from(saved.certificate, "hex")),
   };
 }
 
@@ -89,7 +92,34 @@ export function savedTerms(terms) {
     h0: terms.h0,
     metadataHash: Buffer.from(terms.metadataHash).toString("hex"),
     promoterScript: Buffer.from(terms.promoterScript).toString("hex"),
+    registration: terms.registration,
+    certificate: Buffer.from(terms.certificate).toString("hex"),
   };
+}
+
+// ─── the platform's certificate ─────────────────────────────────────────
+
+const CERT_KEY_FILE = fileURLToPath(new URL("../../.platform-cert-key.json", import.meta.url));
+
+/**
+ * btc.fun's certificate over `unsigned`, signed here with the platform's key
+ * (`.platform-cert-key.json`, gitignored, never printed). For the platform's
+ * own launches, which it admits without a registration fee.
+ */
+export function platformCertificate(unsigned) {
+  const { privateKey } = JSON.parse(readFileSync(CERT_KEY_FILE, "utf8"));
+  return certificate.signCertificate(unsigned, Uint8Array.from(Buffer.from(privateKey, "hex")));
+}
+
+/** The platform's own admission of a draft opening at `h0`: no fee, certified here. */
+export function platformAdmission(draft, h0) {
+  const unsigned = create.draftTerms(draft, h0, network.ACTIVE).unsigned(certificate.NO_REGISTRATION);
+  const registration = {
+    txid: certificate.NO_REGISTRATION,
+    h0,
+    commitment: Buffer.from(certificate.registrationCommitment(unsigned)).toString("hex"),
+  };
+  return { registration, certificate: Buffer.from(platformCertificate(unsigned)).toString("hex") };
 }
 
 // ─── reading the chain ───────────────────────────────────────────────────

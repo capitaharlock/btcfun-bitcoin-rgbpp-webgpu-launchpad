@@ -44,8 +44,8 @@ test.describe("bids", () => {
     // The holder's cell is larger than the bid, so the amount is set aside first.
     await page.goto("/#/market");
     const row = bidsTable(page).locator("tbody tr").filter({ hasText: "20,000 sats" });
-    await row.getByRole("button", { name: /^Set aside 100\.00/ }).click({ timeout: 30_000 });
-    await expect(page.getByText(new RegExp(`^Setting aside 100\\.00 ${MINEABLE}`))).toBeVisible();
+    await row.getByRole("button", { name: /^Set aside 100\b/ }).click({ timeout: 30_000 });
+    await expect(page.getByText(new RegExp(`^Setting aside 100 ${MINEABLE}`))).toBeVisible();
     await block(page, sim);
     expect([...rgbpp.jobs.values()].at(-1)!.state).toBe("completed");
     await row.getByRole("button", { name: "Sell to this bid" }).click({ timeout: 30_000 });
@@ -59,7 +59,7 @@ test.describe("bids", () => {
     await bidderPage.reload();
     await expect(bidderPage.getByText(/A seller accepted your bid/)).toBeVisible({ timeout: 30_000 });
     await myBid.getByRole("button", { name: "Complete purchase" }).click();
-    await expect(bidderPage.getByText(new RegExp(`^Bought 100\\.00 ${MINEABLE} for 20,000 sats`))).toBeVisible();
+    await expect(bidderPage.getByText(new RegExp(`^Bought 100 ${MINEABLE} for 20,000 sats`))).toBeVisible();
 
     const sale = sim.broadcasts.at(-1)!;
     expect(sale.outputs[0].address).toBe(holder.address);
@@ -78,7 +78,7 @@ test.describe("bids", () => {
     expect(fee).toBeLessThan(2_000);
 
     await bidderPage.goto("/#/holdings");
-    await expect(bidderPage.getByText("100.00").first()).toBeVisible({ timeout: 30_000 });
+    await expect(bidderPage.getByText("100", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     await bidderPage.goto("/#/market");
     await expect(myBid).toContainText("filled", { timeout: 30_000 });
     await expect(bidderPage.getByRole("table", { name: "Recent trades" })).toContainText("20,000 sats");
@@ -99,7 +99,7 @@ test.describe("bids", () => {
     await browserKeyOn(other);
     await other.goto("/#/market");
     await expect(bidsTable(other)).toContainText("10,000 sats", { timeout: 30_000 });
-    await expect(bidsTable(other)).toContainText("You hold 0.00.");
+    await expect(bidsTable(other)).toContainText("You hold 0.");
 
     await myBid.getByRole("button", { name: "Withdraw bid" }).click();
     await expect(myBid).toContainText("withdrawn", { timeout: 30_000 });

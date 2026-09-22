@@ -27,5 +27,12 @@ binding = "DB"
 database_name = "btcfun-activity"
 database_id = "e8060ef1-9fd4-4145-884f-cdb692a85220"
 
+# The certificate signer (`POST /api/certify`): where it reads the registration
+# payment and which output must receive it. CERT_KEY, the signing secret, is set
+# with `wrangler secret put CERT_KEY` and lives nowhere in the repository.
+[vars]
+MEMPOOL_API = "https://mempool.space/testnet/api"
+PLATFORM_SCRIPT = "0014f5c1e4b7673e5dfaa348f7cfaa7d73ef0a97a3be"
+
 [observability]
 enabled = true

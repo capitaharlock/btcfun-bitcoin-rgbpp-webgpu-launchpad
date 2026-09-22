@@ -204,6 +204,20 @@ several cells owes one share per cell (decision
 no reserve, promises no floor and offers no redemption: a token is worth what
 someone will pay for it. The interface states this wherever a ticket is bought.
 
+### 4.5 Registration and admission
+
+A launch is registered once, for `REGISTRATION_SATS` = 20,000 sats paid on
+Bitcoin to the platform, in a transaction whose `OP_RETURN` carries
+`sha256("btc.fun/launch-registration/v1" ‖ terms args)`. btc.fun's signer checks
+the payment and signs `sha256("btc.fun/launch-certificate/v1" ‖ terms args ‖
+registration txid)` with the platform's certificate key (BIP340,
+deterministic). The announcement carries the registration txid and the
+certificate; the app lists only launches whose certificate verifies. The mint
+script requires the certificate at the arming of a paid cell and refuses to
+create an idle cell, so every mint descends from a certified arming (decision
+`2026-09-25-paid-registration-and-certificate`). The platform admits its own
+launches without a fee: registration txid all zeros.
+
 ## 5. Tokens after minting
 
 A minted balance is an ordinary RGB++ xUDT: transferable by a Bitcoin
@@ -286,15 +300,17 @@ carry the launch terms: format version, `h0`, the promoter's Bitcoin
 `scriptPubKey` and the hash of the launch metadata. It validates, per
 transaction:
 
-- create: one idle or paid miner cell, no xUDT balance change; a paid cell only
-  in a transaction with no RGB++ input;
+- create: one paid miner cell, only in a transaction with no RGB++ input, no
+  xUDT balance change; an idle cell is never created, only left by a mint;
 - re-arm: idle in, armed out, the Bitcoin transaction pays the promoter the
   re-arm share for every miner cell of theirs it arms and the platform its share
   for every miner cell it arms, the armed cell's anchor is valid, no xUDT
   balance change;
 - arm: paid in (sealed to output 1 of its creating ticket), armed out, only
-  paid cells beside it; the creating ticket in the btc.fun witness hashes to the
-  seal's txid and pays the new-cell shares for every cell armed; the anchor is
+  paid cells beside it; the btc.fun witness starts with the launch's admission
+  (registration txid ‖ btc.fun's certificate over the args and that txid),
+  which must verify against the compiled platform key; the creating ticket
+  after it hashes to the seal's txid and pays the new-cell shares for every cell armed; the anchor is
   valid; no xUDT balance change; a paid cell may otherwise only close;
 - mint: armed in, and either idle out carrying the nonce or no miner cell out
   with the nonce in the btc.fun witness; the xUDT balance under this launch

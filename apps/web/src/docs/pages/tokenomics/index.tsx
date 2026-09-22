@@ -1,6 +1,7 @@
 import { Diagram } from "../../../components/diagram/Diagram";
 import type { DiagramSpec } from "../../../components/diagram/model";
 import { atoms, group } from "../../../lib/format";
+import { REGISTRATION_SATS } from "../../../lib/launches/certificate";
 import {
   ANCHOR_GRACE_BLOCKS,
   DECIMALS,
@@ -97,6 +98,17 @@ export default function TokenomicsPage() {
         <p>
           A ticket buys a chance, not a result. It does not guarantee tokens worth its cost; there is no reserve, no floor
           price and no redemption. Ticket income is the promoter's revenue, and a token is worth what someone will pay for it.
+        </p>
+      </section>
+
+      <section>
+        <h2>Registering a launch</h2>
+        <p>
+          Creating a launch costs {group(REGISTRATION_SATS)} sats, once, paid on Bitcoin to the platform. The payment
+          commits to the launch's terms, so it pays for that launch only; btc.fun checks it and signs the terms, and the
+          mint script lets no miner into a launch without that signature. A token of this script can therefore be minted
+          only where btc.fun admitted its launch — and every ticket of it still pays the shares above. The platform
+          admits its own launches without the fee.
         </p>
       </section>
 

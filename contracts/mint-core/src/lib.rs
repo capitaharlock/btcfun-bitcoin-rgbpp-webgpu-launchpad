@@ -157,6 +157,71 @@ impl<'a> LaunchTerms<'a> {
     }
 }
 
+/// btc.fun's certificate key (BIP340 x-only). It signs a launch's terms once
+/// its registration fee is paid; the matching secret never leaves the
+/// platform's signer.
+#[cfg(not(feature = "test-cert-key"))]
+pub const PLATFORM_CERT_KEY: [u8; 32] = [0x9f, 0x21, 0x69, 0x7a, 0xa0, 0xe6, 0x1b, 0xc6, 0x5c, 0x23, 0xeb, 0x84, 0xa5, 0x25, 0xbb, 0x1a, 0x42, 0x82, 0x21, 0x1d, 0x26, 0x5d, 0x3d, 0x08, 0x0e, 0x49, 0x37, 0x1e, 0xf8, 0x09, 0xbd, 0xfa];
+
+/// The contract tests' build trusts a published key instead
+/// (`TEST_CERT_SECRET`): the deployed binary is built without this feature.
+#[cfg(feature = "test-cert-key")]
+pub const PLATFORM_CERT_KEY: [u8; 32] = TEST_CERT_KEY;
+
+/// A key anyone may sign with, for tests and vectors only: `0x42` × 32.
+pub const TEST_CERT_SECRET: [u8; 32] = [0x42; 32];
+pub const TEST_CERT_KEY: [u8; 32] = [0x24, 0x65, 0x3e, 0xac, 0x43, 0x44, 0x88, 0x00, 0x2c, 0xc0, 0x6b, 0xbf, 0xb7, 0xf1, 0x0f, 0xe1, 0x89, 0x91, 0xe3, 0x5f, 0x9f, 0xe4, 0x30, 0x2d, 0xbe, 0xa6, 0xd2, 0x35, 0x3d, 0xc0, 0xab, 0x1c];
+
+/// Domain tag of what a certificate signs, so a platform signature over
+/// anything else can never pass as one.
+pub const CERTIFICATE_DOMAIN: &[u8] = b"btc.fun/launch-certificate/v1";
+
+/// A launch's admission: the registration it paid (txid, internal order) and
+/// btc.fun's certificate over its terms and that registration. It travels in
+/// the arming of a paid cell — every miner's first way into a launch — rather
+/// than in the terms, where 96 more bytes in every miner cell's type script
+/// would outgrow the paymaster's cell.
+pub const ADMISSION_BYTES: usize = 32 + 64;
+
+/// What a certificate signs: `sha256(domain ‖ terms args ‖ registration txid)`.
+pub fn certificate_message(args: &[u8], registration: &[u8; 32]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(CERTIFICATE_DOMAIN);
+    h.update(args);
+    h.update(registration);
+    h.finalize().into()
+}
+
+/// True when `admission` (registration ‖ BIP340 signature) is `key`'s
+/// certificate over `args`.
+pub fn admitted(args: &[u8], admission: &[u8], key: &[u8; 32]) -> bool {
+    use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
+    let Ok(admission) = <&[u8; ADMISSION_BYTES]>::try_from(admission) else {
+        return false;
+    };
+    let registration: &[u8; 32] = admission[..32].try_into().unwrap();
+    let (Ok(key), Ok(sig)) = (VerifyingKey::from_bytes(key), Signature::try_from(&admission[32..])) else {
+        return false;
+    };
+    key.verify_prehash(&certificate_message(args, registration), &sig).is_ok()
+}
+
+/// Sats a launch's registration pays the platform. Checked by the certificate
+/// signer, off chain; here so both languages share it.
+pub const REGISTRATION_SATS: u64 = 20_000;
+
+/// Domain tag of the commitment a registration's `OP_RETURN` carries.
+pub const REGISTRATION_DOMAIN: &[u8] = b"btc.fun/launch-registration/v1";
+
+/// The 32 bytes a registration commits to: `sha256(domain ‖ terms args)`. It
+/// ties one payment to one launch; the signer checks it before signing.
+pub fn registration_commitment(args: &[u8]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(REGISTRATION_DOMAIN);
+    h.update(args);
+    h.finalize().into()
+}
+
 /// A miner cell's state.
 ///
 /// `Paid` is a cell created by a ticket payment and not armed yet. Creating a

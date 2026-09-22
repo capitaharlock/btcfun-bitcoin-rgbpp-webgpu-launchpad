@@ -1,7 +1,7 @@
 /* Block height is the clock: halvings, the rate a ticket locks in, and the end. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, bar, block, buyTicket, MINEABLE, mineUntilMintable, mintedShown, platformWallet } from "../support/flows";
+import { announce, bar, block, buyTicket, MINEABLE, mineUntilMintable, mintedShown, platformWallet, activate } from "../support/flows";
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -42,13 +42,14 @@ test.describe("time", () => {
     await block(page, sim, WEEK - 5); // five blocks before the first halving
     await buyTicket(page, sim); // armed at the current tip, before the halving
     await block(page, sim, 10); // now past the halving
+    await activate(page, sim); // the activation keeps the ticket's anchor
     // Once the wizard runs the header is a strip; the schedule lives in "About".
     await expect(page.getByRole("list", { name: "Halving 1" })).toBeAttached();
     const accept = await mineUntilMintable(page);
     await accept.click();
     const label = await mintedShown(page);
-    await bar(page).getByRole("button", { name: "Sign mint", exact: true }).click();
-    await expect(page.getByText(/ minted — landing\.$/)).toBeVisible({ timeout: 30_000 });
+    await bar(page).getByRole("button", { name: /^Mint .+ fee$/ }).click();
+    await expect(page.getByText(/^Mint sent: /)).toBeVisible({ timeout: 30_000 });
     await block(page, sim);
     const job = [...rgbpp.jobs.values()].at(-1)!;
     expect(job.state, job.failure ?? "").toBe("completed");

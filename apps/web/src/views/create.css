@@ -1,0 +1,103 @@
+/* Create: the project form in sections, the registration's three stages, and
+   what a launch earns, in view under every step. */
+
+.cr-sections { display: grid; gap: var(--space-6); }
+.cr-section { display: grid; gap: var(--space-3); }
+.cr-section + .cr-section { padding-top: var(--space-5); border-top: var(--border-w) solid var(--line); }
+.cr-section h3 { font-size: var(--text-lg); color: var(--ink); }
+
+.cr-picture { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-5); align-items: center; }
+
+.cr-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-5); }
+.cr-link {
+  display: grid;
+  grid-template-columns: 32px 88px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.cr-link-icon { display: grid; place-items: center; width: 32px; height: 32px; color: var(--ink-dim); }
+.cr-link-name { font-size: var(--text-sm); color: var(--ink-dim); }
+/* The fault is part of the label's text (so the field's name says it), shown
+   under the input. */
+.cr-link { position: relative; }
+.cr-link.bad { padding-bottom: calc(var(--text-sm) * 1.6); }
+.cr-link-fault { position: absolute; left: calc(32px + 88px + 2 * var(--space-3)); bottom: 0; font-size: var(--text-sm); color: var(--warn); }
+.cr-link.bad .input { border-color: var(--warn); }
+
+.cr-register { display: grid; gap: var(--space-4); align-content: start; }
+.cr-stages { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.cr-stages li {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-faint);
+}
+.cr-stages li b { color: var(--ink-dim); font-weight: 600; }
+.cr-stages li span { font-size: var(--text-sm); }
+.cr-stages li.on { border-color: var(--accent); color: var(--ink-dim); }
+.cr-stages li.on b { color: var(--ink); }
+.cr-stages li.done { border-color: color-mix(in oklab, var(--positive) 50%, var(--line)); }
+.cr-stages li.done b { color: var(--positive); }
+.cr-stages li.done b::before { content: "✓ "; }
+
+.cr-earn {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.cr-earn-head { display: grid; gap: var(--space-2); max-width: 72ch; }
+.cr-earn-head h2 { font-size: var(--text-xl); }
+.cr-earn-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.cr-card {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.cr-card .k { font-size: var(--text-sm); color: var(--ink-dim); }
+.cr-card .v { font-family: var(--font-numeric); font-size: var(--text-xl); color: var(--ink); line-height: 1.3; }
+.cr-card.big .v { font-size: 28px; }
+.cr-card .v.amber { color: var(--amber); }
+.cr-card .v .u { font-family: var(--font-ui); font-size: var(--text-sm); color: var(--ink-dim); }
+.cr-paces { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.cr-paces button {
+  appearance: none;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.cr-paces button.on { border-color: var(--accent); color: var(--ink); }
+
+.cr-rules {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-w) solid var(--line);
+}
+.cr-rules dt { font-size: var(--text-sm); color: var(--ink-faint); }
+.cr-rules dd { margin: var(--space-1) 0 0; color: var(--ink); }
+
+@media (max-width: 900px) {
+  .cr-earn-grid, .cr-links { grid-template-columns: minmax(0, 1fr); }
+  .cr-rules { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cr-picture { grid-template-columns: minmax(0, 1fr); }
+  .cr-link { grid-template-columns: 32px minmax(0, 1fr); }
+  .cr-link .input { grid-column: 1 / -1; }
+  .cr-link-fault { left: 0; }
+  .cr-earn { padding: var(--space-4); }
+}

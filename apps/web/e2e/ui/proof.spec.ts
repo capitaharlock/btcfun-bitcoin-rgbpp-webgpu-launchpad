@@ -20,7 +20,7 @@ test.describe("proof", () => {
     for (const check of ["commitment", "armed ticket", "disarmed", "proof of work", "amount"]) {
       await expect(page.getByText(`✓ ${check}`)).toBeVisible();
     }
-    await expect(page.getByText(`Minted ${minted.split(" ")[0]}`)).toBeVisible();
+    await expect(page.getByText(`Minted ${minted.split(" ")[0]}`).first()).toBeVisible();
     ux.note("The proof page recomputes commitment, ticket, work and amount; every line says what it checked.");
   });
 
@@ -29,8 +29,8 @@ test.describe("proof", () => {
     await announce(page, { symbol: MINEABLE });
     await block(page, sim);
     await pressMine(page);
-    await bar(page).getByRole("button", { name: "Sign ticket" }).click();
-    await expect(bar(page).getByRole("button", { name: "Waiting for a block" })).toBeVisible({ timeout: 30_000 });
+    await bar(page).getByRole("button", { name: /^Pay ticket/ }).click();
+    await expect(bar(page).getByRole("button", { name: "Go mine →" })).toBeVisible({ timeout: 30_000 });
     const ticketTx = sim.broadcasts.at(-1)!.txid;
     await block(page, sim);
     await app.goto(`/proof/${ticketTx}`);

@@ -116,7 +116,7 @@ function commitmentIn(entry: ActivityEntry): Heard[] {
     return [];
   }
   const commitment = parsed as LaunchCommitment;
-  if (commitment?.v !== "btcfun/launch/2") return [];
+  if (commitment?.v !== "btcfun/launch/3") return [];
   // The event's own fields must agree with the payload they carry, or the
   // signature covers one launch while the feed indexes another.
   if (commitment.id !== body.launch || commitment.creator !== body.actor) return [];

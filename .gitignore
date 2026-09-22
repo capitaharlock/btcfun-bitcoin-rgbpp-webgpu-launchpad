@@ -28,6 +28,7 @@ tmp/
 
 # End-to-end runner: the test wallet's key and the chains/reports a run writes.
 apps/web/.e2e-wallet.json
+apps/web/.platform-cert-key.json
 apps/web/.e2e-runs/
 
 # Browser suite output: traces, screenshots, reports.

@@ -55,6 +55,13 @@ same `faultIn` the browser runs, stores them, and hands them back for the client
 to check again. It cannot forge an event, alter one, or make an invalid claim
 look valid.
 
+One exception, by decision `2026-09-25-paid-registration-and-certificate`:
+`POST /api/certify` checks a launch's registration payment on Bitcoin and signs
+its terms with the platform's certificate key (the `CERT_KEY` Worker secret).
+That decides which launches may exist — the mint script admits only certified
+ones — and nothing else: not ownership, balances or mints. A certificate and
+the payment it names can be re-checked by anyone from the two chains.
+
 This is load-bearing for the cost model as much as for the trust model: because
 the server decides nothing, it needs no auth, no sessions, no rate-limit
 infrastructure beyond what the platform gives, and no recovery story. Losing the

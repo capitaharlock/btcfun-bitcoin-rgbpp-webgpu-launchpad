@@ -759,5 +759,15 @@
    "platform": 1648,
    "promoter": 13335
   }
- }
+ },
+  "admission": {
+    "about": "A launch admission by the published test key (secret 0x42 x 32, BIP340, aux rand zero). message = sha256(\"btc.fun/launch-certificate/v1\" || terms args || registration txid, internal order); commitment = sha256(\"btc.fun/launch-registration/v1\" || terms args), the registration OP_RETURN.",
+    "args": "01f049020007070707070707070707070707070707070707070707070707070707070707071600140102030405060708090a0b0c0d0e0f1011121314",
+    "registration": "7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e",
+    "message": "8a3158c651a40050e20c553834bccf89c5a732327eb23e1fe02c22a119f0c39f",
+    "signature": "5e66cb9616c25df9011178abefd2653c54c2122fec13c6e60e0d0049aaa0c5df3caccb616749f9355916903f99922300d3afc8c8066d73ed42cf8e930ac81592",
+    "key": "24653eac434488002cc06bbfb7f10fe18991e35f9fe4302dbea6d2353dc0ab1c",
+    "commitment": "ddcd0f95531a8e59696e3302f4b296d8dd3e18df623fba16dfa3f01963f581c7",
+    "registration_sats": 20000
+  }
 }

@@ -20,6 +20,14 @@
  * be totalled into a supply or a volume. `src/lib/activity/types.ts` states the
  * same boundary for the client.
  *
+ * ONE EXCEPTION: THE CERTIFICATE. `POST /api/certify` is the one place btc.fun
+ * decides something (decision `2026-09-25-paid-registration-and-certificate`).
+ * It checks that a Bitcoin transaction paid the launch registration and
+ * committed to the launch's terms, then signs those terms; the mint script
+ * takes tickets only for signed terms. It decides only whether a launch may
+ * exist — never who owns what — and anyone can re-check a certificate and the
+ * payment it names from the two chains.
+ *
  * WHY THIS SHAPE COSTS NOTHING. One Worker serves both the SPA assets and the
  * API, so there is no second origin and no CORS. D1 is SQLite that scales to
  * zero: no idle cost, no machine to keep warm. Cloudflare's free tier covers
@@ -31,11 +39,18 @@
 import { faultIn } from "../src/lib/activity/verify";
 import { activityId } from "../src/lib/activity/verify";
 import type { SignedActivity } from "../src/lib/activity/types";
+import { registrationFault, signCertificate } from "../src/lib/launches/certificate";
 
 export interface Env {
   DB: D1Database;
   /** Static assets binding — the built SPA. */
   ASSETS: Fetcher;
+  /** The certificate signer's secret, hex (a Worker secret). */
+  CERT_KEY?: string;
+  /** mempool.space REST base of the network registrations are paid on. */
+  MEMPOOL_API: string;
+  /** The platform's scriptPubKey, hex: where a registration pays. */
+  PLATFORM_SCRIPT: string;
 }
 
 /** Events returned by one feed request. Bounded so a bad client cannot ask
@@ -75,6 +90,8 @@ export default {
           return await writeEvent(request, env);
         case "GET /api/stats":
           return await readStats(env);
+        case "POST /api/certify":
+          return await certify(request, env);
         default:
           return error("No such endpoint.", 404);
       }
@@ -204,4 +221,46 @@ async function writeEvent(request: Request, env: Env): Promise<Response> {
     .run();
 
   return json({ id }, 201);
+}
+
+// ── the certificate ──────────────────────────────────────────────────────────
+
+const HEX = (bytes: number) => new RegExp(`^[0-9a-f]{${bytes * 2}}$`);
+const fromHex = (hex: string) => Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16));
+const toHex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+/**
+ * Certify a launch whose registration is paid: the named transaction must pay
+ * the platform `REGISTRATION_SATS` and commit to exactly these terms (the mint
+ * script's args). It is read from mempool.space — accepted once broadcast, not
+ * waiting for a block — so a creator is not held for ten minutes; a
+ * registration later double-spent costs the platform one fee, never a miner
+ * anything. The signature is deterministic, so asking twice changes nothing.
+ */
+async function certify(request: Request, env: Env): Promise<Response> {
+  if (!env.CERT_KEY) return error("The certificate signer is not configured.", 503);
+  const text = await request.text();
+  if (text.length > MAX_BODY_BYTES) return error("Too large.", 413);
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return error("Not JSON.", 400);
+  }
+  const { args, registration } = body;
+  // Terms version 1: version, h0, metadata hash, script length, script (`contracts/mint-core` `LaunchTerms`).
+  if (typeof args !== "string" || !/^01([0-9a-f]{2}){37,71}$/.test(args)) return error("Bad terms.", 400);
+  const bytes = fromHex(args);
+  if (bytes[37] === 0 || bytes[37] > 34 || bytes.length !== 38 + bytes[37]) return error("Bad terms.", 400);
+  if (typeof registration !== "string" || !HEX(32).test(registration) || /^0+$/.test(registration)) return error("Bad registration txid.", 400);
+
+  const res = await fetch(`${env.MEMPOOL_API}/tx/${registration}`);
+  if (res.status === 404 || res.status === 400) return error("That registration transaction is not known to Bitcoin yet.", 404);
+  if (!res.ok) return error("Could not read the registration transaction.", 502);
+  const tx = (await res.json()) as { vout?: Array<{ scriptpubkey?: string; value?: number }> };
+  const outputs = (tx.vout ?? []).map((o) => ({ scriptHex: o.scriptpubkey ?? "", value: o.value ?? 0 }));
+  const fault = registrationFault(outputs, bytes, env.PLATFORM_SCRIPT);
+  if (fault) return error(`That transaction does not register this launch: ${fault}.`, 422);
+
+  return json({ certificate: toHex(signCertificate(bytes, registration, fromHex(env.CERT_KEY))) });
 }

@@ -42,7 +42,7 @@ use ckb_std::{
     },
 };
 use mint_core::{
-    anchor_valid, pays_tickets, reward, ticket_challenge, txid, udt_amount, work_clz, LaunchTerms, MinerCell,
+    admitted, ADMISSION_BYTES, PLATFORM_CERT_KEY, anchor_valid, pays_tickets, reward, ticket_challenge, txid, udt_amount, work_clz, LaunchTerms, MinerCell,
     MinerState, Split, NEW_CELL, PAID_SEAL_VOUT, PLATFORM_SCRIPT, REUSE,
 };
 use rgbpp_core::{
@@ -90,6 +90,12 @@ enum Error {
     /// An armed cell names a ticket other than the paid cell's seal, or an
     /// idle cell's arming names one at all.
     BadTicketName,
+    /// The arming of a paid cell carries no valid btc.fun certificate for
+    /// these terms: the launch was never registered.
+    NotCertified,
+    /// A miner cell created idle. An idle cell exists only as a mint leaves
+    /// it, so every way into a mint passes through a certified arming.
+    OpenedIdle,
 }
 
 impl From<SysError> for Error {
@@ -123,9 +129,9 @@ fn main() -> Result<(), Error> {
     let minted = udt_delta(&load_script_hash()?)?;
 
     match (before, after) {
-        // Open idle. Owner mode is not active without a miner cell input, so
-        // the xUDT itself already forbids a mint here.
-        (None, Some(MinerState::Idle)) => Ok(()),
+        // Nobody opens an idle cell: an idle cell is what a mint leaves, and
+        // the only other way to one would skip the certified arming.
+        (None, Some(MinerState::Idle)) => Err(Error::OpenedIdle),
         // Open paid: the ticket transaction creates the cell. Its payment is
         // checked when the cell is armed. An RGB++ input here would mean the
         // same Bitcoin transaction also moves other cells — perhaps arming one,
@@ -152,6 +158,11 @@ fn main() -> Result<(), Error> {
         }
         // Ticket on a paid cell: the creating transaction paid it.
         (Some(MinerState::Paid), Some(MinerState::Armed)) => {
+            // Only a launch btc.fun registered takes its first ticket from a
+            // miner; every later one re-arms a cell this arming made possible.
+            if !admitted(&args, &admission()?, &PLATFORM_CERT_KEY) {
+                return Err(Error::NotCertified);
+            }
             let btc = verified_bitcoin_tx()?;
             let armed = after_cell.unwrap();
             // The ticket's output is the challenge from here on: mining began
@@ -220,6 +231,16 @@ fn btcfun_witness() -> Result<Bytes, Error> {
     load_witness(inputs, Source::Input).map(Bytes::from).map_err(|_| Error::BadBtcfunWitness)
 }
 
+/// The admission a paid cell's arming carries: the first `ADMISSION_BYTES`
+/// of the btc.fun witness, before the creating transaction.
+fn admission() -> Result<Bytes, Error> {
+    let witness = btcfun_witness()?;
+    if witness.len() < ADMISSION_BYTES {
+        return Err(Error::BadBtcfunWitness);
+    }
+    Ok(witness.slice(..ADMISSION_BYTES))
+}
+
 /// The nonce a dissolving mint claims: eight bytes, little-endian.
 fn witness_nonce() -> Result<u64, Error> {
     let witness = btcfun_witness()?;
@@ -236,7 +257,11 @@ fn creating_tx() -> Result<BTCTx, Error> {
     if vout != PAID_SEAL_VOUT {
         return Err(Error::BadPaidSeal);
     }
-    let raw = btcfun_witness()?;
+    let witness = btcfun_witness()?;
+    if witness.len() < ADMISSION_BYTES {
+        return Err(Error::BadBtcfunWitness);
+    }
+    let raw = witness.slice(ADMISSION_BYTES..);
     if txid(&raw) != seal_txid {
         return Err(Error::BadPaidSeal);
     }

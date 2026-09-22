@@ -28,6 +28,8 @@ const BAD_BTCFUN_WITNESS: i8 = 20;
 const BAD_PAID_SEAL: i8 = 21;
 const PAID_ARMED_BESIDE_OTHERS: i8 = 22;
 const BAD_TICKET_NAME: i8 = 23;
+const NOT_CERTIFIED: i8 = 24;
+const OPENED_IDLE: i8 = 25;
 
 const IDLE: MinerState = MinerState::Idle;
 const ARMED: MinerState = MinerState::Armed;
@@ -132,7 +134,7 @@ fn expect_code(result: Result<u64, String>, code: i8) {
 // ─── Open ────────────────────────────────────────────────────────────────
 
 #[test]
-fn anyone_can_open_an_idle_miner_cell() {
+fn nobody_opens_an_idle_miner_cell() {
     let mut l = Launch::new();
     let funding = l.env.live(l.env.always_lock.clone(), None, vec![]);
     let mut op = Op::new();
@@ -144,8 +146,7 @@ fn anyone_can_open_an_idle_miner_cell() {
         data: cell(IDLE, 0),
     });
     let (tx, _) = op.build(&l.env);
-    let cycles = l.env.verify(&tx).unwrap();
-    println!("open: {cycles} cycles");
+    expect_code(l.env.verify(&tx), OPENED_IDLE);
 }
 
 #[test]
@@ -588,7 +589,8 @@ impl Launch {
         op.inputs.push(self.paid_input(id, 1));
         op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(self.mint.clone()), data: naming(H0, id) });
         op.btc_outputs.push((546, p2wpkh(0x01)));
-        op.btcfun_witness = witness(raw);
+        let admission = admission(&self.mint, &mint_core::TEST_CERT_SECRET);
+        op.btcfun_witness = witness(raw).map(|raw| Bytes::from([admission, raw.to_vec()].concat()));
         op
     }
 }
@@ -665,7 +667,7 @@ fn the_creating_transaction_must_be_the_one_the_seal_names() {
     op.inputs.push(l.paid_input(id, 2));
     op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(l.mint.clone()), data: naming(H0, id) });
     op.btc_outputs.push((546, p2wpkh(0x01)));
-    op.btcfun_witness = Some(raw);
+    op.btcfun_witness = Some(Bytes::from([admission(&l.mint, &mint_core::TEST_CERT_SECRET), raw.to_vec()].concat()));
     let (tx, _) = op.build(&l.env);
     expect_code(l.env.verify(&tx), BAD_PAID_SEAL);
 }
@@ -715,7 +717,9 @@ fn a_paid_cell_is_armed_alone() {
     // Sealed to the same output as the paid cell: the case where it would pay.
     let seal = op.inputs[0].1.unwrap();
     let lock = l.env.rgbpp_lock(seal.0, seal.1);
-    op.inputs.push((l.env.live(lock, Some(other_mint.clone()), cell(ARMED, 0)), Some(seal)));
+    // An idle cell moved alongside: valid on its own, so only the paid cell's
+    // rule can refuse the transaction.
+    op.inputs.push((l.env.live(lock, Some(other_mint.clone()), cell(IDLE, 0)), Some(seal)));
     op.outputs.push(Out { seal: Some(2), lock: None, type_: Some(other_mint), data: cell(IDLE, 0) });
     op.btc_outputs.push((546, p2wpkh(0x01)));
     let (tx, _) = op.build(&l.env);
@@ -821,4 +825,36 @@ fn a_cell_armed_from_paid_mints_on_its_tickets_output() {
     if seal_clz < MIN_CLZ {
         expect_code(run(arming), WORK_TOO_WEAK);
     }
+}
+
+// ─── Only a launch btc.fun certified takes a miner in ────────────────────
+
+#[test]
+fn a_paid_cell_of_an_uncertified_launch_is_never_armed() {
+    for (label, secret, cut) in [("another key", [0x11; 32], false), ("no admission", mint_core::TEST_CERT_SECRET, true)] {
+        let mut l = Launch::new();
+        let payments = new_cell_ticket(&l);
+        let (raw, id) = creating_tx(payments);
+        let mut op = Op::new();
+        op.inputs.push(l.paid_input(id, 1));
+        op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(l.mint.clone()), data: naming(H0, id) });
+        op.btc_outputs.push((546, p2wpkh(0x01)));
+        let admission = if cut { vec![] } else { admission(&l.mint, &secret) };
+        op.btcfun_witness = Some(Bytes::from([admission, raw.to_vec()].concat()));
+        let (tx, _) = op.build(&l.env);
+        expect_code(l.env.verify(&tx), NOT_CERTIFIED);
+        let _ = label;
+    }
+    // A certificate for another launch's terms does not carry over.
+    let mut l = Launch::new();
+    let other = l.env.mint_type(H0 + 1, &l.env.promoter.clone());
+    let payments = new_cell_ticket(&l);
+    let (raw, id) = creating_tx(payments);
+    let mut op = Op::new();
+    op.inputs.push(l.paid_input(id, 1));
+    op.outputs.push(Out { seal: Some(1), lock: None, type_: Some(l.mint.clone()), data: naming(H0, id) });
+    op.btc_outputs.push((546, p2wpkh(0x01)));
+    op.btcfun_witness = Some(Bytes::from([admission(&other, &mint_core::TEST_CERT_SECRET), raw.to_vec()].concat()));
+    let (tx, _) = op.build(&l.env);
+    expect_code(l.env.verify(&tx), NOT_CERTIFIED);
 }

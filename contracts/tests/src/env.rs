@@ -122,9 +122,12 @@ impl Env {
         let mint_out_point = ctx.deploy_cell(
             std::fs::read(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../target/riscv64imac-unknown-none-elf/release/btcfun-mint"
+                "/../target/test-cert/riscv64imac-unknown-none-elf/release/btcfun-mint"
             ))
-            .expect("build the script first: cargo build -p btcfun-mint --release --target riscv64imac-unknown-none-elf")
+            .expect(
+                "build the test script first: cargo build -p btcfun-mint --release --target riscv64imac-unknown-none-elf \
+                 --features test-cert-key --target-dir target/test-cert",
+            )
             .into(),
         );
         let always_op = ctx.deploy_cell(ALWAYS_SUCCESS.clone());
@@ -437,4 +440,16 @@ fn commitment(env: &Env, tx: &TransactionView, extra: &ExtraCommitmentData) -> [
 pub fn error_code(err: &str) -> Option<i8> {
     let at = err.find("error code ")? + "error code ".len();
     err[at..].split(|c: char| !(c == '-' || c.is_ascii_digit())).next()?.parse().ok()
+}
+
+/// A launch's admission — registration txid and certificate — signed by
+/// `secret` over the mint script's args. The test build trusts only
+/// `TEST_CERT_SECRET`'s key.
+pub fn admission(mint: &Script, secret: &[u8; 32]) -> Vec<u8> {
+    let args: Bytes = mint.args().unpack();
+    let registration = [0x7e; 32];
+    let key = k256::schnorr::SigningKey::from_bytes(secret).unwrap();
+    let message = mint_core::certificate_message(&args, &registration);
+    let signature = key.sign_raw(&message, &[0u8; 32]).unwrap().to_bytes();
+    [registration.as_slice(), signature.as_slice()].concat()
 }

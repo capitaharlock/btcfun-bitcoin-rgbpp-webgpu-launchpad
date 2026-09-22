@@ -9,3 +9,7 @@ ckb-std = { workspace = true }
 rgbpp-core = { workspace = true }
 ckb-bitcoin-spv-verifier = { git = "https://github.com/ckb-cell/ckb-bitcoin-spv.git", rev = "a3c43fd5fb70044ad438f703212b255af5024476", default-features = false, features = ["no-std"] }
 mint-core = { path = "../mint-core" }
+
+[features]
+# Trust the published test key instead of btc.fun's: for contracts/tests only.
+test-cert-key = ["mint-core/test-cert-key"]

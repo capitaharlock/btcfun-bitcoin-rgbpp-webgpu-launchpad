@@ -24,6 +24,8 @@
         "PROTOCOL.md",
         ".meshkore/context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md",
         ".meshkore/context/decisions/2026-09-24-platform-fee-per-ticket.md",
+        ".meshkore/context/decisions/2026-09-25-paid-registration-and-certificate.md",
+        "apps/web/src/lib/launches/certificate.ts",
         "apps/web/src/lib/standard.ts",
         "contracts/mint-core/src/lib.rs"
       ]
