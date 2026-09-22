@@ -25,7 +25,7 @@
 
 import { fileURLToPath } from "node:url";
 import {
-  activity, alice, bid, bob, creatingTx, demo, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
+  activity, alice, bid, bob, certificate, creatingTx, demo, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
   platformAdmission, sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
 } from "./kit.mjs";
 
@@ -200,7 +200,7 @@ const steps = {
           const plan = ops.planTicket(cfg, terms, { idle: null, paymaster: await rgbpp.paymaster(), tip });
           state.pending[id] = await submit(`${id} ticket`, plan, alice, await funding());
         } else if (miner.data?.state === "paid") {
-          const plan = ops.planArm(cfg, terms, miner, await creatingTx(miner.seal.txid), tip);
+          const plan = ops.planArm(cfg, terms, miner, await creatingTx(miner.seal.txid), tip, certificate.admissionBytes(commitment.registration, commitment.certificate));
           state.pending[id] = await submit(`${id} arm`, plan, alice, await funding());
         } else if (miner.data?.state === "idle") {
           const plan = ops.planTicket(cfg, terms, { idle: miner, paymaster: null, tip });

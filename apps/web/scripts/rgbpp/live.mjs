@@ -51,16 +51,16 @@ const steps = {
   async launch() {
     const tip = await provider.getTipHeight(network.ACTIVE);
     const meta = { name: "Live QA", symbol: "LIVEQA", description: "The btc.fun live testnet run.", imageHash: "" };
-    const unsigned = {
+    const terms = {
       h0: tip,
       metadataHash: launch.metadataHash(meta),
-      registration: certificate.NO_REGISTRATION,
       promoterScript: launch.promoterScriptFor(bob.address, network.ACTIVE),
     };
-    const terms = { ...unsigned, certificate: platformCertificate(unsigned) };
     state.launch = {
       meta,
       terms: savedTerms(terms),
+      // The platform admits its own QA launch: no fee, certified here.
+      certificate: platformCertificate(launch.encodeTerms(terms)),
       tokenId: launch.tokenId(cfg, terms),
       mintScript: launch.mintScript(cfg, terms).hash(),
       alice: alice.address,
@@ -86,7 +86,7 @@ const steps = {
     const paid = miners.find((m) => m.data?.state === "paid");
     if (!paid) throw new Error("no paid miner cell yet: run `ticket` and wait for the queue");
     const tip = await provider.getTipHeight(network.ACTIVE);
-    await submit("arm", ops.planArm(cfg, terms, paid, await creatingTx(paid.seal.txid), tip), alice);
+    await submit("arm", ops.planArm(cfg, terms, paid, await creatingTx(paid.seal.txid), tip, certificate.admissionBytes(certificate.NO_REGISTRATION, state.launch.certificate)), alice);
   },
 
   async mine() {
