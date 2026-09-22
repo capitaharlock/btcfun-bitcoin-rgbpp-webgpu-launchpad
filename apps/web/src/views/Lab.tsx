@@ -13,7 +13,7 @@
 
 import { useMemo, useState } from "react";
 
-import { atoms, group } from "../lib/format";
+import { atoms, group, fixed } from "../lib/format";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, NEW_CELL, REUSE, reward, terminalHalving, TICKET_SATS } from "../lib/standard";
 import { RewardChart } from "../ui/RewardChart";
 import { Field, KV, More, PageHead, Panel, Stat } from "../ui/primitives";
@@ -153,7 +153,7 @@ export function Lab() {
                       <td className="mono">{atoms(w.perTicket, DECIMALS, 0)}</td>
                       <td className="mono">{atoms(w.minted, DECIMALS, 0)}</td>
                       <td className="mono">
-                        {w.perTicket > 0n ? (TICKET_SATS / (Number(w.perTicket) / 10 ** DECIMALS)).toFixed(2) : "—"}
+                        {w.perTicket > 0n ? fixed(TICKET_SATS / (Number(w.perTicket) / 10 ** DECIMALS), 2) : "—"}
                       </td>
                     </tr>
                   ))}

@@ -13,6 +13,7 @@
  * source passed in; what a frame should sound like comes back as `events`.
  */
 
+import { group } from "../../lib/format";
 import {
   alive,
   burst,
@@ -445,7 +446,7 @@ function moveShots(game: Game, dt: number, rand: Rand): void {
       if (ufo && inside(ufoRect(ufo), x, y)) {
         const rect = ufoRect(ufo);
         burst(scene, rect, "bitcoin", rand, 24);
-        scene.popups.push({ x: rect.x + UFO_W / 2, y: UFO_Y + UFO_H + 8, text: `+${ufo.bonus.toLocaleString("en-US")} BLOCK`, tint: "bitcoin", born: scene.time });
+        scene.popups.push({ x: rect.x + UFO_W / 2, y: UFO_Y + UFO_H + 8, text: `+${group(ufo.bonus)} BLOCK`, tint: "bitcoin", born: scene.time });
         score(game, ufo.bonus);
         game.ufo = null;
         game.nextUfo = scene.time + ufoGap(rand);

@@ -194,7 +194,7 @@ function Row({
       <span className="figures">
         {amount > 0n && (
           <span className="amount">
-            {atoms(amount, decimals, 4)} <span className="unit">{symbol}</span>
+            {atoms(amount, decimals)} <span className="unit">{symbol}</span>
           </span>
         )}
         {body.sats > 0 && <span className="amount">{group(body.sats)} sats</span>}

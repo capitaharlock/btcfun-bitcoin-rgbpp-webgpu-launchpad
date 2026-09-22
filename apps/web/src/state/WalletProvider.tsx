@@ -37,6 +37,7 @@ import {
   type AddressBalance,
   type Vault,
 } from "../lib/bitcoin";
+import { btc } from "../lib/format";
 
 /** How often to refetch the balance and tip while a wallet is connected. */
 const POLL_MS = 15_000;
@@ -226,5 +227,5 @@ export function shortAddress(address: string): string {
 
 /** Satoshis as BTC, trimmed but never in scientific notation. */
 export function formatBtc(sats: number): string {
-  return (sats / 1e8).toFixed(8).replace(/0+$/, "0");
+  return btc(sats);
 }
