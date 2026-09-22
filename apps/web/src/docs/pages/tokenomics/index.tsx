@@ -107,8 +107,10 @@ export default function TokenomicsPage() {
           Creating a launch costs {group(REGISTRATION_SATS)} sats, once, paid on Bitcoin to the platform. The payment
           commits to the launch's terms, so it pays for that launch only; btc.fun checks it and signs the terms, and the
           mint script lets no miner into a launch without that signature. A token of this script can therefore be minted
-          only where btc.fun admitted its launch — and every ticket of it still pays the shares above. The platform
-          admits its own launches without the fee.
+          only where btc.fun admitted its launch — and every ticket of it still pays the shares above. There is no
+          exception: the platform's own launches, DEMO included, pay the same registration, and the mint script refuses a
+          certificate that names no payment. The payment only has to be seen by Bitcoin, not confirmed, so creating a
+          launch is one click that pays, gets the certificate and signs the announcement.
         </p>
       </section>
 

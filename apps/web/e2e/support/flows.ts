@@ -71,18 +71,18 @@ export async function announce(page: Page, draft: Draft): Promise<string> {
   if (draft.why) await field(page, "Why").fill(draft.why);
   if (draft.plan) await field(page, "The plan").fill(draft.plan);
   await page.getByRole("button", { name: "Continue →" }).click();
-  // Register: one payment to the platform, certified, then a free signature.
-  // The registration is funded here, to the sat, so a test's own balances are
-  // exactly what it set up.
-  const pay = page.getByRole("button", { name: /^Pay registration · [\d,]+ sats$/ });
+  // Register: one button pays the platform, gets the certificate and signs the
+  // announcement. The registration is funded here, to the sat, so a test's own
+  // balances are exactly what it set up.
+  const pay = page.getByRole("button", { name: new RegExp(`^Pay [\\d,]+ sats & launch ${draft.symbol}$`) });
   await expect(pay).toBeVisible();
   const total = Number((await pay.textContent())!.replace(/\D/g, ""));
   const from = await page.locator("[data-paying-from]").getAttribute("data-paying-from");
   ChainSim.of(page).fund(from!, total);
   await page.reload();
   await pay.click();
-  await page.getByRole("button", { name: `Announce ${draft.symbol} · free` }).click();
-  await page.getByRole("button", { name: `Open ${draft.symbol}` }).click();
+  await expect(page.getByRole("heading", { name: `${draft.symbol} is launched` })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "See the launch" }).click();
   await expect(page).toHaveURL(/#\/launch\/[a-z0-9]+-[0-9a-f]{16}$/);
   return decodeURIComponent(page.url().split("#/launch/")[1]);
 }

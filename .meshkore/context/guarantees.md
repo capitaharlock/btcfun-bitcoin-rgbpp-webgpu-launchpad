@@ -57,7 +57,10 @@ row names today's mechanism so a port knows what it replaces.
 
 ## Criteria for admitting a launch
 
-Today: a paid registration committed to the exact terms. The certificate is the
+Today: a paid registration committed to the exact terms, known to Bitcoin (in
+the mempool or a block). No launch is admitted without one — the platform's own
+included: the mint script refuses a certificate over no registration. The
+certificate is the
 place where further checks go — identity review, name collisions, prohibited
 content — because it is signed before a launch can take its first ticket. Each
 new criterion is a decision record and a line here.

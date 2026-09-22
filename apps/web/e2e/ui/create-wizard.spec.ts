@@ -1,7 +1,8 @@
 /* Announcing a launch: identity, income and opening — and nothing economic. */
 
 import { test, expect } from "../support/fixtures";
-import { announce, block, field } from "../support/flows";
+import { announce, bar, block, field } from "../support/flows";
+import { ChainSim } from "../support/chain";
 
 test.describe("create wizard", () => {
   test("announces a launch whose id is its token's, and lists it as opening soon", async ({ page, app, sim, ux }) => {
@@ -34,7 +35,7 @@ test.describe("create wizard", () => {
     await page.getByLabel("Name").fill("Meshwork");
     await page.getByLabel("One sentence").fill("A community token for mesh relay operators.");
     await page.getByRole("button", { name: "Continue →" }).click();
-    // What a launch earns is in view on every step: the share, the fee and the fixed rules.
+    // What a launch earns sits beside the income address: the share, the fee and the fixed rules.
     const earn = page.getByRole("region", { name: "What your launch earns" });
     await expect(earn).toContainText("13,335 sats");
     await expect(earn).toContainText("7,105 sats on a miner's first two tickets");
@@ -118,6 +119,46 @@ test.describe("create wizard", () => {
     });
   });
 
+  test("one button pays, certifies and announces — even before Bitcoin has seen the payment — and the summary leads to a mint page that waits for the opening block", async ({ page, app, sim, rgbpp, ux }) => {
+    await app.createBrowserKey();
+    await app.goto("/create");
+    await page.getByLabel("Symbol").fill("ROOT");
+    await page.getByLabel("Name").fill("Rootstock");
+    await page.getByLabel("One sentence").fill("A community token for people who plant trees.");
+    await page.getByRole("button", { name: "Continue →" }).click();
+    await page.getByLabel("Opens in (blocks)").fill("2");
+    await page.getByRole("button", { name: "Continue →" }).click();
+    await page.getByRole("button", { name: "Continue →" }).click();
+    const pay = page.getByRole("button", { name: /^Pay [\d,]+ sats & launch ROOT$/ });
+    const total = Number((await pay.textContent())!.replace(/\D/g, ""));
+    ChainSim.of(page).fund((await page.locator("[data-paying-from]").getAttribute("data-paying-from"))!, total);
+    await page.reload();
+    const before = sim.broadcasts.length;
+
+    // The explorer has not heard of the payment for the first request: the page asks again by itself.
+    rgbpp.unseenCertifications = 1;
+    await pay.click();
+    await expect(page.getByRole("heading", { name: "ROOT is launched" })).toBeVisible({ timeout: 30_000 });
+    expect(rgbpp.unseenCertifications).toBe(0);
+    // One payment, unconfirmed, and nothing else broadcast.
+    expect(sim.broadcasts.length - before).toBe(1);
+    const registration = sim.broadcasts.at(-1)!.txid;
+
+    // The summary names what the launch rests on.
+    await expect(page.getByRole("link", { name: new RegExp(`^${registration.slice(0, 10)}`) })).toHaveAttribute("href", new RegExp(`${registration}$`));
+    await expect(page.getByText("Certified by btc.fun")).toBeVisible();
+    await expect(page.getByText(/Mining opens in 2 blocks/)).toBeVisible();
+
+    // The mint page waits for the opening block, and says why.
+    await page.getByRole("button", { name: "Go to the mint page →" }).click();
+    await expect(page).toHaveURL(/#\/launch\/root-[0-9a-f]{16}\/mine$/);
+    await expect(page.locator(".lh").getByRole("button", { name: "Not open yet" })).toBeDisabled();
+    await expect(page.getByRole("status").filter({ hasText: "Mining opens at block" })).toContainText("in 2 blocks");
+    await block(page, sim, 2);
+    await expect(bar(page).getByRole("button", { name: /^Pay ticket/ })).toBeVisible({ timeout: 30_000 });
+    ux.note("Creating a launch is one click after the form: pay, certify (retried until Bitcoin sees the payment) and announce; the summary leads to a mint page that opens by itself at the block.");
+  });
+
   test("keeps the draft when the visitor leaves to get a wallet", async ({ page, app, ux }) => {
     await app.goto("/create");
     await page.getByLabel("Symbol").fill("TIDE");
@@ -130,7 +171,7 @@ test.describe("create wizard", () => {
     await page.getByRole("link", { name: "Connect a wallet" }).click();
     await page.getByRole("button", { name: "Create a browser key" }).click();
     await app.goto("/create");
-    await expect(page.getByRole("button", { name: /^Pay registration · / })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Pay [\d,]+ sats & launch TIDE$/ })).toBeVisible();
     ux.note("Leaving the wizard for the wallet and coming back lands on the last step with everything kept.");
   });
 });

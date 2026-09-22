@@ -28,7 +28,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Launch } from "../data/launches";
 import { InsufficientFunds } from "../lib/bitcoin";
 import { fastFeeRate, getTxHex } from "../lib/bitcoin/provider";
-import { canMine } from "../lib/launches/featured";
 import { ticketKey } from "../lib/mining";
 import { deriveLoop, inProgress, narrate, type Loop, type Narration } from "../lib/mining/loop";
 import { ARM_SHAPE, fundingNeeded, mintShape, networkFee, plainFunding, shapeOf, strippedTx } from "../lib/rgbpp/bitcoin";
@@ -150,7 +149,6 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
   // the session keyed by it; the full loop then folds the best hash in.
   const facts = {
     wallet: wallet.vault?.kind ?? null,
-    offered: canMine(launch),
     launchOpen: launch.open,
     miners,
     operations,

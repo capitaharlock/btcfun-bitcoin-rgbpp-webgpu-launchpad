@@ -70,8 +70,6 @@ export interface Traces {
 }
 
 export type LoopState =
-  /** The site offers no miner on this launch and this wallet holds no ticket here. */
-  | { at: "closed" }
   /** The launch has not reached its opening block. */
   | { at: "not-open" }
   | { at: "wallet" }
@@ -102,8 +100,6 @@ export const STEPS: readonly LoopStep[] = ["wallet", "ticket", "mine", "mint"];
 
 export interface LoopInput {
   wallet: WalletKind | null;
-  /** True when this site offers new tickets on the launch (`canMine`). */
-  offered: boolean;
   /** True once the launch's opening block has passed. */
   launchOpen: boolean;
   /** Miner cells of this launch sealed to the wallet; null until read. */
@@ -229,11 +225,6 @@ function stateOf(
   },
 ): LoopState {
   const { idle, armed, paid, landing, ticket, lastMint } = facts;
-  // A launch the site does not offer mining on stays finishable for a wallet
-  // that already paid for a ticket there; before its cells are read, "finish"
-  // cannot be told from "closed".
-  const holdsTicket = ticket !== null || landing !== undefined || paid !== null;
-  if (!input.offered && !holdsTicket && (input.wallet === null || input.miners !== null)) return { at: "closed" };
   if (!input.launchOpen) return { at: "not-open" };
   if (input.wallet === null) return { at: "wallet" };
   if (input.miners === null) return { at: "reading" };
@@ -260,7 +251,6 @@ function stateOf(
 
 export function stepOf(state: LoopState): LoopStep | null {
   switch (state.at) {
-    case "closed":
     case "not-open":
       return null;
     case "wallet":
@@ -329,7 +319,6 @@ const UNARMED_NEXT: Record<Unarmed["why"] | "armed", string> = {
 /** Null where the loop is not on offer: the page says why in its own words. */
 export function narrate(state: LoopState, ctx: NarrationContext): Narration | null {
   switch (state.at) {
-    case "closed":
     case "not-open":
       return null;
     case "wallet":

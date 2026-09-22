@@ -74,10 +74,9 @@ export default function MintPage() {
           show in your wallet as landing until their own block.
         </p>
         <p>
-          On this testnet showcase the site offers its miner on one launch, the platform's DEMO, so everyone's tickets and
-          hashes land in the same place; every other launch shows its <strong>Mine</strong> button greyed out and its page
-          points to DEMO. That is this site's choice, not a rule of the token: the mint script accepts a paid ticket and a
-          valid hash for any launch. A ticket you already hold on another launch can still be mined and minted.
+          Every registered launch can be mined here, DEMO first in the catalogue. Before a launch's opening block its page
+          waits: the button reads <strong>Not open yet</strong> and says which block it waits for, because the mint script
+          refuses tickets before it — the creator's included — and the page unlocks by itself when the block arrives.
         </p>
         <Diagram spec={CIRCUIT} />
         <p>

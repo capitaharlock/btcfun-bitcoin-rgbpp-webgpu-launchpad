@@ -111,7 +111,7 @@ export interface LaunchCommitment {
   h0: number;
   /** The Bitcoin address every ticket pays. */
   promoter: string;
-  /** The registration's txid (displayed order); all zeros for a launch the platform admitted itself. */
+  /** The registration's txid (displayed order): the Bitcoin payment that registered the launch. */
   registration: string;
   /** btc.fun's certificate over the terms and the registration, 64 bytes hex. */
   certificate: string;
@@ -503,17 +503,44 @@ export async function payRegistration(
   return registration;
 }
 
-/** Ask btc.fun's signer for the certificate of a paid registration. */
-export async function requestCertificate(draft: LaunchDraft, registration: Registration): Promise<string> {
+/**
+ * The signer has not seen the registration yet. Not a failure: Bitcoin's
+ * explorers learn of a transaction seconds after it is sent, so the request is
+ * simply repeated.
+ */
+export class RegistrationNotSeen extends Error {}
+
+/** Ask btc.fun's signer (`origin`, this site by default) for the certificate of a paid registration. */
+export async function requestCertificate(draft: LaunchDraft, registration: Registration, origin = ""): Promise<string> {
   const { args } = draftTerms(draft, registration.h0);
-  const res = await fetch("/api/certify", {
+  const res = await fetch(`${origin}/api/certify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ args: bytesToHex(args), registration: registration.txid }),
   });
   const body = (await res.json().catch(() => ({}))) as { certificate?: string; error?: string };
+  if (res.status === 404) throw new RegistrationNotSeen(body.error ?? "The registration is not known to Bitcoin yet.");
   if (!res.ok || !body.certificate) throw new Error(body.error ?? `The certificate request failed (${res.status}).`);
   return body.certificate;
+}
+
+/** How long `certify` keeps asking while Bitcoin has not seen the payment: 5 s apart, 5 minutes in all. */
+export const CERTIFY_RETRY = { everyMs: 5_000, tries: 60 };
+
+/** The certificate of a paid registration, asked for again while the signer has not seen the payment. */
+export async function certify(
+  draft: LaunchDraft,
+  registration: Registration,
+  { origin = "", retry = CERTIFY_RETRY, signal }: { origin?: string; retry?: typeof CERTIFY_RETRY; signal?: AbortSignal } = {},
+): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await requestCertificate(draft, registration, origin);
+    } catch (err) {
+      if (!(err instanceof RegistrationNotSeen) || attempt >= retry.tries || signal?.aborted) throw err;
+      await new Promise((r) => setTimeout(r, retry.everyMs));
+    }
+  }
 }
 
 /** Sign the announcement of a registered, certified launch, keep it locally and publish it to the index. */

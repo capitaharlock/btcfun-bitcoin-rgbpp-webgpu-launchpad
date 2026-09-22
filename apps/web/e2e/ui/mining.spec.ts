@@ -178,17 +178,11 @@ test.describe("mining", () => {
       await expect(bar(page).getByRole("button", { name: /^Activate ticket/ })).toHaveCount(0);
     });
 
-    test("on any launch but DEMO the site offers no miner, says why, and points at DEMO", async ({ page, app, sim }) => {
-      await platformWallet(app, sim);
-      const demo = await announce(page, { symbol: MINEABLE });
-      // Even the platform's own launches: only the featured one is mined here.
-      await announce(page, { symbol: "OTHER" });
+    test("any registered launch is mined here, not only DEMO", async ({ page, app, sim }) => {
+      await app.createBrowserKey();
+      const id = await announce(page, { symbol: "OTHER" });
       await block(page, sim);
-      await expect(page.getByRole("heading", { name: "Mining is open on DEMO" })).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByText(/the mint script on CKB accepts a paid ticket and a valid hash for any launch/)).toBeVisible();
-      await expect(page.getByRole("button", { name: /^Pay ticket/ })).toHaveCount(0);
-      await page.getByRole("link", { name: "▶ Mine DEMO" }).click();
-      await expect(page).toHaveURL(new RegExp(`#/launch/${demo}/mine$`));
+      await app.goto(`/launch/${id}/mine`);
       await expect(bar(page).getByRole("button", { name: /^Pay ticket/ })).toBeVisible({ timeout: 30_000 });
     });
   });

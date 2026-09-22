@@ -39,6 +39,12 @@ describe("a launch's admission", () => {
     expect(admitted(args, registration, "not hex", v.key)).toBe(false);
   });
 
+  it("refuses a genuine signature over no registration, as the mint script does", () => {
+    const none = "0".repeat(64);
+    const unpaid = bytesToHex(signCertificate(args, none, hexToBytes(TEST_CERT_SECRET)));
+    expect(admitted(args, none, unpaid, v.key)).toBe(false);
+  });
+
   it("accepts a registration that pays the platform and commits to the launch", () => {
     const platform = "0014" + "aa".repeat(20);
     const memo = { scriptHex: "6a20" + v.commitment, value: 0 };

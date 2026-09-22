@@ -93,29 +93,27 @@ export function savedTerms(terms) {
   };
 }
 
-// ─── the platform's certificate ─────────────────────────────────────────
+// ─── registering a launch ────────────────────────────────────────────────
 
-const CERT_KEY_FILE = fileURLToPath(new URL("../../.platform-cert-key.json", import.meta.url));
+/** The deployed site: its index takes announcements and its signer certifies registrations. */
+export const INDEX = (process.env.INDEX ?? "https://btcfun.rjj.workers.dev").replace(/\/$/, "");
 
 /**
- * btc.fun's certificate over a launch's terms args and registration, signed
- * here with the platform's key (`.platform-cert-key.json`, gitignored, never
- * printed). For the platform's own launches, which it admits without a fee.
+ * Register a draft opening at `h0` exactly as the create page does, with no
+ * exception for the platform's own launches: `key` pays REGISTRATION_SATS to
+ * the platform with the commitment to the terms, and the site's public signer
+ * (`POST /api/certify`) certifies it once Bitcoin has seen the payment. Resumes
+ * from `paid` (a registration sent earlier) so a retry never pays twice.
  */
-export function platformCertificate(args, registration = certificate.NO_REGISTRATION) {
-  const { privateKey } = JSON.parse(readFileSync(CERT_KEY_FILE, "utf8"));
-  return Buffer.from(certificate.signCertificate(args, registration, Uint8Array.from(Buffer.from(privateKey, "hex")))).toString("hex");
-}
-
-/** The platform's own admission of a draft opening at `h0`: no fee, certified here. */
-export function platformAdmission(draft, h0) {
-  const { args } = create.draftTerms(draft, h0, network.ACTIVE);
-  const registration = {
-    txid: certificate.NO_REGISTRATION,
-    h0,
-    commitment: Buffer.from(certificate.registrationCommitment(args)).toString("hex"),
-  };
-  return { registration, certificate: platformCertificate(args) };
+export async function register(key, draft, h0, paid = null) {
+  let registration = paid;
+  if (!registration) {
+    const [free, feeRate] = await Promise.all([rgbpp.freeUtxos(key.address), provider.fastFeeRate(network.ACTIVE)]);
+    const plain = bitcoin.plainFunding(free.filter((u) => u.confirmed), new Set());
+    registration = await create.payRegistration(vaultOf(key), draft, h0, plain, feeRate, (hex) => rgbpp.broadcast(hex));
+    console.log(`registration ${draft.symbol}: ${network.txUrl(registration.txid, network.ACTIVE)}`);
+  }
+  return { registration, certificate: await create.certify(draft, registration, { origin: INDEX }) };
 }
 
 // ─── reading the chain ───────────────────────────────────────────────────

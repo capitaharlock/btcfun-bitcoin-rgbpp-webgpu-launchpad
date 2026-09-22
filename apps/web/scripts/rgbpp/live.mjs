@@ -2,7 +2,9 @@
  *
  *   node scripts/rgbpp/live.mjs <step>
  *
- *   launch     fix the launch terms (opening now, tickets paid to Bob)
+ *   launch     register a launch as the create page does — pay the
+ *              registration, get the site's certificate, announce it — opening
+ *              at the next block, tickets paid to Bob
  *   ticket     buy a ticket: it creates the miner cell, paid, or re-arms an
  *              idle one at the tip
  *   arm        arm a paid cell, once its ticket has settled (network fee only)
@@ -24,8 +26,8 @@
 
 import { fileURLToPath } from "node:url";
 import {
-  alice as aliceKey, bob, cellsOf, cfg, close, creatingTx, demo, launch, network, ops, provider, rgbpp, sale, sealedUtxos,
-  certificate, platformCertificate, savedTerms, standard, stateFile, submit as send, termsFrom, verify,
+  alice as aliceKey, bob, cellsOf, cfg, close, create, creatingTx, demo, events, INDEX, launch, network, ops, provider, register, rgbpp, sale,
+  sealedUtxos, certificate, savedTerms, standard, stateFile, submit as send, termsFrom, vaultOf, verify,
 } from "./kit.mjs";
 
 /** Who mines: Alice, or the shared demo wallet. */
@@ -50,24 +52,38 @@ async function submit(name, plan, key) {
 const steps = {
   async launch() {
     const tip = await provider.getTipHeight(network.ACTIVE);
-    const meta = { name: "Live QA", symbol: "LIVEQA", description: "The btc.fun live testnet run.", imageHash: "" };
-    const terms = {
-      h0: tip,
-      metadataHash: launch.metadataHash(meta),
-      promoterScript: launch.promoterScriptFor(bob.address, network.ACTIVE),
+    const symbol = process.env.SYMBOL ?? "LIVEQA";
+    const draft = {
+      symbol, name: "Live QA", blurb: "The btc.fun live testnet run, registered like anyone's launch.", accent: "var(--cyan)",
+      promoter: bob.address, opensInBlocks: 1,
+      links: Object.fromEntries(create.LINK_KINDS.map((k) => [k, ""])), story: { why: "", plan: "" }, image: "",
     };
+    // A registration already paid for this draft is resumed, never paid twice.
+    const paid = state.registration?.symbol === symbol ? state.registration : null;
+    const h0 = paid?.h0 ?? tip + draft.opensInBlocks;
+    const { registration, certificate: cert } = await register(alice, draft, h0, paid);
+    state.registration = { ...registration, symbol };
+    write();
+    const commitment = create.commitmentFor(draft, vaultOf(alice).identity, registration, cert, network.ACTIVE);
+    if (!create.idMatches(commitment, network.ACTIVE)) throw new Error("the certificate does not verify");
+    const signed = await events.signActivity(vaultOf(alice), { kind: "launch", launch: commitment.id, ref: create.commitmentId(commitment), meta: JSON.stringify(commitment) });
+    const res = await fetch(`${INDEX}/api/activity`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(signed) });
+    if (!res.ok) throw new Error(`index refused the launch: ${res.status} ${await res.text()}`);
+    const terms = create.termsOf(commitment, network.ACTIVE);
     state.launch = {
-      meta,
+      id: commitment.id,
+      meta: { name: draft.name, symbol, description: draft.blurb, imageHash: "" },
       terms: savedTerms(terms),
-      // The platform admits its own QA launch: no fee, certified here.
-      certificate: platformCertificate(launch.encodeTerms(terms)),
+      registration: registration.txid,
+      certificate: cert,
       tokenId: launch.tokenId(cfg, terms),
       mintScript: launch.mintScript(cfg, terms).hash(),
       alice: alice.address,
       bob: bob.address,
     };
+    state.steps.push({ step: "launch", btcTxid: registration.txid, at: new Date().toISOString() });
     write();
-    console.log(state.launch);
+    console.log(`${INDEX}/#/launch/${commitment.id}`, state.launch);
   },
 
   async ticket() {
@@ -86,7 +102,7 @@ const steps = {
     const paid = miners.find((m) => m.data?.state === "paid");
     if (!paid) throw new Error("no paid miner cell yet: run `ticket` and wait for the queue");
     const tip = await provider.getTipHeight(network.ACTIVE);
-    await submit("arm", ops.planArm(cfg, terms, paid, await creatingTx(paid.seal.txid), tip, certificate.admissionBytes(certificate.NO_REGISTRATION, state.launch.certificate)), alice);
+    await submit("arm", ops.planArm(cfg, terms, paid, await creatingTx(paid.seal.txid), tip, certificate.admissionBytes(state.launch.registration, state.launch.certificate)), alice);
   },
 
   async mine() {

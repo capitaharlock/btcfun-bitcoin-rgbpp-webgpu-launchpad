@@ -11,11 +11,6 @@
  * neither grows nor shrinks as the loop advances and the bar stays put. Every action lives in one bar
  * under the frame: back on the left, the step's own action and the way
  * forward on the right. Nothing signs without a press of that bar.
- *
- * During the testnet showcase the site offers the loop only on the featured
- * launch (`canMine`). On any other launch a wallet that already holds a ticket
- * can still mine and mint it: the showcase closing a launch must never strand a
- * ticket someone paid for.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -25,7 +20,6 @@ import type { Launch } from "../../data/launches";
 import { FUNDS_POLL_MS, type Costs, type MiningLoop } from "../../hooks/useMiningLoop";
 import { addressUrl, txUrl } from "../../lib/bitcoin/network";
 import { atoms, group, shortHash } from "../../lib/format";
-import { canMine } from "../../lib/launches/featured";
 import { statusOf, STEPS, type LoopState, type LoopStep, type StepStatus, type Trace } from "../../lib/mining/loop";
 import { ACTIVE_RGBPP } from "../../lib/rgbpp/config";
 import { DECIMALS, MIN_CLZ, reward, TICKET_SATS } from "../../lib/standard";
@@ -127,13 +121,6 @@ export function MiningWizard({ launch, loop: ml, view: wv }: { launch: Launch; l
 
   return (
     <section className="wz" aria-label={`Mine ${launch.symbol}`}>
-      {!canMine(launch) && (
-        <Notice tone="cyan">
-          Mining on {launch.symbol} is closed on this testnet showcase, but the ticket you already hold stays yours: mine it
-          and mint it here as usual.
-        </Notice>
-      )}
-
       <nav className="wz-rail" aria-label="Steps">
         <ol>
           {STEPS.map((s, i) => {

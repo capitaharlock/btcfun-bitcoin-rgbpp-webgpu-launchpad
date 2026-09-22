@@ -18,12 +18,11 @@
 
 import { navigate } from "../App";
 import { phaseTone, type Launch } from "../data/launches";
-import { useChainSynced, useLaunch, useLaunches, useTip } from "../hooks/useLaunches";
+import { useChainSynced, useLaunch, useTip } from "../hooks/useLaunches";
 import { useImageCheck } from "../hooks/useImageCheck";
 import { useLaunchStats } from "../hooks/useLaunchStats";
 import { useMiningLoop, type MiningLoop } from "../hooks/useMiningLoop";
 import { addressUrl } from "../lib/bitcoin/network";
-import { featuredLaunch } from "../lib/launches/featured";
 import { ckbMintScriptUrl, ckbTokenUrl } from "../lib/rgbpp/explorer";
 import { atoms, blocksAsTime, group, shortHash } from "../lib/format";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, NEW_CELL, PLATFORM_PERCENT, REUSE, reward, TICKET_SATS } from "../lib/standard";
@@ -55,7 +54,6 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
   // Arriving from a MINE button (`/launch/<id>/mine`) opens the wizard; the
   // page still starts at the top, so the header — and its MINE — is what shows.
   const ml = useMiningLoop(launch, tip, focusMiner);
-  const { state } = ml.loop;
 
   return (
     <div className="stack-lg">
@@ -64,14 +62,6 @@ function LaunchBody({ launch, focusMiner }: { launch: Launch; focusMiner: boolea
       </div>
 
       <LaunchHeader launch={launch} ml={ml} />
-
-      {state.at === "closed" && (
-        <Notice>
-          On this testnet showcase the site offers its miner on one launch, so everyone's tickets and hashes land in the
-          same place. That is this site's choice, not a rule of the token: the mint script on CKB accepts a paid ticket and
-          a valid hash for any launch.
-        </Notice>
-      )}
 
       <About launch={launch} />
     </div>
@@ -89,7 +79,7 @@ function LaunchHeader({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
   const { vault } = useWallet();
   const { state } = ml.loop;
   const role = vault && vault.address === launch.promoter ? "You mine — and, as promoter, tickets pay you" : "You: miner";
-  const wizard = ml.engaged && state.at !== "closed" && state.at !== "not-open";
+  const wizard = ml.engaged && state.at !== "not-open";
   const view = useWizardView(launch.id, ml);
 
   if (wizard) {
@@ -154,43 +144,29 @@ function LaunchHeader({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
       </div>
 
       <div className="lh-act">
-        {state.at === "closed" ? (
-          <MiningElsewhere />
+        <div className="lh-role">{role}</div>
+        <MineButton launch={launch} ml={ml} />
+        {state.at === "not-open" ? (
+          <div className="lh-say" role="status">
+            <p>
+              <span className="lh-k">Waiting</span> Mining opens at block {group(launch.h0)}, in{" "}
+              {launch.blocksToHalving === 1 ? "1 block" : `${group(launch.blocksToHalving)} blocks`} (about{" "}
+              {blocksAsTime(launch.blocksToHalving)}).
+            </p>
+            <p className="tiny faint">
+              The mint script refuses tickets before that block, so nothing can be bought yet — by anyone, the creator
+              included. This page unlocks by itself when the block arrives.
+            </p>
+          </div>
         ) : (
-          <>
-            <div className="lh-role">{role}</div>
-            <MineButton launch={launch} ml={ml} />
-            {state.at === "not-open" ? (
-              <p className="lh-say">Nothing to buy until block {group(launch.h0)}.</p>
-            ) : (
-              <div className="lh-say">
-                <p>
-                  <span className="lh-k">How</span> Wallet → ticket ({group(TICKET_SATS)} sats) → mine in your browser → mint.
-                </p>
-              </div>
-            )}
-          </>
+          <div className="lh-say">
+            <p>
+              <span className="lh-k">How</span> Wallet → ticket ({group(TICKET_SATS)} sats) → mine in your browser → mint.
+            </p>
+          </div>
         )}
       </div>
     </section>
-  );
-}
-
-/**
- * The header's action on a launch this site does not offer mining on. Says
- * plainly where mining is open; the notice under the header says why.
- */
-function MiningElsewhere() {
-  const demo = featuredLaunch(useLaunches());
-  return (
-    <div className="stack-sm">
-      <h2 className="lh-elsewhere">{demo ? `Mining is open on ${demo.symbol}` : "Mining is open on DEMO"}</h2>
-      {demo ? (
-        <a className="btn play xl lh-mine" href={`#/launch/${demo.id}/mine`}>▶ Mine {demo.symbol}</a>
-      ) : (
-        <p className="tiny faint">The DEMO launch has not reached this browser yet.</p>
-      )}
-    </div>
   );
 }
 

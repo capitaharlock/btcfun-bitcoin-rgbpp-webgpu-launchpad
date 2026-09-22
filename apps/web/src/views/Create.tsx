@@ -1,35 +1,41 @@
 /* Create your token.
  *
- * Four steps, all about identity: what it is called and looks like, where its
- * ticket income goes and when it opens, where the project lives and why it
- * raises funds, and the signature. There is no economics step — every token
- * follows the same standard (`PROTOCOL.md` §4), so a creator cannot make a
- * token look scarce by picking a small number, and tokens stay comparable.
+ * Five steps. Three are about identity: what it is called and looks like,
+ * where its ticket income goes and when it opens, where the project lives and
+ * why it raises funds. There is no economics step — every token follows the
+ * same standard (`PROTOCOL.md` §4), so a creator cannot make a token look
+ * scarce by picking a small number, and tokens stay comparable.
  *
- * The last step registers the launch: one Bitcoin payment of
- * `REGISTRATION_SATS` to the platform, which btc.fun's signer checks before it
- * certifies the terms — the mint script takes tickets only for certified terms
- * (`lib/launches/certificate.ts`). Then a free signature announces it. The
- * payment is kept on the device the moment it is sent, so nothing here ever
- * pays twice. A launch opens at a future height so that its creator cannot
- * mine it before anyone else has heard of it. Links, story and picture are
- * part of the signed announcement but not of the token: they never change its
- * id, and nothing on chain enforces them.
+ * The fourth registers and announces the launch behind one button: one Bitcoin
+ * payment of `REGISTRATION_SATS` to the platform, btc.fun's certificate over
+ * the terms and that payment's txid — the mint script takes tickets only for
+ * terms certified that way (`lib/launches/certificate.ts`) — and the signed
+ * announcement. The payment is kept on the device the moment it is sent, so
+ * nothing here ever pays twice, and nothing waits for a confirmation. The
+ * fifth is the summary: what the launch rests on, and its mint page.
  *
- * Under the steps, always in view, is what a launch earns: the ticket share,
- * the fee, and what a given number of tickets a day comes to.
+ * A launch opens at a future height so that its creator cannot mine it before
+ * anyone else has heard of it. Links, story and picture are part of the signed
+ * announcement but not of the token: they never change its id, and nothing on
+ * chain enforces them.
+ *
+ * The income step shows, beside the address it pays, what a launch earns: the
+ * ticket share, the fee, and what a given number of tickets a day comes to.
+ * The whole wizard fits one laptop screen, its actions always in the bar at
+ * the bottom of the card.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { navigate } from "../App";
 import { useTip } from "../hooks/useLaunches";
 import {
   ACCENTS,
+  certify,
   createLaunch,
   payRegistration,
   pendingRegistration,
-  requestCertificate,
+  type LaunchCommitment,
   type Registration,
   extrasOf,
   LINK_KINDS,
@@ -71,9 +77,10 @@ const ACCENT_LABELS: Record<(typeof ACCENTS)[number], string> = {
   "var(--warn)": "Gold",
 };
 
-const STEPS = ["Identity", "Income", "Project", "Register"] as const;
-type StepIndex = 0 | 1 | 2 | 3;
-const LAST: StepIndex = 3;
+const STEPS = ["Identity", "Income", "Project", "Register", "Launched"] as const;
+type StepIndex = 0 | 1 | 2 | 3 | 4;
+const REGISTER: StepIndex = 3;
+const LAUNCHED: StepIndex = 4;
 
 const INITIAL: LaunchDraft = {
   symbol: "",
@@ -93,6 +100,7 @@ const OWNED: Record<StepIndex, DraftField[]> = {
   1: ["promoter", "opensInBlocks"],
   2: [...LINK_KINDS.map((k) => `links.${k}` as const), "story.why", "story.plan", "image", "extras"],
   3: [],
+  4: [],
 };
 
 const LINK_PLACEHOLDER: Record<LinkKind, string> = {
@@ -126,7 +134,8 @@ function loadDraft(): SavedDraft {
     const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null") as Partial<SavedDraft> | null;
     if (!saved) return { step: 0, draft: INITIAL };
     return {
-      step: ([0, 1, 2, 3] as const).includes(saved.step as StepIndex) ? (saved.step as StepIndex) : 0,
+      // The summary is never restored: the draft is forgotten once announced.
+      step: ([0, 1, 2, 3] as const).includes(saved.step as 0) ? (saved.step as StepIndex) : 0,
       draft: {
         ...INITIAL,
         ...(saved.draft ?? {}),
@@ -153,6 +162,15 @@ export function Create() {
   const [step, setStep] = useState<StepIndex>(initial.step);
   const [draft, setDraft] = useState<LaunchDraft>(initial.draft);
   const faults = useMemo(() => validate(draft), [draft]);
+  const valid = Object.keys(faults).length === 0;
+  // A registration already paid for exactly this draft — in this visit or an
+  // earlier one. Once it exists the terms are fixed: going back to edit them
+  // would make a different launch, one the payment does not cover. Only a
+  // valid draft has terms to look one up by.
+  const stored = useMemo(() => (valid ? pendingRegistration(draft) : null), [draft, valid]);
+  const [paid, setPaid] = useState<Registration | null>(null);
+  const registration = paid ?? stored;
+  const [launched, setLaunched] = useState<LaunchCommitment | null>(null);
 
   // The promoter defaults to the creator's own address once a wallet exists,
   // without overwriting an address the creator typed.
@@ -168,12 +186,19 @@ export function Create() {
     }
   }, [step, draft]);
 
+  // Every step starts at the top of the form, wherever the last one was left.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [step]);
+
   const set = <K extends keyof LaunchDraft>(key: K, value: LaunchDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const clean = (index: StepIndex) => OWNED[index].every((field) => !faults[field]);
-  const reachable = (index: StepIndex) => ([0, 1, 2] as StepIndex[]).slice(0, index).every(clean);
+  const reachable = (index: StepIndex) =>
+    launched ? index === LAUNCHED : registration ? index === REGISTER : index < LAUNCHED && ([0, 1, 2] as StepIndex[]).slice(0, index).every(clean);
+  const back = step > 0 && step < LAUNCHED && !registration ? () => setStep((s) => (s - 1) as StepIndex) : null;
 
   return (
-    <div className="stack-lg">
+    <div className="cr-page">
       <PageHead
         eyebrow="create"
         title={
@@ -185,49 +210,98 @@ export function Create() {
         aside={<Chip tone="cyan">{ACTIVE.label}</Chip>}
       />
 
-      <div className="wizard">
-        <nav className="steps" aria-label="Steps">
+      <section className="cw" aria-label="Create a launch">
+        <nav className="cw-steps" aria-label="Steps">
           {STEPS.map((label, i) => {
             const index = i as StepIndex;
+            const done = index < step;
             return (
               <button
                 key={label}
                 type="button"
-                className={`${step === index ? "on" : ""}${clean(index) && index < step ? " done" : ""}`}
+                className={step === index ? "on" : done ? "done" : ""}
+                aria-label={label}
+                aria-current={step === index ? "step" : undefined}
                 disabled={!reachable(index)}
                 onClick={() => setStep(index)}
               >
-                <span className="num">{i + 1}</span>
-                {label}
+                <span className="num">{done ? "✓" : i + 1}</span>
+                <span className="cw-label">{label}</span>
               </button>
             );
           })}
         </nav>
 
-        <div className="stack-lg">
-          {step === 0 && <Identity draft={draft} faults={faults} set={set} />}
-          {step === 1 && <Opening draft={draft} faults={faults} set={set} />}
-          {step === 2 && <Project draft={draft} faults={faults} set={set} />}
-          {step === LAST && <Register draft={draft} />}
-
-          {step < LAST && (
-            <div className="row">
-              {step > 0 && (
-                <button className="btn ghost" onClick={() => setStep((s) => (s - 1) as StepIndex)}>
-                  ← Back
-                </button>
-              )}
-              <span className="spacer" />
+        {step === LAUNCHED && launched ? (
+          <Launched launch={launched} />
+        ) : step >= REGISTER ? (
+          <Register
+            draft={draft}
+            registration={registration}
+            onPaid={setPaid}
+            onLaunched={(commitment) => {
+              setLaunched(commitment);
+              setStep(LAUNCHED);
+            }}
+            back={back}
+          />
+        ) : (
+          <>
+            <div className="cw-body">
+              {step === 0 && <Identity draft={draft} faults={faults} set={set} />}
+              {step === 1 && <Income draft={draft} faults={faults} set={set} />}
+              {step === 2 && <Project draft={draft} faults={faults} set={set} />}
+            </div>
+            <Bar step={step} back={back}>
               <button className="btn primary lg" disabled={!clean(step)} onClick={() => setStep((s) => (s + 1) as StepIndex)}>
                 Continue →
               </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <Earnings opensAt={draft.opensInBlocks} />
+            </Bar>
+          </>
+        )}
+      </section>
     </div>
+  );
+}
+
+/** What the next step is, said on the bar next to the button that goes there. */
+const NEXT: Record<StepIndex, string> = {
+  0: "Next: where your income goes",
+  1: "Next: picture, links and story",
+  2: "Next: register and announce",
+  3: "Next: your launch's summary",
+  4: "Done",
+};
+
+/**
+ * The wizard's footer: back on the left, the one action that moves forward on
+ * the right, always in the same place whatever the step holds.
+ */
+function Bar({ step, back, children }: { step: StepIndex; back: (() => void) | null; children: React.ReactNode }) {
+  return (
+    <footer className="cw-bar">
+      {back ? (
+        <button className="btn ghost" onClick={back}>
+          ← Back
+        </button>
+      ) : (
+        <span />
+      )}
+      <span className="cw-where">
+        Step {step + 1} of {STEPS.length} · {NEXT[step]}
+      </span>
+      <div className="cw-go">{children}</div>
+    </footer>
+  );
+}
+
+/** A step's own heading inside the wizard's card. */
+function StepHead({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <header className="cw-head">
+      <div className="eyebrow">{eyebrow}</div>
+      <h2>{title}</h2>
+    </header>
   );
 }
 
@@ -249,24 +323,28 @@ function previewSeed(draft: LaunchDraft): string {
 function Identity({ draft, faults, set }: StepProps) {
   const seed = previewSeed(draft);
   return (
-    <Panel eyebrow="step 1" title="What is it called?">
+    <>
+      <StepHead eyebrow="step 1 of 5" title="What is it called?" />
       <div className="split">
         <div className="stack-sm">
-          <Field label="Symbol" hint={faults.symbol ?? "2–8 characters. Part of the URL."}>
-            <input
-              className="input"
-              placeholder="MESH"
-              maxLength={8}
-              value={draft.symbol}
-              onChange={(e) => set("symbol", e.target.value.toUpperCase())}
-            />
-          </Field>
-          <Field label="Name" hint={faults.name}>
-            <input className="input" placeholder="Meshwork" maxLength={40} value={draft.name} onChange={(e) => set("name", e.target.value)} />
-          </Field>
+          <div className="grid g2">
+            <Field label="Symbol" hint={faults.symbol ?? "2–8 characters. Part of the URL."}>
+              <input
+                className="input"
+                placeholder="MESH"
+                maxLength={8}
+                value={draft.symbol}
+                onChange={(e) => set("symbol", e.target.value.toUpperCase())}
+              />
+            </Field>
+            <Field label="Name" hint={faults.name}>
+              <input className="input" placeholder="Meshwork" maxLength={40} value={draft.name} onChange={(e) => set("name", e.target.value)} />
+            </Field>
+          </div>
           <Field label="One sentence" hint={faults.blurb ?? `${draft.blurb.length}/160`}>
             <textarea
               className="input"
+              rows={2}
               placeholder="Community token for a mesh-relay operators' group."
               maxLength={160}
               value={draft.blurb}
@@ -309,43 +387,49 @@ function Identity({ draft, faults, set }: StepProps) {
           </More>
         </Panel>
       </div>
-    </Panel>
+    </>
   );
 }
 
-function Opening({ draft, faults, set }: StepProps) {
+/** Where the income goes and when it starts — beside what that income is. */
+function Income({ draft, faults, set }: StepProps) {
   const tip = useTip();
   return (
-    <Panel eyebrow="step 2" title="Where your income goes, and when it opens">
-      <div className="grid g2">
-        <Field label="Ticket income to" hint={faults.promoter ?? `Every ticket pays this address ${group(REUSE.promoter)} sats. Permanent.`}>
-          <input
-            className="input mono"
-            placeholder={`${ACTIVE.addressPrefix}…`}
-            spellCheck={false}
-            value={draft.promoter}
-            onChange={(e) => set("promoter", e.target.value.trim())}
-          />
-        </Field>
-        <Field
-          label="Opens in (blocks)"
-          hint={faults.opensInBlocks ?? `About ${blocksAsTime(draft.opensInBlocks)}${tip ? ` — block ${group(tip + draft.opensInBlocks)}` : ""}.`}
-        >
-          <input
-            className="input"
-            type="number"
-            min={1}
-            max={1008}
-            value={draft.opensInBlocks}
-            onChange={(e) => set("opensInBlocks", Math.max(1, Number(e.target.value) | 0))}
-          />
-        </Field>
+    <>
+      <StepHead eyebrow="step 2 of 5" title="Where your income goes, and when it opens" />
+      <div className="cr-income">
+        <div className="stack-sm">
+          <Field label="Ticket income to" hint={faults.promoter ?? "Permanent."}>
+            <input
+              className="input mono"
+              placeholder={`${ACTIVE.addressPrefix}…`}
+              spellCheck={false}
+              value={draft.promoter}
+              onChange={(e) => set("promoter", e.target.value.trim())}
+            />
+          </Field>
+          <Field
+            label="Opens in (blocks)"
+            hint={faults.opensInBlocks ?? `About ${blocksAsTime(draft.opensInBlocks)}${tip ? ` — block ${group(tip + draft.opensInBlocks)}` : ""}.`}
+          >
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={1008}
+              value={draft.opensInBlocks}
+              onChange={(e) => set("opensInBlocks", Math.max(1, Number(e.target.value) | 0))}
+            />
+          </Field>
+          <p className="tiny faint clamp">
+            A launch opens at a future block, so nobody — you included — can mine it before it is announced. You choose
+            the name and the address, never the price, the supply or the reward: every launch follows the same rules,
+            so every token is comparable.
+          </p>
+        </div>
+        <Earnings />
       </div>
-      <p className="tiny faint clamp">
-        A launch opens at a future block, so nobody — you included — can mine it before it is announced. What it earns is
-        below.
-      </p>
-    </Panel>
+    </>
   );
 }
 
@@ -353,53 +437,57 @@ function Project({ draft, faults, set }: StepProps) {
   const setLink = (kind: LinkKind, value: string) => set("links", { ...draft.links, [kind]: value });
   const setStory = (part: StoryPart, value: string) => set("story", { ...draft.story, [part]: value });
   const picture = imageFor(draft.image);
+  const row = (kind: LinkKind | "image", label: string, fault: string | undefined, icon: React.ReactNode, input: React.ReactNode) => (
+    <label key={kind} className={`cr-link${fault ? " bad" : ""}`}>
+      <span className="cr-link-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="cr-link-name">
+        {label}
+        {fault && <span className="cr-link-fault"> · {fault}</span>}
+      </span>
+      {input}
+    </label>
+  );
   return (
-    <Panel eyebrow="step 3 · optional" title="Picture, links and story">
-      <div className="cr-sections">
-        <section className="cr-section">
-          <h3>Picture</h3>
-          <div className="cr-picture">
-            <TokenImage art={picture ? { src: picture, by: "creator" } : null} seed={draft.symbol || "draft"} accent={draft.accent} symbol={draft.symbol || "Your"} size="lg" />
-            <Field label="Image address" hint={faults.image ?? "Square, an https:// address or one of this site's under /tokens/."}>
+    <>
+      <StepHead eyebrow="step 3 of 5 · optional" title="Picture, links and story" />
+      <div className="cr-project">
+        <div className="cr-links">
+          {row(
+            "image",
+            "Image address",
+            faults.image,
+            <TokenImage art={picture ? { src: picture, by: "creator" } : null} seed={draft.symbol || "draft"} accent={draft.accent} symbol={draft.symbol || "Your"} size="sm" />,
+            <input
+              className="input"
+              inputMode="url"
+              spellCheck={false}
+              placeholder="https://…/token.png — square"
+              value={draft.image}
+              onChange={(e) => set("image", e.target.value)}
+            />,
+          )}
+          {LINK_KINDS.map((kind) =>
+            row(
+              kind,
+              LINK_LABEL[kind],
+              faults[`links.${kind}`],
+              <PixelIcon kind={kind} />,
               <input
                 className="input"
                 inputMode="url"
                 spellCheck={false}
-                placeholder="https://…/token.png"
-                value={draft.image}
-                onChange={(e) => set("image", e.target.value)}
-              />
-            </Field>
-          </div>
-        </section>
+                placeholder={LINK_PLACEHOLDER[kind]}
+                value={draft.links[kind]}
+                onChange={(e) => setLink(kind, e.target.value)}
+              />,
+            ),
+          )}
+        </div>
 
-        <section className="cr-section">
-          <h3>Links</h3>
-          <div className="cr-links">
-            {LINK_KINDS.map((kind) => (
-              <label key={kind} className={`cr-link${faults[`links.${kind}`] ? " bad" : ""}`}>
-                <span className="cr-link-icon" aria-hidden="true">
-                  <PixelIcon kind={kind} />
-                </span>
-                <span className="cr-link-name">
-                  {LINK_LABEL[kind]}
-                  {faults[`links.${kind}`] && <span className="cr-link-fault"> · {faults[`links.${kind}`]}</span>}
-                </span>
-                <input
-                  className="input"
-                  inputMode="url"
-                  spellCheck={false}
-                  placeholder={LINK_PLACEHOLDER[kind]}
-                  value={draft.links[kind]}
-                  onChange={(e) => setLink(kind, e.target.value)}
-                />
-              </label>
-            ))}
-          </div>
-        </section>
-
-        <section className="cr-section">
-          <h3>Story</h3>
+        <section className="cr-story" aria-label="Story">
+          <h3>Explain the why and the plan</h3>
           <div className="grid g2">
             {(["why", "plan"] as const).map((part) => (
               <Field
@@ -409,7 +497,7 @@ function Project({ draft, faults, set }: StepProps) {
               >
                 <textarea
                   className="input"
-                  rows={4}
+                  rows={3}
                   maxLength={MAX_STORY_LENGTH}
                   placeholder={STORY_LABEL[part].placeholder}
                   value={draft.story[part]}
@@ -420,9 +508,8 @@ function Project({ draft, faults, set }: StepProps) {
           </div>
         </section>
         {faults.extras && <Notice tone="warn">{faults.extras}</Notice>}
-        <p className="tiny faint clamp">Signed by you with the announcement and shown on the launch page. Not enforced on chain.</p>
       </div>
-    </Panel>
+    </>
   );
 }
 
@@ -431,19 +518,39 @@ function registrationFee(feeRate: number): number {
   return Math.ceil(estimateVsize(1, [P2WPKH_SCRIPT_BYTES, opReturnScriptBytes(32), P2WPKH_SCRIPT_BYTES]) * feeRate);
 }
 
-type Certificate = { state: "none" } | { state: "asking" } | { state: "failed"; error: string } | { state: "ready"; certificate: string };
+/** Where the one registering action stands while it runs. */
+type Phase = "paying" | "certifying" | "announcing";
 
-function Register({ draft }: { draft: LaunchDraft }) {
+const PHASE_LABEL: Record<Phase, string> = {
+  paying: "Paying the registration…",
+  certifying: "Waiting for Bitcoin to see the payment…",
+  announcing: "Signing the announcement…",
+};
+
+interface RegisterProps {
+  draft: LaunchDraft;
+  registration: Registration | null;
+  onPaid: (paid: Registration) => void;
+  onLaunched: (launch: LaunchCommitment) => void;
+  back: (() => void) | null;
+}
+
+/**
+ * Pay, certify and announce behind one button. The payment is the only step
+ * that asks anything of the creator; the certificate follows from it (asked
+ * for again while Bitcoin's explorers have not seen the payment) and the
+ * announcement is a signature with the same key. A registration paid earlier
+ * resumes at the certificate and never pays twice.
+ */
+function Register({ draft, registration, onPaid, onLaunched, back }: RegisterProps) {
   const wallet = useWallet();
   const tokens = useTokens();
   const registry = useLaunchRegistry();
   const tip = useTip();
-  const [registration, setRegistration] = useState<Registration | null>(() => pendingRegistration(draft));
-  const [cert, setCert] = useState<Certificate>({ state: "none" });
+  const [certificate, setCertificate] = useState<string | null>(null);
   const [feeRate, setFeeRate] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<Phase | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ id: string; h0: number } | null>(null);
   const extras = extrasOf(draft);
 
   useEffect(() => {
@@ -459,178 +566,205 @@ function Register({ draft }: { draft: LaunchDraft }) {
   const spendable = wallet.balance
     ? plainFunding(wallet.balance.utxos, landingTxids(tokens.operations)).reduce((n, u) => n + u.value, 0)
     : null;
-  const short = total !== null && spendable !== null && spendable < total;
+  const short = !registration && total !== null && spendable !== null && spendable < total;
   const h0 = registration?.h0 ?? (tip ? tip + draft.opensInBlocks : null);
 
-  const ask = useCallback(
-    async (paid: Registration) => {
-      setCert({ state: "asking" });
-      try {
-        setCert({ state: "ready", certificate: await requestCertificate(draft, paid) });
-      } catch (err) {
-        setCert({ state: "failed", error: err instanceof Error ? err.message : String(err) });
-      }
-    },
-    [draft],
-  );
-
-  // A registration paid earlier — in this visit or before a reload — is
-  // certified without paying again.
-  useEffect(() => {
-    if (registration && cert.state === "none") void ask(registration);
-  }, [registration, cert.state, ask]);
-
-  const pay = async () => {
-    if (!wallet.vault || !tip || feeRate === null) return;
-    setBusy(true);
+  const run = async () => {
+    const vault = wallet.vault;
+    if (!vault || !tip || feeRate === null) return;
     setError(null);
     try {
-      const free = await tokens.service.freeUtxos(wallet.vault.address);
-      const utxos = plainFunding(free, landingTxids(tokens.operations));
-      const paid = await payRegistration(wallet.vault, draft, tip + draft.opensInBlocks, utxos, feeRate, (hex) => tokens.service.broadcast(hex));
-      setRegistration(paid);
-      void wallet.refresh();
+      let paid = registration;
+      if (!paid) {
+        setPhase("paying");
+        const free = await tokens.service.freeUtxos(vault.address);
+        const utxos = plainFunding(free, landingTxids(tokens.operations));
+        paid = await payRegistration(vault, draft, tip + draft.opensInBlocks, utxos, feeRate, (hex) => tokens.service.broadcast(hex));
+        onPaid(paid);
+        void wallet.refresh();
+      }
+      let cert = certificate;
+      if (!cert) {
+        setPhase("certifying");
+        cert = await certify(draft, paid);
+        setCertificate(cert);
+      }
+      setPhase("announcing");
+      const commitment = await createLaunch(vault, draft, paid, cert);
+      registry.refresh();
+      forgetDraft();
+      onLaunched(commitment);
     } catch (err) {
       setError(err instanceof InsufficientFunds ? "Not enough bitcoin for the registration and its network fee." : err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(false);
+      setPhase(null);
     }
   };
 
-  const announce = async () => {
-    if (!wallet.vault || !registration || cert.state !== "ready") return;
-    setBusy(true);
-    setError(null);
-    try {
-      const commitment = await createLaunch(wallet.vault, draft, registration, cert.certificate);
-      registry.refresh();
-      forgetDraft();
-      setCreated({ id: commitment.id, h0: commitment.h0 });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const stage = !registration ? 1 : certificate ? 3 : 2;
+  const action = !wallet.vault ? (
+    <a className="btn primary lg" href="#/wallet">Connect a wallet</a>
+  ) : phase ? (
+    <button className="btn lg working" disabled aria-busy="true">
+      {PHASE_LABEL[phase]}
+    </button>
+  ) : registration ? (
+    <button className="btn primary lg" onClick={() => void run()}>
+      {error ? "Try again" : "Finish"} · launch {draft.symbol}, already paid
+    </button>
+  ) : (
+    <button className="btn primary lg" disabled={total === null || short} onClick={() => void run()}>
+      {total === null ? "Pricing…" : `Pay ${group(total)} sats & launch ${draft.symbol}`}
+    </button>
+  );
 
-  if (created) {
-    return (
-      <Panel eyebrow="done" title={`${draft.symbol} is registered and announced`}>
-        <div className="row">
-          <Sigil seed={created.id} accent={draft.accent} size="lg" />
-          <p className="clamp">
-            Certified by btc.fun. Opens at block <span className="mono">{group(created.h0)}</span>; from then on every
-            ticket pays your address.
-          </p>
-        </div>
-        <div className="rule" />
-        <div className="row wrapped">
-          <button className="btn primary" onClick={() => navigate(`/launch/${created.id}`)}>Open {draft.symbol}</button>
-          <button className="btn ghost" onClick={() => navigate("/")}>Back to launches</button>
-        </div>
-      </Panel>
-    );
-  }
-
-  const stage = !registration ? 1 : cert.state === "ready" ? 3 : 2;
   return (
-    <Panel eyebrow="step 4" title="Register it, then announce it">
-      <div className="split">
-        <div className="stack-sm">
-          <KV
-            rows={[
-              ["Symbol", draft.symbol],
-              ["Name", draft.name],
-              ["Ticket income to", shortHash(draft.promoter, 12, 8)],
-              ["Opens at block", h0 ? group(h0) : "—"],
-              ["Story", extras.story ? `${Object.keys(extras.story).length} of 2 parts` : "none"],
-              ["Image", extras.image ? <span className="mono" title={extras.image}>{shortHash(extras.image, 24, 10)}</span> : "none"],
-            ]}
-          />
-          {extras.links && <ProjectLinks links={extras.links} symbol={draft.symbol} small />}
-        </div>
+    <>
+      <div className="cw-body">
+        <StepHead eyebrow="step 4 of 5" title="Register it and announce it — one signature" />
+        <div className="split">
+          <div className="stack-sm">
+            <KV
+              rows={[
+                ["Symbol", draft.symbol],
+                ["Name", draft.name],
+                ["Ticket income to", shortHash(draft.promoter, 12, 8)],
+                ["Opens at block", h0 ? group(h0) : "—"],
+                ["Story", extras.story ? `${Object.keys(extras.story).length} of 2 parts` : "none"],
+                ["Image", extras.image ? <span className="mono" title={extras.image}>{shortHash(extras.image, 24, 10)}</span> : "none"],
+              ]}
+            />
+            {extras.links && <ProjectLinks links={extras.links} symbol={draft.symbol} small />}
+            <More summary="What registering guarantees">
+              <p>
+                The payment commits to this launch's terms, so it pays for this launch only. btc.fun checks it and signs the
+                terms together with the payment's txid; the mint script on CKB refuses tickets for any terms it has not
+                signed that way, so {draft.symbol || "your token"} exists only as launched here, and anyone can check the
+                certificate and the payment it names. The registration is kept on this device the moment it is sent: a
+                reload continues it and never pays twice.
+              </p>
+              <p>Not refundable. Once paid, nothing above can change: a different field would be a different token.</p>
+            </More>
+          </div>
 
-        <div className="cr-register">
-          <ol className="cr-stages">
-            <li className={stage > 1 ? "done" : "on"}>
-              <b>1 · Pay the registration</b>
-              <span data-paying-from={wallet.vault?.address}>
-                {group(REGISTRATION_SATS)} sats to btc.fun, once{fee !== null ? ` + ${group(fee)} sats network fee` : ""}
-                {wallet.vault ? `, from ${shortHash(wallet.vault.address, 8, 6)}` : ""}.
-              </span>
-              {registration && (
-                <a className="mono" href={txUrl(registration.txid)} target="_blank" rel="noopener noreferrer">
-                  {shortHash(registration.txid, 8, 6)} ↗
-                </a>
-              )}
-            </li>
-            <li className={stage > 2 ? "done" : stage === 2 ? "on" : ""}>
-              <b>2 · btc.fun certifies it</b>
-              <span>
-                {cert.state === "asking"
-                  ? "Checking your payment…"
-                  : cert.state === "failed"
-                    ? cert.error
-                    : cert.state === "ready"
+          <div className="cr-register">
+            <ol className="cr-stages">
+              <li className={stage > 1 ? "done" : phase === "paying" ? "on" : ""}>
+                <b>1 · Pay the registration</b>
+                <span data-paying-from={wallet.vault?.address}>
+                  {group(REGISTRATION_SATS)} sats to btc.fun, once{fee !== null ? ` + ${group(fee)} sats network fee` : ""}
+                  {wallet.vault ? `, from ${shortHash(wallet.vault.address, 8, 6)}` : ""}.
+                </span>
+                {registration && (
+                  <a className="mono" href={txUrl(registration.txid)} target="_blank" rel="noopener noreferrer">
+                    Registration {shortHash(registration.txid, 8, 6)} ↗
+                  </a>
+                )}
+              </li>
+              <li className={stage > 2 ? "done" : phase === "certifying" ? "on" : ""}>
+                <b>2 · btc.fun certifies it</b>
+                <span>
+                  {phase === "certifying"
+                    ? "Asking every few seconds until Bitcoin has seen the payment. No confirmation needed."
+                    : certificate
                       ? "Certified: the mint script will take tickets for this launch."
                       : "Automatic, seconds after the payment."}
-              </span>
-            </li>
-            <li className={stage === 3 ? "on" : ""}>
-              <b>3 · Announce</b>
-              <span>A free signature with your key publishes it.</span>
-            </li>
-          </ol>
-
-          {!wallet.vault ? (
-            <>
-              <Notice tone="cyan">Registering pays from a wallet, and announcing signs with its key.</Notice>
-              <a className="btn primary block" href="#/wallet">Connect a wallet</a>
-            </>
-          ) : stage === 1 ? (
-            <>
-              <button className="btn primary block lg" disabled={busy || total === null || short} onClick={() => void pay()}>
-                {busy ? "Signing…" : total === null ? "Pricing…" : `Pay registration · ${group(total)} sats`}
-              </button>
-              {short && (
-                <Notice tone="warn">
-                  The wallet has {group(spendable ?? 0)} sats ready; the registration needs {group(total ?? 0)}.{" "}
-                  {NETWORK.faucets[0] && (
-                    <a href={NETWORK.faucets[0].url} target="_blank" rel="noopener noreferrer">
-                      Get testnet coins ↗
-                    </a>
-                  )}
-                </Notice>
-              )}
-            </>
-          ) : stage === 2 ? (
-            cert.state === "failed" ? (
-              <button className="btn block lg" onClick={() => registration && void ask(registration)}>
-                Ask for the certificate again
-              </button>
-            ) : (
-              <button className="btn block lg working" disabled aria-busy="true">
-                Certifying…
-              </button>
-            )
-          ) : (
-            <button className="btn primary block lg" disabled={busy} onClick={() => void announce()}>
-              {busy ? "Signing…" : `Announce ${draft.symbol} · free`}
-            </button>
-          )}
-          {error && <Notice tone="warn">{error}</Notice>}
-          <More summary="What registering guarantees">
-            <p>
-              The payment commits to this launch's terms, so it pays for this launch only. btc.fun checks it and signs the
-              terms; the mint script on CKB refuses tickets for any terms it has not signed, so {draft.symbol || "your token"}{" "}
-              exists only as launched here, and anyone can check the certificate and the payment it names. The
-              registration is kept on this device the moment it is sent: a reload continues it and never pays twice.
-            </p>
-            <p>Not refundable. Once announced, nothing above can change: a different field would be a different token.</p>
-          </More>
+                </span>
+              </li>
+              <li className={phase === "announcing" ? "on" : ""}>
+                <b>3 · Announce</b>
+                <span>Signed with your key and published, in the same click. Free.</span>
+              </li>
+            </ol>
+            {!wallet.vault && <Notice tone="cyan">Registering pays from a wallet, and announcing signs with its key.</Notice>}
+            {short && (
+              <Notice tone="warn">
+                The wallet has {group(spendable ?? 0)} sats ready; the registration needs {group(total ?? 0)}.{" "}
+                {NETWORK.faucets[0] && (
+                  <a href={NETWORK.faucets[0].url} target="_blank" rel="noopener noreferrer">
+                    Get testnet coins ↗
+                  </a>
+                )}
+              </Notice>
+            )}
+            {error && <Notice tone="warn">{error}</Notice>}
+          </div>
         </div>
       </div>
-    </Panel>
+      <Bar step={REGISTER} back={back}>
+        {action}
+      </Bar>
+    </>
+  );
+}
+
+/**
+ * The launch as it now exists: the transactions and signatures it rests on,
+ * and the way to its mint page, which waits for the opening block.
+ */
+function Launched({ launch }: { launch: LaunchCommitment }) {
+  const tip = useTip();
+  const blocks = tip === null ? null : launch.h0 - tip;
+  return (
+    <>
+      <div className="cw-body">
+        <StepHead eyebrow="step 5 of 5 · done" title={`${launch.symbol} is launched`} />
+        <div className="split">
+          <div className="stack-sm">
+            <KV
+              rows={[
+                ["Launch", <a className="mono" href={`#/launch/${launch.id}`}>{launch.id}</a>],
+                ["Token id", <span className="mono" title={launch.tokenId}>{shortHash(launch.tokenId, 10, 8)}</span>],
+                [
+                  "Registration",
+                  <a className="mono" href={txUrl(launch.registration)} target="_blank" rel="noopener noreferrer" title={launch.registration}>
+                    {shortHash(launch.registration, 10, 8)} ↗
+                  </a>,
+                ],
+                ["Certificate", <span className="mono" title={launch.certificate}>{shortHash(launch.certificate, 10, 8)}</span>],
+                ["Announced by", <span className="mono" title={launch.creator}>{shortHash(launch.creator, 10, 8)}</span>],
+                ["Mining opens", `block ${group(launch.h0)}`],
+              ]}
+            />
+          </div>
+          <div className="cr-register">
+            <div className="row">
+              <Sigil seed={launch.id} accent={launch.accent} size="lg" />
+              <p className="clamp">
+                {blocks !== null && blocks > 0
+                  ? `Mining opens in ${blocks === 1 ? "1 block" : `${group(blocks)} blocks`}, about ${blocksAsTime(blocks)}. The mint page waits for it and says so.`
+                  : "Mining is open: the first ticket can be bought now."}
+              </p>
+            </div>
+            <ol className="cr-stages">
+              <li className="done">
+                <b>Registration paid</b>
+                <span>The Bitcoin payment that names these terms. Certified whether or not it has confirmed yet.</span>
+              </li>
+              <li className="done">
+                <b>Certified by btc.fun</b>
+                <span>Its signature over the terms and that payment; every miner's first arming carries it on chain.</span>
+              </li>
+              <li className="done">
+                <b>Announced</b>
+                <span>Signed with your key; on the launch list now. Every ticket pays your address.</span>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <footer className="cw-bar">
+        <button className="btn ghost" onClick={() => navigate(`/launch/${launch.id}`)}>
+          See the launch
+        </button>
+        <span className="cw-where">All five steps done</span>
+        <div className="cw-go">
+          <button className="btn primary lg" onClick={() => navigate(`/launch/${launch.id}/mine`)}>
+            Go to the mint page →
+          </button>
+        </div>
+      </footer>
+    </>
   );
 }
 
@@ -644,29 +778,20 @@ const TICKET_PACES = [10, 50, 200, 1000] as const;
  * The range is honest about the one variable: a miner's first two tickets on
  * a launch pay the promoter less, because they also pay for the miner's cell.
  */
-function Earnings({ opensAt }: { opensAt: number }) {
-  const tip = useTip();
+function Earnings() {
   const [pace, setPace] = useState<number>(50);
   const low = pace * NEW_CELL.promoter;
   const high = pace * REUSE.promoter;
   return (
     <section className="cr-earn" aria-label="What your launch earns">
-      <div className="cr-earn-head">
-        <div className="eyebrow">the standard</div>
-        <h2>What your launch earns</h2>
-        <p className="faint clamp">
-          Every launch follows the same rules. You choose the name and the address — never the price, the supply or the
-          reward — so every token is comparable, and yours earns exactly what its miners pay.
-        </p>
-      </div>
-
+      <h3>What your launch earns</h3>
       <div className="cr-earn-grid">
         <div className="cr-card big">
           <div className="k">you earn per ticket</div>
           <div className="v amber">{group(REUSE.promoter)} <span className="u">sats</span></div>
           <p className="tiny faint">
-            {group(NEW_CELL.promoter)} sats on a miner's first two tickets here, which also pay {group(NEW_CELL.paymaster)} for
-            the miner's cell. Paid straight to your address, in the ticket's own transaction.
+            {group(NEW_CELL.promoter)} sats on a miner's first two tickets, which also pay {group(NEW_CELL.paymaster)} for
+            their cell. Straight to your address, in the ticket itself.
           </p>
         </div>
 
@@ -679,39 +804,29 @@ function Earnings({ opensAt }: { opensAt: number }) {
               </button>
             ))}
           </div>
-          <div className="v">{btc(low)}–{btc(high)} <span className="u">BTC a day</span></div>
+          <div className="v">{btc(low)}–{btc(high)} <span className="u">BTC/day</span></div>
           <p className="tiny faint">
             {btc(low * 7)}–{btc(high * 7)} BTC a week. Illustrative: income is only what miners choose to pay.
           </p>
-        </div>
-
-        <div className="cr-card">
-          <div className="k">registration</div>
-          <div className="v">{group(REGISTRATION_SATS)} <span className="u">sats, once</span></div>
-          <p className="tiny faint">Pays btc.fun to list and certify the launch. Tickets then pay the platform {PLATFORM_PERCENT} %.</p>
         </div>
       </div>
 
       <dl className="cr-rules">
         <div>
+          <dt>Registration</dt>
+          <dd>{group(REGISTRATION_SATS)} sats, once</dd>
+        </div>
+        <div>
           <dt>Ticket</dt>
-          <dd>{group(TICKET_SATS)} sats, fixed</dd>
+          <dd>{group(TICKET_SATS)} sats, fixed · {PLATFORM_PERCENT} % platform</dd>
         </div>
         <div>
           <dt>Reward</dt>
-          <dd>1 token × clz² ÷ 2<sup>halvings</sup>, from {MIN_CLZ} zero bits</dd>
+          <dd>1 token × clz² ÷ 2<sup>halvings</sup>, from {MIN_CLZ} zero bits; halving every {group(HALVING_BLOCKS)} blocks</dd>
         </div>
         <div>
           <dt>A 24-bit hash, first week</dt>
           <dd>{atoms(reward(24, 0, 0), DECIMALS, 0)} tokens</dd>
-        </div>
-        <div>
-          <dt>Halving</dt>
-          <dd>every {group(HALVING_BLOCKS)} blocks, about a week</dd>
-        </div>
-        <div>
-          <dt>Opens at</dt>
-          <dd>{tip ? `block ${group(tip + opensAt)}` : "—"}</dd>
         </div>
       </dl>
     </section>

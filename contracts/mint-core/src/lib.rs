@@ -193,13 +193,19 @@ pub fn certificate_message(args: &[u8], registration: &[u8; 32]) -> [u8; 32] {
 }
 
 /// True when `admission` (registration ‖ BIP340 signature) is `key`'s
-/// certificate over `args`.
+/// certificate over `args`. The registration must name a transaction: an
+/// all-zero txid was how the platform once admitted its own launches without
+/// paying, and no certificate over it is honoured, so every mineable launch
+/// points at a real registration payment on Bitcoin.
 pub fn admitted(args: &[u8], admission: &[u8], key: &[u8; 32]) -> bool {
     use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
     let Ok(admission) = <&[u8; ADMISSION_BYTES]>::try_from(admission) else {
         return false;
     };
     let registration: &[u8; 32] = admission[..32].try_into().unwrap();
+    if registration.iter().all(|&b| b == 0) {
+        return false;
+    }
     let (Ok(key), Ok(sig)) = (VerifyingKey::from_bytes(key), Signature::try_from(&admission[32..])) else {
         return false;
     };

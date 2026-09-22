@@ -21,7 +21,6 @@ const op = (kind: LoopOperation["kind"], btcTxid: string, stage: LoopOperation["
 
 const base: LoopInput = {
   wallet: "local",
-  offered: true,
   launchOpen: true,
   miners: [],
   operations: [],
@@ -153,16 +152,6 @@ describe("which step of the loop a miner is on", () => {
     expect(at({ miners: [cell("idle")], operations: [transfer] }).state).toEqual({ at: "waiting", op: transfer });
   });
 
-  it("stays closed where the site offers no miner, unless a ticket is already held", () => {
-    expect(at({ offered: false }).state.at).toBe("closed");
-    expect(at({ offered: false, wallet: null, miners: null }).state.at).toBe("closed");
-    // Before the wallet's cells are read, "finish" cannot be told from "closed".
-    expect(at({ offered: false, miners: null }).state.at).toBe("reading");
-    expect(at({ offered: false, miners: [cell("armed")] }).state.at).toBe("mine");
-    // A paid ticket is a ticket held: it can still be armed and mined.
-    expect(at({ offered: false, miners: [cell("paid")] }).state.at).toBe("mine");
-  });
-
   it("marks the steps behind as done and the ones ahead as next", () => {
     const loop = at({ miners: [cell("armed")] });
     expect(statusOf("wallet", loop.step, loop.state)).toBe("done");
@@ -198,7 +187,6 @@ describe("what the page says is happening", () => {
   });
 
   it("leaves a launch that is not on offer to the page", () => {
-    expect(narrate(at({ offered: false }).state, ctx)).toBeNull();
     expect(narrate(at({ launchOpen: false }).state, ctx)).toBeNull();
   });
 });

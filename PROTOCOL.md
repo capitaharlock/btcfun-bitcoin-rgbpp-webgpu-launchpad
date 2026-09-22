@@ -215,8 +215,11 @@ deterministic). The announcement carries the registration txid and the
 certificate; the app lists only launches whose certificate verifies. The mint
 script requires the certificate at the arming of a paid cell and refuses to
 create an idle cell, so every mint descends from a certified arming (decision
-`2026-09-25-paid-registration-and-certificate`). The platform admits its own
-launches without a fee: registration txid all zeros.
+`2026-09-25-paid-registration-and-certificate`). There is no unpaid admission:
+the script refuses a certificate over an all-zero registration txid, and the
+platform's own launches pay like anyone's (decision
+`2026-09-26-every-launch-registered-and-mineable`). The signer needs the payment
+to be known to Bitcoin, not confirmed.
 
 ## 5. Tokens after minting
 

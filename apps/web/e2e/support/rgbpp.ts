@@ -164,6 +164,8 @@ export class RgbppSim {
   readonly unexpected: string[] = [];
   /** When true, the queue leaves every job waiting. */
   stalled = false;
+  /** How many certificate requests to answer as if Bitcoin had not seen the registration yet. */
+  unseenCertifications = 0;
   private blockNumber = 1;
 
   constructor(private readonly chain: ChainSim) {
@@ -181,7 +183,10 @@ export class RgbppSim {
   private async certify(route: Route): Promise<void> {
     const { args, registration } = JSON.parse(route.request().postData() ?? "{}") as { args: string; registration: string };
     const tx = this.chain.broadcasts.find((b) => b.txid === registration);
-    if (!tx) return route.fulfill({ status: 404, json: { error: "That registration transaction is not known to Bitcoin yet." } });
+    // An explorer that has not heard of the payment yet, as happens seconds after it is sent.
+    const unseen = this.unseenCertifications > 0;
+    if (unseen) this.unseenCertifications--;
+    if (!tx || unseen) return route.fulfill({ status: 404, json: { error: "That registration transaction is not known to Bitcoin yet." } });
     const bytes = Uint8Array.from(Buffer.from(args, "hex"));
     const fault = registrationFault(tx.outputs.map((o) => ({ scriptHex: o.script, value: Number(o.amount) })), bytes, PLATFORM_SCRIPT);
     if (fault) return route.fulfill({ status: 422, json: { error: `That transaction does not register this launch: ${fault}.` } });

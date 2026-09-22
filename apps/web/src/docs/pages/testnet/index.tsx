@@ -54,8 +54,8 @@ export default function TestnetPage() {
             run end to end on testnet. Until it has, no mint through the app is claimed as done.
           </li>
           <li>
-            The certified mint script (2026-09-25) — one payment per round, mining from the broadcast ticket and paid
-            registration — has not had its live round yet. Its arming and first mint carry data
+            The certified mint script (2026-09-26) — one payment per round, mining from the broadcast ticket, and a paid
+            registration behind every launch, the platform's own included — has not had its live round yet. Its arming and first mint carry data
             in a witness past the inputs, which the RGB++ queue is expected to leave as written; the simulator does, the
             real queue is unconfirmed until that round. The same round is the first live test of mining from the broadcast
             ticket, with the arming signed while mining.

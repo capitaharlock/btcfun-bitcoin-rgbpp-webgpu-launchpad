@@ -11,10 +11,6 @@
  * show a dash until they arrive. A simulated example (`data/showcase.ts`) is
  * badged as such, carries its own illustrative figures, and has every link and
  * its MINE button switched off: there is nothing on chain behind it.
- *
- * On the testnet showcase the site offers mining on the featured launch only
- * (`canMine`), so every other real launch shows its MINE greyed out with the
- * reason. The box itself still links to the launch's page.
  */
 
 import { memo } from "react";
@@ -22,7 +18,6 @@ import { memo } from "react";
 import type { CatalogueEntry } from "../data/showcase";
 import type { LaunchStats } from "../hooks/useLaunchStats";
 import { atoms, compact, group } from "../lib/format";
-import { canMine, MINING_CLOSED_NOTE } from "../lib/launches/featured";
 import { DECIMALS, reward } from "../lib/standard";
 import { HalvingBar } from "./HalvingBar";
 import { ExplorerLinks, launchExplorers, offExplorers, ProjectLinks } from "./PixelIcon";
@@ -143,16 +138,10 @@ export const TokenCard = memo(function TokenCard({ entry, tip, synced, stats, ho
                 ▶ Mine
               </button>
             </span>
-          ) : action === "mine" && canMine(entry) ? (
+          ) : action === "mine" ? (
             <a className="btn play soft" href={`${href}/mine`} aria-label={`Mine ${entry.symbol}`}>
               ▶ Mine
             </a>
-          ) : action === "mine" ? (
-            <span className="tc-off" title={MINING_CLOSED_NOTE}>
-              <button type="button" className="btn" disabled aria-label={`Mine ${entry.symbol} — ${MINING_CLOSED_NOTE}`}>
-                ▶ Mine
-              </button>
-            </span>
           ) : (
             <a className="btn" href={href} aria-label={`View ${entry.symbol}`}>
               {action === "soon" ? "Preview" : "View"}

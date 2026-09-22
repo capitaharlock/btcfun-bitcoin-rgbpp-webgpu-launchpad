@@ -197,4 +197,8 @@ fn an_admission_is_the_platform_signature_over_the_terms_and_the_registration() 
     assert!(!admitted(&args, &forged, &key));
     assert!(!admitted(&args, &admission, &PLATFORM_CERT_KEY));
     assert!(!admitted(&args, &admission[..95], &key));
+    // A genuine signature over no registration (all zeros) is refused too.
+    let signer = k256::schnorr::SigningKey::from_bytes(&TEST_CERT_SECRET).unwrap();
+    let unpaid = signer.sign_raw(&certificate_message(&args, &[0; 32]), &[0; 32]).unwrap().to_bytes();
+    assert!(!admitted(&args, &[[0u8; 32].as_slice(), &unpaid].concat(), &key));
 }

@@ -446,8 +446,12 @@ pub fn error_code(err: &str) -> Option<i8> {
 /// `secret` over the mint script's args. The test build trusts only
 /// `TEST_CERT_SECRET`'s key.
 pub fn admission(mint: &Script, secret: &[u8; 32]) -> Vec<u8> {
+    admission_over(mint, secret, [0x7e; 32])
+}
+
+/// `secret`'s certificate over the launch and a registration txid of the test's choosing.
+pub fn admission_over(mint: &Script, secret: &[u8; 32], registration: [u8; 32]) -> Vec<u8> {
     let args: Bytes = mint.args().unpack();
-    let registration = [0x7e; 32];
     let key = k256::schnorr::SigningKey::from_bytes(secret).unwrap();
     let message = mint_core::certificate_message(&args, &registration);
     let signature = key.sign_raw(&message, &[0u8; 32]).unwrap().to_bytes();

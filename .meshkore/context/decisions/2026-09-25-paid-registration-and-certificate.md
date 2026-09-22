@@ -22,9 +22,11 @@ the creating ticket. Idle cells exist only as a mint leaves them, so every
 ticket and every mint of a launch descends from a certified arming: **a token
 of btc.fun's mint script can be minted only where btc.fun admitted its launch.**
 
-The platform's own launches (DEMO and the official set) are admitted by the
-platform without a fee: their registration txid is all zeros and the
-certificate is signed with the same key.
+The platform's own launches (DEMO and the official set) were admitted by the
+platform without a fee: their registration txid was all zeros and the
+certificate signed with the same key. **Superseded 2026-09-26** by
+`2026-09-26-every-launch-registered-and-mineable`: every launch pays, and the
+script refuses an all-zero registration.
 
 # Why
 

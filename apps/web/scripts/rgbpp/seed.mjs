@@ -26,10 +26,9 @@
 import { fileURLToPath } from "node:url";
 import {
   activity, alice, bid, bob, certificate, creatingTx, demo, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
-  platformAdmission, sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
+  INDEX, register, sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
 } from "./kit.mjs";
 
-const INDEX = (process.env.INDEX ?? "https://btcfun.rjj.workers.dev").replace(/\/$/, "");
 const ROUNDS = Number(process.env.ROUNDS ?? 2);
 
 const { state, write } = stateFile(fileURLToPath(new URL("../../.e2e-runs/seed.json", import.meta.url)), {
@@ -103,7 +102,13 @@ const steps = {
       };
       const faults = create.validate(draft, network.ACTIVE);
       if (Object.keys(faults).length > 0) throw new Error(`${symbol}: ${JSON.stringify(faults)}`);
-      const admitted = platformAdmission(draft, tip + draft.opensInBlocks);
+      // Registered like anyone's launch: paid, then certified by the site's signer.
+      // A payment already sent is kept first, so a retry never pays twice.
+      state.registrations ??= {};
+      const h0 = state.registrations[symbol]?.h0 ?? tip + draft.opensInBlocks;
+      const admitted = await register(alice, draft, h0, state.registrations[symbol] ?? null);
+      state.registrations[symbol] = admitted.registration;
+      write();
       const commitment = create.commitmentFor(draft, identity, admitted.registration, admitted.certificate, network.ACTIVE);
       if (!create.idMatches(commitment, network.ACTIVE)) throw new Error(`${symbol}: the certificate does not verify`);
       await publish(alice, {

@@ -42,9 +42,6 @@ export const PLATFORM_CERT_KEY: string =
   (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_PLATFORM_CERT_KEY ??
   "9f21697aa0e61bc65c23eb84a525bb1a4282211d265d3d080e49371ef809bdfa";
 
-/** The registration a launch the platform admits itself names: no payment. */
-export const NO_REGISTRATION = "0".repeat(64);
-
 const CERTIFICATE_DOMAIN = utf8ToBytes("btc.fun/launch-certificate/v1");
 const REGISTRATION_DOMAIN = utf8ToBytes("btc.fun/launch-registration/v1");
 
@@ -73,9 +70,15 @@ export function signCertificate(args: Uint8Array, registration: string, secret: 
   return schnorr.sign(certificateMessage(args, registration), secret, new Uint8Array(32));
 }
 
-/** True when `key` (x-only hex) signed these terms and registration. Never throws: announcements are untrusted input. */
+/**
+ * True when `key` (x-only hex) signed these terms and registration. Never
+ * throws: announcements are untrusted input. An all-zero registration names no
+ * payment and is refused whoever signed it, as the mint script refuses it — the
+ * platform's own launches once went unpaid that way, and none may any more.
+ */
 export function admitted(args: Uint8Array, registration: string, certificate: string, key: string = PLATFORM_CERT_KEY): boolean {
   try {
+    if (/^0+$/.test(registration)) return false;
     return /^[0-9a-f]{128}$/.test(certificate) && schnorr.verify(hexToBytes(certificate), certificateMessage(args, registration), key);
   } catch {
     return false;
