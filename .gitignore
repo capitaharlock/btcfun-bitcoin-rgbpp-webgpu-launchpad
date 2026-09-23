@@ -26,10 +26,9 @@ tmp/
 .DS_Store
 .wrangler/
 
-# End-to-end runner: the test wallet's key and the chains/reports a run writes.
-apps/web/.e2e-wallet.json
-apps/web/.platform-cert-key.json
-apps/web/.e2e-runs/
+# The operator's local workspace (`apps/web/scripts/local.mjs`): the test
+# wallet, runner state, logs and scratch. Never committed.
+apps/web/.local/
 
 # Browser suite output: traces, screenshots, reports.
 apps/web/e2e-output/

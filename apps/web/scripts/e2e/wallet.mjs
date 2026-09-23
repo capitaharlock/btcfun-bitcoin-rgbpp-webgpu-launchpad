@@ -4,7 +4,7 @@
  * from anything a person uses in the browser, and it is the only secret this
  * repository's tooling holds.
  *
- * WHERE THE SECRET LIVES. In `.e2e-wallet.json`, beside this app, ignored by
+ * WHERE THE SECRET LIVES. In the local workspace (`../local.mjs`), ignored by
  * git. It is never printed except by `mnemonic`, never committed, and never
  * sent anywhere. `E2E_MNEMONIC` overrides it, which is how CI would supply one
  * without a file on disk.
@@ -19,11 +19,10 @@
  * money.
  */
 
-import { readFile, writeFile, chmod } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { storedMnemonic, WALLET_FILE } from "../local.mjs";
 import { load } from "./load.mjs";
-
-const WALLET_PATH = fileURLToPath(new URL("../../.e2e-wallet.json", import.meta.url));
 
 export class WalletMissing extends Error {
   constructor() {
@@ -59,36 +58,26 @@ export async function ensureWallet() {
   const mnemonic = entropyToMnemonic(new Uint8Array(randomBytes(32)), wordlist);
   const address = await addressFor(mnemonic);
 
+  await mkdir(dirname(WALLET_FILE), { recursive: true });
   await writeFile(
-    WALLET_PATH,
+    WALLET_FILE,
     `${JSON.stringify({ mnemonic, address, createdAt: new Date().toISOString() }, null, 2)}\n`,
   );
   // Owner-only: this file is a spending key, testnet or not.
-  await chmod(WALLET_PATH, 0o600);
+  await chmod(WALLET_FILE, 0o600);
 
   return { created: true, mnemonic, address };
 }
 
 /** The stored wallet, or null. `E2E_MNEMONIC` wins when set. */
 async function read() {
-  const fromEnv = process.env.E2E_MNEMONIC?.trim();
-  if (fromEnv) return { mnemonic: fromEnv, address: await addressFor(fromEnv) };
-
-  try {
-    const parsed = JSON.parse(await readFile(WALLET_PATH, "utf8"));
-    if (typeof parsed.mnemonic !== "string") return null;
-    return { mnemonic: parsed.mnemonic, address: await addressFor(parsed.mnemonic) };
-  } catch {
-    return null;
-  }
+  const mnemonic = storedMnemonic();
+  return mnemonic ? { mnemonic, address: await addressFor(mnemonic) } : null;
 }
 
 async function entropyOf(mnemonic) {
-  const { mnemonicToEntropy, validateMnemonic } = await import("@scure/bip39");
+  const { mnemonicToEntropy } = await import("@scure/bip39");
   const { wordlist } = await import("@scure/bip39/wordlists/english");
-  if (!validateMnemonic(mnemonic, wordlist)) {
-    throw new Error("The stored end-to-end mnemonic is not a valid BIP39 phrase.");
-  }
   return mnemonicToEntropy(mnemonic, wordlist);
 }
 
@@ -138,4 +127,4 @@ export async function balanceOf(address) {
   return getBalance(address);
 }
 
-export { WALLET_PATH };
+export { WALLET_FILE };

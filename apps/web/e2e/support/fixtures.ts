@@ -5,7 +5,7 @@
  *   app     small verbs over the UI — go somewhere, get a wallet — written
  *           against what a person sees, not against component internals
  *   ux      a place to record experience findings; they end up in
- *           TEST_RESULTS.md next to the pass/fail table
+ *           .meshkore/docs/test-results.md next to the pass/fail table
  *
  * A page error fails the test even if every assertion passed. An uncaught
  * exception in the console is a bug a user would hit, whether or not the

@@ -93,6 +93,7 @@ done. Nothing is named more strongly than the code can support.
 
 - [Protocol specification](PROTOCOL.md)
 - [What is implemented, pending and absent](.meshkore/docs/capabilities.md)
+- [Test results: what is tested and what testing found](.meshkore/docs/test-results.md)
 - [The decision: one standard, an instant mint](.meshkore/context/decisions/2026-09-24-standard-tokenomics-and-instant-mint.md)
 - [Hosting: why Cloudflare, and what the index may never be](.meshkore/docs/hosting.md)
 - [Design history — including the directions already rejected](.meshkore/context/idea-evolution.md)

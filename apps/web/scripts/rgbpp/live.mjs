@@ -17,14 +17,13 @@
  *
  * Every Bitcoin transaction is built by `lib/rgbpp` exactly as the browser
  * builds it; the only thing this file adds is a key read from disk. Each step
- * records what it did in `.e2e-runs/rgbpp-live.json`, so the steps can be run
+ * records what it did in the local run file `rgbpp-live`, so the steps can be run
  * minutes apart while Bitcoin confirms and the RGB++ queue completes the CKB
  * side. Testnet only: the RGB++ configuration here is CKB testnet's.
  *
  * MINER=demo mines with the shared demo wallet instead of Alice.
  */
 
-import { fileURLToPath } from "node:url";
 import {
   alice as aliceKey, bob, cellsOf, cfg, close, create, creatingTx, demo, events, INDEX, launch, network, ops, provider, register, rgbpp, sale,
   sealedUtxos, certificate, savedTerms, standard, stateFile, submit as send, termsFrom, vaultOf, verify,
@@ -33,7 +32,7 @@ import {
 /** Who mines: Alice, or the shared demo wallet. */
 const alice = process.env.MINER === "demo" ? demo : aliceKey;
 
-const { state, write } = stateFile(fileURLToPath(new URL("../../.e2e-runs/rgbpp-live.json", import.meta.url)), { steps: [] });
+const { state, write } = stateFile("rgbpp-live", { steps: [] });
 
 function termsOf(state) {
   if (!state.launch) throw new Error("run `launch` first");

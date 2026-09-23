@@ -10,7 +10,7 @@ created: 2026-09-23
 updated: 2026-09-23
 ---
 
-`TEST_RESULTS.md` at the repository root: a hand-written account of what was tested and what changed, plus a section regenerated from the last run by `npm run test:report`.
+`.meshkore/docs/test-results.md`: a hand-written account of what was tested and what changed, plus a section regenerated from the last run by `npm run test:report`.
 
 ## Done when
 

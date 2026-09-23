@@ -8,13 +8,11 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { sha256 } from "@noble/hashes/sha2";
 import { mnemonicToEntropy } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { close, loadAll } from "../e2e/load.mjs";
-
-const WALLET = fileURLToPath(new URL("../../.e2e-wallet.json", import.meta.url));
+import { requireMnemonic, runFile } from "../local.mjs";
 
 export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment, certificate] =
   await loadAll(
@@ -46,8 +44,7 @@ export const rgbpp = new service.RgbppService(cfg, { origin: "https://btcfun.loc
 
 // ─── keys ────────────────────────────────────────────────────────────────
 
-const mnemonic = process.env.E2E_MNEMONIC?.trim() || JSON.parse(readFileSync(WALLET, "utf8")).mnemonic;
-const aliceEntropy = mnemonicToEntropy(mnemonic, wordlist);
+const aliceEntropy = mnemonicToEntropy(requireMnemonic(), wordlist);
 /** Bob: a second wallet derived from Alice's secret, so the scripts need one secret. */
 const bobEntropy = sha256(new Uint8Array([...aliceEntropy, ...new TextEncoder().encode("btcfun/bob")]));
 export const alice = keys.deriveKey(aliceEntropy, network.ACTIVE);
@@ -67,8 +64,9 @@ export const vaultOf = (key) => ({
 
 // ─── state ───────────────────────────────────────────────────────────────
 
-/** A JSON state file that survives between steps run minutes apart. */
-export function stateFile(path, initial) {
+/** A runner's JSON state (`local.mjs` `runFile`), kept between steps run minutes apart. */
+export function stateFile(name, initial) {
+  const path = runFile(name);
   const state = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : initial;
   const write = () => {
     mkdirSync(dirname(path), { recursive: true });

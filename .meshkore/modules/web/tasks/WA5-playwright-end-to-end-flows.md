@@ -10,7 +10,7 @@ created: 2026-09-23
 updated: 2026-09-24
 ---
 
-The deterministic browser suite over simulated Bitcoin, RGB++ and CKB covers create, ticket, mine, mint, transfer, sale and proof, with the mint rules as an independent oracle (`TEST_RESULTS.md`). What remains is the recorded real-network run and the cases the simulators do not yet produce.
+The deterministic browser suite over simulated Bitcoin, RGB++ and CKB covers create, ticket, mine, mint, transfer, sale and proof, with the mint rules as an independent oracle (`.meshkore/docs/test-results.md`). What remains is the recorded real-network run and the cases the simulators do not yet produce.
 
 ## Execution
 

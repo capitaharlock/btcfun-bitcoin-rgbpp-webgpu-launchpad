@@ -1,3 +1,13 @@
+---
+title: Test results
+category: docs
+tags: [testing, evidence, testnet]
+updated: 2026-09-26
+owner: rjj
+status: current
+related: [onchain-tokens, web-app]
+---
+
 # Test results
 
 btc.fun's tokens are RGB++ xUDT cells on CKB, minted under one standard by a

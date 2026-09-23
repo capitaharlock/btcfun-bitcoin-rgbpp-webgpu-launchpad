@@ -23,7 +23,6 @@
  * deployed site).
  */
 
-import { fileURLToPath } from "node:url";
 import {
   activity, alice, bid, bob, certificate, creatingTx, demo, payment, cellsOf, cfg, close, create, events, image, launchCells, network, ops, provider, rgbpp, sale,
   INDEX, register, sealedUtxos, standard, stateFile, submit, termsFrom, vaultOf, verify,
@@ -31,7 +30,7 @@ import {
 
 const ROUNDS = Number(process.env.ROUNDS ?? 2);
 
-const { state, write } = stateFile(fileURLToPath(new URL("../../.e2e-runs/seed.json", import.meta.url)), {
+const { state, write } = stateFile("seed", {
   launches: [],
   rounds: {},
   pending: {},
@@ -124,7 +123,7 @@ const steps = {
   },
 
   async history() {
-    const live = stateFile(fileURLToPath(new URL("../../.e2e-runs/rgbpp-live.json", import.meta.url)), null).state;
+    const live = stateFile("rgbpp-live", null).state;
     if (!live?.launch) throw new Error("no live run to publish");
     const t = live.launch;
     const commitment = {

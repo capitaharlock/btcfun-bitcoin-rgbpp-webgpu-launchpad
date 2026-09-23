@@ -1,16 +1,14 @@
 /* The browser suite.
  *
- * Two projects, because they answer different questions and must never be
- * confused:
+ *   ui      Deterministic. The Bitcoin provider is simulated, so the block
+ *           height — the emission schedule's clock — is whatever a test says it
+ *           is. This is where time is moved forward a day, a week, twenty-one
+ *           days, and where every wrong input is tried. Nothing leaves the machine.
  *
- *   ui    Deterministic. The Bitcoin provider is simulated, so the block height
- *         — the emission schedule's clock — is whatever a test says it is. This
- *         is where time is moved forward a day, a week, twenty-one days, and
- *         where every wrong input is tried. Nothing leaves the machine.
+ *   mobile  The layout, docs and wizard specs again on a phone viewport.
  *
- *   live  Real testnet3 and CKB testnet, real satoshis, the funded end-to-end wallet restored
- *         through the wallet page like any user would. Serial, slow, and the
- *         only project that can spend money. Skipped unless E2E_LIVE=1.
+ * Real testnet runs are the command-line runners (`npm run rgbpp:live`), not
+ * a browser project: they spend, and must never start from a test glob.
  *
  * `HEADED=1` shows the browser; `SLOWMO=<ms>` slows it enough to follow.
  */
@@ -58,17 +56,6 @@ export default defineConfig({
       testMatch: /\/(layout|docs|wizard)\.spec\.ts$/,
       timeout: 60_000,
       use: { ...devices["Pixel 7"] },
-    },
-    {
-      name: "live",
-      testDir: "e2e/live",
-      // Its own artifact folder: a concurrent `ui` run cleans the shared one.
-      outputDir: "e2e-output/live-artifacts",
-      // One wallet, one UTXO set: two runs in parallel would double-spend.
-      workers: 1,
-      timeout: 45 * 60_000,
-      retries: 0,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 960 } },
     },
   ],
   // The production build, served statically: what ships, and fast enough that

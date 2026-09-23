@@ -6,7 +6,7 @@
  */
 
 import { argv, exit } from "node:process";
-import { assertTestnet, ensureWallet, balanceOf, WALLET_PATH } from "./wallet.mjs";
+import { assertTestnet, ensureWallet, balanceOf, WALLET_FILE } from "./wallet.mjs";
 import { close } from "./load.mjs";
 
 const command = argv[2] ?? "wallet";
@@ -19,7 +19,7 @@ try {
 
     console.log(`\n${created ? "Created" : "Existing"} end-to-end wallet on ${network.label}\n`);
     console.log(`  address   ${address}`);
-    console.log(`  key file  ${WALLET_PATH}  (git-ignored, chmod 600)`);
+    console.log(`  key file  ${WALLET_FILE}  (git-ignored, chmod 600)`);
 
     if (argv.includes("--seed")) {
       console.log(`\n  recovery phrase (BIP39, path m/84'/1'/0'/0/0):\n\n    ${mnemonic}\n`);

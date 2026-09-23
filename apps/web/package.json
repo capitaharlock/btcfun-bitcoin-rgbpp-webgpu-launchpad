@@ -22,7 +22,6 @@
     "ckb:deploy-mint": "node scripts/ckb/deploy-mint.mjs",
     "test:browser": "playwright test --project=ui --project=mobile",
     "test:browser:headed": "HEADED=1 playwright test --project=ui --project=mobile",
-    "test:browser:live": "E2E_LIVE=1 HEADED=1 playwright test --project=live",
     "test:report": "node scripts/test-report.mjs"
   },
   "dependencies": {
