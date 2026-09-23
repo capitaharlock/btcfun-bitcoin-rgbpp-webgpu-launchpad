@@ -137,7 +137,8 @@ function LaunchHeader({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
             </>
           ) : (
             <span>
-              Opens in {group(launch.blocksToHalving)} blocks · {blocksAsTime(launch.blocksToHalving)}
+              Opens in {launch.blocksToHalving === 1 ? "1 block" : `${group(launch.blocksToHalving)} blocks`} ·{" "}
+              {blocksAsTime(launch.blocksToHalving)}
             </span>
           )}
         </p>
@@ -149,14 +150,13 @@ function LaunchHeader({ launch, ml }: { launch: Launch; ml: MiningLoop }) {
         {state.at === "not-open" ? (
           <div className="lh-say" role="status">
             <p>
-              <span className="lh-k">Waiting</span> Mining opens at block {group(launch.h0)}, in{" "}
-              {launch.blocksToHalving === 1 ? "1 block" : `${group(launch.blocksToHalving)} blocks`} (about{" "}
-              {blocksAsTime(launch.blocksToHalving)}).
+              <span className="lh-k">When</span> Mining opens at block {group(launch.h0)}, in{" "}
+              {launch.blocksToHalving === 1 ? "1 block" : `${group(launch.blocksToHalving)} blocks`} ({blocksAsTime(launch.blocksToHalving)}).
             </p>
-            <p className="tiny faint">
+            <div className="tiny faint">
               The mint script refuses tickets before that block, so nothing can be bought yet — by anyone, the creator
               included. This page unlocks by itself when the block arrives.
-            </p>
+            </div>
           </div>
         ) : (
           <div className="lh-say">
