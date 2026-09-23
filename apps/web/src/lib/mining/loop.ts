@@ -310,7 +310,7 @@ const LANDING_NAMES: Record<LoopOperation["kind"], string> = {
 };
 
 const UNARMED_NEXT: Record<Unarmed["why"] | "armed", string> = {
-  landing: "Minting waits for one Bitcoin block",
+  landing: "Minting waits for the ticket to settle, about one Bitcoin block",
   arm: "Activate your ticket — network fee only",
   arming: "Minting waits for the activation's block",
   armed: `Minting unlocks at ${MIN_CLZ} zero bits`,

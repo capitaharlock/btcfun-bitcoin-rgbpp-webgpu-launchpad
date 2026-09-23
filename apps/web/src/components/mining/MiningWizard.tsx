@@ -193,7 +193,7 @@ function progressOf(step: LoopStep, ml: MiningLoop): Progress {
       if (state.at === "waiting") return { word: "waiting", tone: "wait" };
       if (state.at === "mine" && state.unarmed?.why === "arm") return { word: "activate", tone: "act" };
       if (state.at === "mine" && state.unarmed?.why === "arming") return { word: "activating", tone: "wait" };
-      if (traces.ticket?.stage === "landing") return { word: "in mempool", tone: "wait" };
+      if (traces.ticket?.stage === "landing") return { word: "settling", tone: "wait" };
       if (traces.ticket?.stage === "failed") return { word: "failed", tone: "act" };
       return { word: "confirmed", tone: "done" };
     }
@@ -204,7 +204,7 @@ function progressOf(step: LoopStep, ml: MiningLoop): Progress {
       if (qualifies) return { word: "hash ok", tone: "act" };
       return ml.mining.running ? { word: "mining", tone: "wait" } : { word: "start", tone: "act" };
     case "mint":
-      if (state.at === "minting") return { word: "in mempool", tone: "wait" };
+      if (state.at === "minting") return { word: "settling", tone: "wait" };
       if (state.at === "minted") return state.op.stage === "failed" ? { word: "failed", tone: "act" } : { word: "confirmed", tone: "done" };
       if (ml.keeping) return { word: "to sign", tone: "act" };
       return { word: at === "todo" ? "next" : "later", tone: "todo" };
@@ -220,14 +220,14 @@ function RoundLedger({ ml, symbol }: { ml: MiningLoop; symbol: string }) {
   const { state, traces, activates } = ml.loop;
   const best = ml.mining.progress.best?.clz ?? null;
   const tx = (trace: Trace | null, before: Progress): Progress =>
-    !trace ? before : trace.stage === "settled" ? { word: "confirmed", tone: "done" } : trace.stage === "failed" ? { word: "failed", tone: "act" } : { word: "in mempool", tone: "wait" };
+    !trace ? before : trace.stage === "settled" ? { word: "confirmed", tone: "done" } : trace.stage === "failed" ? { word: "failed", tone: "act" } : { word: "settling", tone: "wait" };
   const items: Array<{ label: string; p: Progress }> = [
     { label: "Ticket payment", p: tx(traces.ticket, state.at === "buy" ? { word: "to sign", tone: "act" } : { word: "not yet", tone: "todo" }) },
   ];
   if (activates) {
     const unarmed = state.at === "mine" ? state.unarmed : null;
     const before: Progress =
-      unarmed?.why === "arm" ? { word: "to sign", tone: "act" } : unarmed?.why === "landing" ? { word: "after the ticket's block", tone: "todo" } : { word: "not yet", tone: "todo" };
+      unarmed?.why === "arm" ? { word: "to sign", tone: "act" } : unarmed?.why === "landing" ? { word: "after the ticket settles", tone: "todo" } : { word: "not yet", tone: "todo" };
     items.push({ label: "Activation", p: tx(traces.arm, before) });
   }
   items.push({
@@ -661,7 +661,7 @@ function Readiness({ ml }: { ml: MiningLoop }) {
   let say: ReactNode;
   switch (unarmed?.why) {
     case "landing":
-      say = <Working>Ticket in the mempool — minting waits for one Bitcoin block.</Working>;
+      say = <Working>Ticket sent — it settles on CKB once a Bitcoin block confirms it. Keep mining meanwhile.</Working>;
       break;
     case "arm":
       say = (
