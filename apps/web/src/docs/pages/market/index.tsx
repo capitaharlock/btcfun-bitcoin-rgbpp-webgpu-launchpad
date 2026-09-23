@@ -139,7 +139,7 @@ export default function MarketPage() {
       <section>
         <h2>An order book between people</h2>
         <p>
-          The market is a <strong>peer-to-peer order book</strong>, over launches btc.fun has admitted. Selling never touches a ticket being mined: token
+          The market is a <strong>peer-to-peer order book</strong>, over launches btc.fun has admitted — each one registered by a payment on Bitcoin. Selling never touches a ticket being mined: token
           cells and miner cells are sealed to different outputs. There is no liquidity pool, no automated market maker
           and no market maker of ours: every trade is between one seller and one buyer, at a price one of them chose.{" "}
           <strong>Nothing is escrowed</strong> — no one, including btc.fun, ever holds the tokens or the bitcoin in between.
