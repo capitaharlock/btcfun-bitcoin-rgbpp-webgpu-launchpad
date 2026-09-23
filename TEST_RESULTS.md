@@ -137,6 +137,19 @@ The same day DEMO and the official launches were registered with real payments
 through the same signer (DEMO: [b138624592bf…](https://mempool.space/testnet/tx/b138624592bf9c0419eb3ca52273a575c1ec56a7409cfc58579d08cc3af6701b));
 the launches admitted without a payment under the previous script are gone.
 
+The same circuit was then run **through the deployed site's own interface**
+(headless Chromium, the demo wallet, no mocks): launch `SITEQA`
+(`siteqa-34ffad68e5eab621`) created with the one-button registration
+([93dc18506c04…](https://mempool.space/testnet/tx/93dc18506c04a3b5)), its mint
+page waiting for the opening block, ticket
+([25b5d90c3fab…](https://mempool.space/testnet/tx/25b5d90c3fabc22f)) mined at
+once without waiting for Bitcoin (28 bits in the browser), activation, and a
+mint of 784 SITEQA ([a48b9e86729c…](https://mempool.space/testnet/tx/a48b9e86729cdeda1f26a71f7961afc2cab5b44a2956c430554dba9b0aedc49a),
+CKB [0x7646ce6346…](https://testnet.explorer.nervos.org/transaction/0x7646ce63467794761826a1b52dcadf4ef1cfb209b77383a7fdbdced34c8cc9f3)).
+The wallet shows the balance and the Proof page passes every rule. The run found
+one fault, fixed the same day: a ticket confirmed on Bitcoin but not yet settled
+on CKB was labelled "in mempool"; it now reads "settling".
+
 The first run, below, used the first mint script.
 
 Run on 2026-09-24 with `npm run rgbpp:live`, against the public RGB++ services,
