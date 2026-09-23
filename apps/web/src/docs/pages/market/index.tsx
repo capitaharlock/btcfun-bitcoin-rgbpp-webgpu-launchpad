@@ -15,7 +15,7 @@ const ASK: DiagramSpec = {
     "ANYONECANPAY: that output as input 0, and the price paid to themselves as output 0. The index publishes this signed " +
     "listing. A buyer checks it, adds the commitment, the output their tokens will be sealed to, their funding and change, " +
     "signs their own inputs and broadcasts. After confirmation the RGB++ queue proves it to CKB and the tokens move to the " +
-    "buyer. Payment and delivery are one Bitcoin transaction.",
+    "buyer if the committed CKB transaction confirms. The Bitcoin payment can confirm first.",
   laneWidth: 206,
   lanes: [
     { id: "seller", label: "Seller", tone: "violet" },
@@ -31,9 +31,9 @@ const ASK: DiagramSpec = {
     { id: "check", lane: "buyer", row: 3, kind: "process", label: "Check the listing", detail: "signature, price, live cell", tone: "violet" },
     { id: "complete", lane: "buyer", row: 4, kind: "process", label: "Complete the transaction", detail: "commitment, own seal, funding, change", tone: "violet" },
     { id: "broadcast", lane: "buyer", row: 5, kind: "process", label: "Sign own inputs, broadcast", tone: "violet" },
-    { id: "tx", lane: "chain", row: 5, kind: "process", label: "One transaction", detail: "price and tokens move together", tone: "amber" },
+    { id: "tx", lane: "chain", row: 5, kind: "process", label: "Bitcoin payment confirms", detail: "commits to the CKB transfer", tone: "amber" },
     { id: "queue", lane: "chain", row: 6, kind: "process", label: "Queue proves it to CKB", tone: "cyan" },
-    { id: "done", lane: "chain", row: 7, kind: "terminal", label: "Seller paid, buyer holds", tone: "mint" },
+    { id: "done", lane: "chain", row: 7, kind: "terminal", label: "CKB confirms: buyer holds", tone: "mint" },
     { id: "cancel", lane: "seller", row: 4, kind: "note", label: "To cancel: spend the listed output. The listing then cannot complete." },
   ],
   edges: [
@@ -117,8 +117,9 @@ const BID: DiagramSpec = {
     { id: "listing", lane: "holder", row: 3, kind: "process", label: "List exactly N for P", detail: "an ordinary signed ask", tone: "sun" },
     { id: "listed", lane: "index", row: 4, kind: "process", label: "Listing published", detail: "labelled with the bid", tone: "slate" },
     { id: "complete", lane: "bidder", row: 5, kind: "process", label: "Complete it like any buyer", detail: "and broadcast", tone: "violet" },
-    { id: "tx", lane: "chain", row: 5, kind: "process", label: "One transaction", detail: "price and tokens together", tone: "amber" },
-    { id: "done", lane: "chain", row: 6, kind: "terminal", label: "Settled", tone: "mint" },
+    { id: "tx", lane: "chain", row: 5, kind: "process", label: "Bitcoin payment confirms", detail: "commits to token transfer", tone: "amber" },
+    { id: "queue", lane: "chain", row: 6, kind: "process", label: "Queue submits CKB proof", tone: "cyan" },
+    { id: "done", lane: "chain", row: 7, kind: "terminal", label: "CKB confirms: tokens delivered", tone: "mint" },
   ],
   edges: [
     { from: "start", to: "sign" },
@@ -129,7 +130,8 @@ const BID: DiagramSpec = {
     { from: "listing", to: "listed", fromSide: "left", toSide: "top" },
     { from: "listed", to: "complete", fromSide: "left", toSide: "top" },
     { from: "complete", to: "tx" },
-    { from: "tx", to: "done" },
+    { from: "tx", to: "queue" },
+    { from: "queue", to: "done" },
   ],
 };
 
@@ -173,9 +175,9 @@ export default function MarketPage() {
         </p>
         <p>
           A buyer adds the rest: the commitment that moves the tokens, the output they will be sealed to, the bitcoin that
-          pays the price, and their change. They sign their part and broadcast. The price and the tokens move in the same
-          Bitcoin transaction, so neither can happen without the other: the seller's signature is valid only if the price
-          output pays them, and the tokens can only follow the transaction that spends their output.
+          pays the price, and their change. They sign their part and broadcast. The Bitcoin transaction commits to the
+          proposed token transfer and pays the seller. The token transfer completes only when the matching CKB transaction
+          confirms. If that second step fails, the Bitcoin payment still stands; the buyer must check both chains.
         </p>
         <Diagram spec={ASK} />
         <Diagram spec={PURCHASE} />
@@ -204,9 +206,10 @@ export default function MarketPage() {
               is consumed and recreated with the same amount, sealed to output {BUYER_SEAL_VOUT}.
             </li>
             <li>
-              Before paying, the buyer checks that the PSBT parses, spends the listed seal, carries the seller's signature
-              with the right sighash, pays the seller's address and matches the stated price, and that the cell exists with
-              the stated amount. A listing is only a claim until the chain confirms it.
+              Before paying, the buyer checks that the PSBT parses, spends the listed seal, carries a valid seller
+              signature with the right sighash, declares the seller's input script and amount, pays the seller's address
+              and matches the stated price. The cell is checked separately for its current type, seal and amount. The
+              PSBT's input amount is still a claim until checked against Bitcoin chain data.
             </li>
             <li>
               A price is at least {group(DUST_SATS)} sats, the dust limit, because the price is its own Bitcoin output.
@@ -218,9 +221,10 @@ export default function MarketPage() {
               withdrawal counts.
             </li>
             <li>
-              A sale counts as a trade only when its Bitcoin transaction spends the listed output and pays the seller the
-              listed price; a bid is filled only when that sale delivered to the bidder's address. A report of a sale is a
-              pointer to where to look, never the evidence.
+              The current market counts a trade when the Bitcoin transaction spends the listed output and pays the seller
+              the listed price. A bid appears filled when that Bitcoin transaction names the bidder's address at the buyer
+              seal output. This is evidence of payment and intended delivery, not proof that the CKB token cell arrived;
+              the CKB settlement check is still pending. A report of a sale is only a pointer to where to look.
             </li>
             <li>
               The index stores listings and bids as public signed data. It can omit an entry but cannot forge or alter one,

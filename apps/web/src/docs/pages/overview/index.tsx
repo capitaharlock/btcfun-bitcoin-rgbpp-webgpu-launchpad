@@ -49,8 +49,8 @@ export default function OverviewPage() {
           Bitcoin for {group(TICKET_SATS)} sats — the round's one payment, network fees apart — your browser{" "}
           <strong>mines</strong> against that ticket, and you <strong>mint</strong> what your best result is worth into a
           Bitcoin output you control, paying only the network. The token itself is
-          recorded on a second chain, CKB, and bound to that Bitcoin output, so whoever can spend the output owns the
-          tokens. A script on CKB — not this website — decides whether a mint is valid, and anyone can check any mint from
+          recorded on a second chain, CKB, and bound to that Bitcoin output. Its spending key authorizes a normal RGB++
+          transfer, which also needs a valid CKB transaction. A script on CKB decides whether a mint is valid, and anyone can check any mint from
           the two chains. A launch is registered once, for a fee paid on Bitcoin — the platform's own launches
           included — and admitted by btc.fun's certificate, which the mint script requires before any miner can enter it.
         </p>
@@ -66,8 +66,8 @@ export default function OverviewPage() {
         <div className="docs-facts">
           <KV
             rows={[
-              ["Bitcoin testnet3", "where tickets are paid and where every token's owner is: a token sits on a Bitcoin output"],
-              ["RGB++", "binds a CKB record to a Bitcoin output, so spending the output is the only way to move the record"],
+              ["Bitcoin testnet3", "where tickets are paid and the UTXOs controlling RGB++ token cells are spent"],
+              ["RGB++", "binds a CKB cell to a Bitcoin output; a matching Bitcoin spend and CKB transition move it"],
               ["CKB", "a chain whose records (cells) can carry data and scripts; the token balances live there"],
               ["xUDT", "the standard CKB token format, readable by any wallet that understands RGB++ assets"],
               ["Mint script", "a Rust program on CKB that accepts a mint only for a paid ticket, enough work and the exact reward"],

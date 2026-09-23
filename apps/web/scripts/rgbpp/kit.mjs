@@ -109,7 +109,8 @@ export async function register(key, draft, h0, paid = null) {
   let registration = paid;
   if (!registration) {
     const [free, feeRate] = await Promise.all([rgbpp.freeUtxos(key.address), provider.fastFeeRate(network.ACTIVE)]);
-    const plain = bitcoin.plainFunding(free.filter((u) => u.confirmed), new Set());
+    // Unconfirmed change is spendable: the signer needs the payment seen, not confirmed.
+    const plain = bitcoin.plainFunding(free, new Set());
     registration = await create.payRegistration(vaultOf(key), draft, h0, plain, feeRate, (hex) => rgbpp.broadcast(hex));
     console.log(`registration ${draft.symbol}: ${network.txUrl(registration.txid, network.ACTIVE)}`);
   }

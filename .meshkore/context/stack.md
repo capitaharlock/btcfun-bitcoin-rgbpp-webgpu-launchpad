@@ -29,3 +29,22 @@ successor. Pin tested versions and record them; do not assume a preview package
 is production-ready. Testnet network support must be verified across the
 wallet, SDK, SPV service and deployed scripts as one system. Sources are
 recorded in `.meshkore/docs/design-review.md`.
+
+## Test wallets (Bitcoin testnet3)
+
+Every address below is ours and derives from one secret: the BIP39 mnemonic in
+`apps/web/.e2e-wallet.json` (gitignored, `E2E_MNEMONIC` overrides it). Path
+m/84'/1'/0'/0/0 of the entropy named. Derivations live in
+`apps/web/scripts/rgbpp/kit.mjs`; `npm run e2e:wallet` shows Alice.
+
+| Role | Address | Entropy | Who can spend | Balance 2026-09-25 |
+|---|---|---|---|---|
+| Alice — e2e wallet, promoter in `rgbpp:live` | `tb1q93pwzegduvqq2mahaxy6vq0ydnz5yqv9kz7qc4` | the mnemonic's | us only | 14,088 sats |
+| Bob — second party in `rgbpp:live` | `tb1qp3em8ca7qz99mxvezuhr74flkpftnpfenyhuqq` | `sha256(alice ‖ "btcfun/bob")` | us only | 199,035 sats |
+| Demo — the site's shared "demo wallet" | `tb1qjjq482m9pj7dvge0l2r07a3fcyflktrzgzf6tz` | `sha256(alice ‖ "btcfun/demo")`, published as `DEMO_ENTROPY_HEX` in `apps/web/src/lib/bitcoin/vault.ts` | **anyone** — the secret is public | 187,844 sats |
+
+The three stay separate on purpose: the live run needs two independent parties
+(promoter and buyer), and the demo wallet is public, so any balance there can be
+spent by a stranger at any moment. Keep working funds in Bob and move them to
+Alice or the demo wallet as a step needs them. Balances above are a snapshot;
+check `https://mempool.space/testnet/address/<address>` before relying on them.

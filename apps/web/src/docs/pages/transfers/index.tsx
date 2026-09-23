@@ -126,7 +126,8 @@ export default function TransfersPage() {
             <li>
               <code>planTransfer</code> in <code>lib/rgbpp/operations.ts</code>: the recipient's cell is sealed to output 1
               (which pays their address), the sender's change to output 2. The commitment is at output 0 and bitcoin change
-              comes last.
+              comes last. Its Bitcoin script is encoded by the same <code>commitmentScript</code> function used for mint and
+              purchase transactions.
             </li>
             <li>
               A new token cell needs CKB capacity. When the consumed cells do not have enough, the RGB++ paymaster provides
