@@ -119,6 +119,26 @@ walks one launch through the real services, one step at a time while Bitcoin
 confirms and the RGB++ queue lands each CKB transaction.
 
 <!-- live:start -->
+Run on 2026-09-26 with `npm run rgbpp:live` (`MINER=demo`), against the public
+RGB++ services, Bitcoin testnet3 and the certified mint script
+`0x4e459968…19a5`. Launch `LIVEQA` (`liveqa-63794a84330441b3`), token id
+`0x63794a84…81ba`, promoter Bob, miner the demo wallet. The launch was
+registered exactly as the create page does it: paid, certified by the deployed
+signer (`POST /api/certify`, the payment still unconfirmed) and announced.
+
+| Step | Bitcoin testnet3 | CKB testnet | What it shows |
+|---|---|---|---|
+| Registration | [61d9f17accb2…](https://mempool.space/testnet/tx/61d9f17accb268d4651eafbb75eba9e8b264473b85257a88b0ba632b8c875378) | — | 20,000 sats to the platform with the terms' commitment; the deployed signer certified it from the mempool. |
+| Ticket | [2470d44ebee9…](https://mempool.space/testnet/tx/2470d44ebee979d4691a7a0d206c7de34abb6c8a66c61197547bde8480cec401) | [0x2f5efddc97…](https://testnet.explorer.nervos.org/transaction/0x2f5efddc9742c5ff60535ccce782881443f3f9871a484c34bd5484cecea5b680) | The round's one payment; it created the miner cell, paid. |
+| Arming | [4d815c2f3ef7…](https://mempool.space/testnet/tx/4d815c2f3ef7bfbc4366f4bab4e9ab48bbbc07ee9a49521c0803cf3cff7925d4) | [0x61177f131e…](https://testnet.explorer.nervos.org/transaction/0x61177f131e8b35cc0404b293f01a233228a586e4ccfebbe5e9fb15f04f48c985) | **The admission (registration txid ‖ certificate) in the btc.fun witness passed through the real RGB++ queue** and the script armed the cell, naming the ticket. |
+| Mint | [9177fd4f237d…](https://mempool.space/testnet/tx/9177fd4f237dab6842779952120c5fda90a465d0fe5b15f673d24f8d4fe3ad8f) | [0x8b6f389938…](https://testnet.explorer.nervos.org/transaction/0x8b6f38993858a1171cd336af832d39e6ade05c09a91c976f706bfacaca62be40) | An 18-bit hash of the ticket's challenge, 324 tokens (`10^8 × 18²` atoms), accepted. |
+
+The same day DEMO and the official launches were registered with real payments
+through the same signer (DEMO: [b138624592bf…](https://mempool.space/testnet/tx/b138624592bf9c0419eb3ca52273a575c1ec56a7409cfc58579d08cc3af6701b));
+the launches admitted without a payment under the previous script are gone.
+
+The first run, below, used the first mint script.
+
 Run on 2026-09-24 with `npm run rgbpp:live`, against the public RGB++ services,
 Bitcoin testnet3 and the mint script deployed on CKB testnet
 (`contracts/deployments/testnet.json`, code hash `0x43771432…`). Every

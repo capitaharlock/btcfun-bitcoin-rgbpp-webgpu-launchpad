@@ -32,6 +32,11 @@ export default function TestnetPage() {
             The reward the page shows while you mine uses the same function, with the same test vectors, as the script.
           </li>
           <li>Any mint can be re-checked from the two chains on the Proof page.</li>
+          <li>
+            The certified script's whole circuit has run live (2026-09-26): a launch registered with a real payment and
+            certified from the mempool, a ticket, the arming carrying the certificate through the public RGB++ queue, and
+            a mint — recorded, transaction by transaction, in the repository's test results.
+          </li>
         </ul>
       </section>
 
@@ -52,13 +57,6 @@ export default function TestnetPage() {
           <li>
             The complete path — ticket, mint, transfer and sale through the RGB++ queue with real wallets — has not yet been
             run end to end on testnet. Until it has, no mint through the app is claimed as done.
-          </li>
-          <li>
-            The certified mint script (2026-09-26) — one payment per round, mining from the broadcast ticket, and a paid
-            registration behind every launch, the platform's own included — has not had its live round yet. Its arming and first mint carry data
-            in a witness past the inputs, which the RGB++ queue is expected to leave as written; the simulator does, the
-            real queue is unconfirmed until that round. The same round is the first live test of mining from the broadcast
-            ticket, with the arming signed while mining.
           </li>
           <li>It is not yet confirmed that an RGB++ explorer shows a minted balance under the token's identity.</li>
           <li>
