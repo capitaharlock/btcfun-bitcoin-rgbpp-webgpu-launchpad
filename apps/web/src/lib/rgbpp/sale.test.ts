@@ -4,6 +4,7 @@ import { OutScript, SigHash, Transaction } from "@scure/btc-signer";
 import { hash160 } from "@scure/btc-signer/utils";
 import { secp256k1 } from "@noble/curves/secp256k1";
 
+import { fromBase64, toBase64 } from "../bytes";
 import { deriveKey } from "../bitcoin/keys";
 import { TESTNET3 } from "../bitcoin/network";
 import { TESTNET } from "./config";
@@ -40,6 +41,23 @@ describe("listing", () => {
     expect(checkListing({ ...listing, seller: buyer.address }, TESTNET3)).toMatch(/someone other/);
     expect(checkListing({ ...listing, seal: { ...listing.seal, vout: 2 } }, TESTNET3)).toMatch(/different output/);
     expect(checkListing({ ...listing, psbt: "AAAA" }, TESTNET3)).toMatch(/parse/);
+    expect(checkListing({ ...listing, priceSats: Number.NaN }, TESTNET3)).toMatch(/invalid amounts/);
+    expect(checkListing({ ...listing, sealValue: 547 }, TESTNET3)).toMatch(/input does not match/);
+  });
+
+  it("rejects a PSBT whose seller signature has been changed", () => {
+    const listing = signListing(seller, meta, cell, 546, 30_000);
+    const tx = Transaction.fromPSBT(fromBase64(listing.psbt), { allowUnknownOutputs: true });
+    const input = tx.getInput(0);
+    const signature = input.partialSig![0][1];
+    const changed = fromBase64(listing.psbt);
+    let offset = -1;
+    for (let i = 0; i <= changed.length - signature.length; i++) {
+      if (signature.every((byte, j) => changed[i + j] === byte)) { offset = i; break; }
+    }
+    expect(offset).toBeGreaterThanOrEqual(0);
+    changed[offset + 10] ^= 1;
+    expect(checkListing({ ...listing, psbt: toBase64(changed) }, TESTNET3)).toMatch(/signature is invalid/);
   });
 
   it("carries the bid it answers without changing what the seller signs", () => {

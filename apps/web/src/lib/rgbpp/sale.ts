@@ -8,10 +8,11 @@
  * output their tokens will be sealed to, their funding and change — and
  * broadcast the whole transaction alone.
  *
- * Payment and delivery are one Bitcoin transaction. The seller's signature is
- * valid only if output 0 pays them; the RGB++ lock releases the listed cell
- * only to the CKB transaction the same Bitcoin transaction commits to. Neither
- * leg can happen without the other, and no third party is involved.
+ * The Bitcoin payment and the commitment to delivery share one transaction.
+ * The seller's signature is valid only if the corresponding output pays them.
+ * Delivery still needs a later CKB transaction accepted through the RGB++
+ * proof path; a Bitcoin payment can confirm before that happens or even if it
+ * fails. Do not report the purchase as delivered until CKB confirms it.
  *
  * What the buyer must check before paying — that the listed cell exists and
  * holds what the listing says — is `checkListing` plus a read of the cell,
@@ -19,13 +20,16 @@
  */
 
 import { Address, OutScript, SigHash, Transaction } from "@scure/btc-signer";
+import { hash160 } from "@scure/btc-signer/utils";
 import { ccc } from "@ckb-ccc/core";
+import { secp256k1 } from "@noble/curves/secp256k1";
 
 import { fromBase64, toBase64 } from "../bytes";
 import { DUST_SATS, ACTIVE, type NetworkConfig } from "../bitcoin/network";
 import { estimateVsize, FeeTooLow, InsufficientFunds } from "../bitcoin/payment";
 import type { WalletKey } from "../bitcoin/keys";
 import type { Utxo } from "../bitcoin/provider";
+import { commitmentScript } from "./bitcoin";
 import { commitment } from "./commitment";
 import type { RgbppConfig } from "./config";
 import { mintScript, tokenScript, type LaunchTerms } from "./launch";
@@ -101,6 +105,13 @@ export function signListing(
 
 /** Why a listing's PSBT does not say what the listing says, or null. */
 export function checkListing(listing: Listing, network: NetworkConfig = ACTIVE): string | null {
+  if (!Number.isSafeInteger(listing.priceSats) || listing.priceSats < DUST_SATS ||
+      !Number.isSafeInteger(listing.sealValue) || listing.sealValue < DUST_SATS ||
+      typeof listing.amount !== "string" || !/^[1-9][0-9]*$/.test(listing.amount) ||
+      !listing.seal || !/^[0-9a-f]{64}$/.test(listing.seal.txid) ||
+      !Number.isInteger(listing.seal.vout) || listing.seal.vout < 0) {
+    return "The listing contains invalid amounts or a malformed seal.";
+  }
   let tx: Transaction;
   try {
     tx = Transaction.fromPSBT(fromBase64(listing.psbt), { allowUnknownOutputs: true });
@@ -114,7 +125,7 @@ export function checkListing(listing: Listing, network: NetworkConfig = ACTIVE):
     return "The PSBT spends a different output from the one the tokens are sealed to.";
   }
   if (!input.partialSig || input.partialSig.length !== 1) return "The seller's input is not signed.";
-  const [, signature] = input.partialSig[0];
+  const [pubkey, signature] = input.partialSig[0];
   if (signature[signature.length - 1] !== SigHash.SINGLE_ANYONECANPAY) {
     return "The seller signed with a sighash that would not let a buyer complete the sale.";
   }
@@ -129,6 +140,19 @@ export function checkListing(listing: Listing, network: NetworkConfig = ACTIVE):
     return "The PSBT pays someone other than the seller.";
   }
   if (output.amount !== BigInt(listing.priceSats)) return "The PSBT's price differs from the listing's.";
+  if (!input.witnessUtxo || input.witnessUtxo.amount !== BigInt(listing.sealValue) ||
+      ccc.hexFrom(input.witnessUtxo.script) !== ccc.hexFrom(sellerScript)) {
+    return "The PSBT's input does not match the seller's sealed output.";
+  }
+  try {
+    const scriptCode = OutScript.encode({ type: "pkh", hash: hash160(pubkey) });
+    const digest = tx.preimageWitnessV0(0, scriptCode, SigHash.SINGLE_ANYONECANPAY, BigInt(listing.sealValue));
+    if (!secp256k1.verify(signature.slice(0, -1), digest, pubkey, { format: "der" } as never)) {
+      return "The seller's PSBT signature is invalid.";
+    }
+  } catch {
+    return "The seller's PSBT signature is invalid.";
+  }
   return null;
 }
 
@@ -178,10 +202,9 @@ export function completePurchase(
   const sellerInput = offer.getInput(0);
   const sellerOutput = offer.getOutput(0);
 
-  const commitmentScript = ccc.bytesConcat([0x6a, 0x20], ccc.bytesFrom(plan.commitment));
   const outputs = [
     { script: sellerOutput.script!, amount: sellerOutput.amount! },
-    { script: commitmentScript, amount: 0n },
+    { script: commitmentScript(plan.commitment), amount: 0n },
     { script: key.script, amount: BigInt(SEAL_SATS) },
   ];
   const spend = listing.priceSats + SEAL_SATS;

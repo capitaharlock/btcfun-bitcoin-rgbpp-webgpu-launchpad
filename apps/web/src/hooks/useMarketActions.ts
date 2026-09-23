@@ -22,7 +22,7 @@ import { useAnnounce } from "./useAnnounce";
 import type { OpenListing, PublishedBid } from "./useMarket";
 
 export interface MarketActions {
-  /** Complete a listing: pay the seller and receive the cell, in one transaction. */
+  /** Pay the seller in Bitcoin and submit the committed CKB transfer. */
   buy(item: OpenListing): Promise<Operation>;
   /** Void a listing by moving its cell back to the seller. */
   cancelListing(item: OpenListing): Promise<Operation>;

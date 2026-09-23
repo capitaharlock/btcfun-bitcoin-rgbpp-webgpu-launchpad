@@ -87,7 +87,7 @@ interface TokensContextValue {
  * plan's sealed UTXOs from this wallet; a purchase instead completes a
  * seller's signed input (`lib/rgbpp/sale.ts`), so it brings its own.
  */
-export type Signer = (key: WalletKey, sealed: Utxo[], free: Utxo[], feeRate: number) => { hex: string };
+export type Signer = (key: WalletKey, sealed: Utxo[], free: Utxo[], feeRate: number) => { hex: string; txid: string };
 
 export interface SubmitOptions {
   sign?: Signer;
@@ -196,20 +196,28 @@ export function TokensProvider({ children }: { children: ReactNode }) {
       const signed = await vault.use((key) =>
         sign ? sign(key, sealed, funding, rate) : signOperation(key, plan, sealed, funding, rate),
       );
-      const btcTxid = await service.broadcast(signed.hex);
-      const queued = await service.enqueue(plan, btcTxid);
+      const serviceTxid = await service.broadcast(signed.hex);
+      const btcTxid = signed.txid;
       const operation: Operation = {
         ...meta,
         btcTxid,
-        stage: queued === "failed" ? "failed" : "sent",
+        stage: "sent",
         ckbTxHash: null,
         failure: null,
         at: new Date().toISOString(),
         ...(meta.newCell ? { hex: signed.hex } : {}),
       };
+      // Persist the Bitcoin spend before calling the CKB queue. If enqueue
+      // fails, the spend still exists and its seals must remain reserved.
       persist([operation, ...readOps(vault.address)]);
+      if (serviceTxid !== btcTxid) {
+        throw new Error(`The Bitcoin service returned ${serviceTxid} for a transaction whose local txid is ${btcTxid}.`);
+      }
+      const queued = await service.enqueue(plan, btcTxid);
+      persist([{ ...operation, stage: queued === "failed" ? "failed" : "queued" },
+        ...readOps(vault.address).filter((op) => op.btcTxid !== btcTxid)]);
       void refreshWallet();
-      return operation;
+      return { ...operation, stage: queued === "failed" ? "failed" : "queued" };
     },
     [vault, service, persist, refreshWallet],
   );

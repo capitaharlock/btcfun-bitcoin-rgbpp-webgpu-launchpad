@@ -29,7 +29,8 @@ export interface SignedOperation {
   funding: Utxo[];
 }
 
-function commitmentScript(commitment: ccc.Hex): Uint8Array {
+/** Exact OP_RETURN script committed by the RGB++ Bitcoin transaction. */
+export function commitmentScript(commitment: ccc.Hex): Uint8Array {
   const data = ccc.bytesFrom(commitment);
   if (data.length !== 32) throw new RangeError("an RGB++ commitment is 32 bytes");
   return ccc.bytesConcat([0x6a, 0x20], data);

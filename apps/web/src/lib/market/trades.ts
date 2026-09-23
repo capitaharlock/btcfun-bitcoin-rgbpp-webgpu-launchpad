@@ -4,9 +4,10 @@
  * Bitcoin transaction; that transaction is a sale of a listing when it spends
  * the listing's sealed output at input 0 and pays the listing's price to its
  * seller at output 0 — the one pairing the seller's SINGLE|ANYONECANPAY
- * signature allows. The listing's cell is released only to the CKB
- * transaction committed at output 1, so the same Bitcoin transaction is also
- * the delivery. Anything a fill event claims beyond that is ignored.
+ * signature allows. This establishes a Bitcoin payment and an RGB++
+ * commitment, not CKB delivery: that requires the committed CKB transaction
+ * to confirm separately. Anything a fill event claims beyond the Bitcoin
+ * evidence is ignored.
  */
 
 import type { ChainTx } from "../bitcoin/provider";
@@ -39,7 +40,7 @@ export function saleFault(listing: Listing, tx: ChainTx): string | null {
   return null;
 }
 
-/** The trade `tx` records, when it is a sale of `listing`. */
+/** The Bitcoin payment `tx` records for a listing; CKB delivery is not checked here. */
 export function tradeOf(listing: Listing, tx: ChainTx): Trade | null {
   if (saleFault(listing, tx) !== null) return null;
   return {

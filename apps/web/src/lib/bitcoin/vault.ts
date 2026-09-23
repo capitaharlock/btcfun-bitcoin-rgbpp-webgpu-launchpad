@@ -159,8 +159,12 @@ async function withKey<T>(
   fn: (key: WalletKey) => T | Promise<T>,
   network: NetworkConfig = ACTIVE,
 ): Promise<T> {
-  const key = deriveKey(entropy, network);
-  entropy.fill(0);
+  let key: WalletKey;
+  try {
+    key = deriveKey(entropy, network);
+  } finally {
+    entropy.fill(0);
+  }
   try {
     return await fn(key);
   } finally {
