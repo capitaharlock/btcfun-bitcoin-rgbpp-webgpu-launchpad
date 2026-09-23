@@ -50,7 +50,7 @@ export default function MintPage() {
           what it authorizes and its cost — <strong>Pay ticket · N sats</strong>, <strong>Start mining</strong> or{" "}
           <strong>Pause</strong>, <strong>Activate ticket · N sats fee</strong> (the page's name for the arming),{" "}
           <strong>Use this hash → Mint</strong>, <strong>Mint X tokens · N sats fee</strong>. Each step on the rail says
-          how far it has got — confirmed (green), in the mempool (cyan), waiting for you, or later — and a line under
+          how far it has got — confirmed (green), settling — sent, and not yet settled on CKB (cyan) — waiting for you, or later — and a line under
           the rail lists the round's transactions the same way, beside the step count. Nothing is signed without that press, whatever the
           wallet: the demo and browser wallets sign on it, a passkey wallet asks for the passkey. Each finished step keeps
           its trace: the Bitcoin transaction, a link to it on mempool.space, and whether it is still landing or has
