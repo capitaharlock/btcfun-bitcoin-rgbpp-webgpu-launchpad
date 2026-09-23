@@ -17,7 +17,7 @@
 
 .cw-steps {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border-bottom: var(--border-w) solid var(--line);
 }
 .cw-steps button {
@@ -159,7 +159,7 @@
 @media (max-width: 900px) {
   .cw { min-height: 0; }
   /* Only the current step keeps its name; the others are their numbers. */
-  .cw-steps { grid-template-columns: auto auto auto auto; }
+  .cw-steps { grid-template-columns: repeat(5, auto); }
   .cw-steps button { padding: var(--space-3); }
   .cw-steps button:not(.on) .cw-label { display: none; }
   .cw-body, .cw-bar { padding-inline: var(--space-4); }
