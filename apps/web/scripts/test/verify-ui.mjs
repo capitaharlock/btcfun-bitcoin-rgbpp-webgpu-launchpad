@@ -7,7 +7,7 @@
  * wallet actually derives an address in a real browser. This drives Chromium
  * against the dev server and checks all three.
  *
- *   node scripts/verify-ui.mjs [--url http://localhost:5273] [--shots DIR]
+ *   node scripts/test/verify-ui.mjs [--url http://localhost:5273] [--shots DIR]
  *
  * Exits non-zero on any console error, failed render, backend that recorded no
  * work, or candidate that fails recomputation — so it gates rather than only

@@ -23,4 +23,4 @@ same change.
 
 ## Resolution
 
-`apps/web/src/docs/sources.json` declares each page's sources and also drives the docs navigation. `apps/web/scripts/docs-check.mjs` (logic in `scripts/docs-check/stale.mjs`, tested by `stale.test.mjs`) fails when a source was committed after its page, has uncommitted changes the page lacks, or no longer exists. `npm run docs:check` exists and `npm run deploy` runs it first. The rule is stated in the root `README.md`.
+`apps/web/src/docs/sources.json` declares each page's sources and also drives the docs navigation. `apps/web/scripts/docs/check.mjs` (logic in `scripts/docs/stale.mjs`, tested by `stale.test.mjs`) fails when a source was committed after its page, has uncommitted changes the page lacks, or no longer exists. `npm run docs:check` exists and `npm run deploy` runs it first. The rule is stated in the root `README.md`.

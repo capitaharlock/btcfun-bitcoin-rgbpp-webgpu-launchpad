@@ -5,15 +5,15 @@
  * outside the markers is written by hand and left alone, so the narrative and
  * the numbers can live in one document without one overwriting the other.
  *
- *   node scripts/test-report.mjs [path/to/results.json]
+ *   node scripts/test/report.mjs [path/to/results.json]
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 
-const RESULTS = argv[2] ?? fileURLToPath(new URL("../e2e-output/results.json", import.meta.url));
-const DOC = fileURLToPath(new URL("../../../.meshkore/docs/test-results.md", import.meta.url));
+const RESULTS = argv[2] ?? fileURLToPath(new URL("../../e2e-output/results.json", import.meta.url));
+const DOC = fileURLToPath(new URL("../../../../.meshkore/docs/test-results.md", import.meta.url));
 const START = "<!-- results:start -->";
 const END = "<!-- results:end -->";
 

@@ -14,12 +14,8 @@ import { createHash } from "node:crypto";
 import type { Page, Route } from "@playwright/test";
 import { Address, OutScript, TEST_NETWORK, Transaction } from "@scure/btc-signer";
 
-const hex = {
-  decode: (s: string) => Uint8Array.from(Buffer.from(s, "hex")),
-  encode: (b: Uint8Array) => Buffer.from(b).toString("hex"),
-};
-
-export const API = "https://mempool.space/testnet/api";
+import { hex } from "./bytes";
+import { MEMPOOL_API as API } from "./endpoints";
 
 export interface SimUtxo {
   txid: string;

@@ -6,7 +6,7 @@
 #
 # Cost: Workers free tier covers 100k requests/day, D1 free covers 5 GB and
 # 100k writes/day, and D1 scales to zero — there is no machine to keep warm and
-# no idle charge. See .meshkore/docs/deploy/hosting.md for why not Fly or Vercel.
+# no idle charge. See .meshkore/docs/hosting.md for why not Fly or Vercel.
 
 # The name fixes the public address: https://btcfun.<account>.workers.dev.
 # Renaming the Worker moves the site, so it stays "btcfun".

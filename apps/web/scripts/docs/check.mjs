@@ -15,10 +15,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { exit } from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { describe, findStale } from "./docs-check/stale.mjs";
+import { describe, findStale } from "./stale.mjs";
 
-const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const MANIFEST = fileURLToPath(new URL("../src/docs/sources.json", import.meta.url));
+const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
+const MANIFEST = fileURLToPath(new URL("../../src/docs/sources.json", import.meta.url));
 
 /** @param {string[]} args */
 function git(args) {
