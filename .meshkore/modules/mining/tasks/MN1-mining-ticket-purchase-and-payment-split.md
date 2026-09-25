@@ -27,4 +27,4 @@ Implement the adopted commitment/admission and ticket payment split. Pending tic
 
 ## Resolution
 
-The ticket pays 9,500 sats to the promoter and 500 sats (5 %) to the platform in one Bitcoin transaction, and the mint script refuses to arm a cell otherwise ([decision](../../../context/decisions/2026-09-24-platform-fee-per-ticket.md)). There are no pending ticket funds: the promoter is paid in the block the ticket confirms. `contracts/mint-core/src/lib.rs` (`pays_tickets`), `contracts/tests/src/mint.rs`, `apps/web/src/lib/rgbpp/operations.ts` (`planTicket`).
+The ticket pays 9,500 sats to the promoter and 500 sats (5 %) to the platform in one Bitcoin transaction, and the mint script refuses to arm a cell otherwise ([decision](../../../context/decisions/2026-09-24-platform-fee-per-ticket.md)). There are no pending ticket funds: the promoter is paid in the block the ticket confirms. `contracts/mint-core/src/lib.rs` (`pays_tickets`), `contracts/tests/src/mint/`, `apps/web/src/lib/rgbpp/operations.ts` (`planTicket`).

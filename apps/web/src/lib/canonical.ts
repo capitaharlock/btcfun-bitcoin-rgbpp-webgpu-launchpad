@@ -70,6 +70,3 @@ export function parseAtoms(value: string, label = "amount"): bigint {
 
 /** A compressed secp256k1 public key in hex — the identity format everywhere. */
 export const IDENTITY_PATTERN = /^0[23][0-9a-f]{64}$/;
-
-/** A Bitcoin transaction id in hex. */
-export const TXID_PATTERN = /^[0-9a-f]{64}$/;

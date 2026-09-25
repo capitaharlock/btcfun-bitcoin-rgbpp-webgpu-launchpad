@@ -15,42 +15,17 @@ import { Address } from "@scure/btc-signer";
 
 import type { Launch } from "../../data/launches";
 import { useLaunchByToken } from "../../hooks/useLaunches";
-import { ACTIVE, matchesNetwork, txUrl } from "../../lib/bitcoin/network";
+import { ACTIVE, matchesNetwork } from "../../lib/bitcoin/network";
 import { atoms, parseAmount, shortHash } from "../../lib/format";
 import { ACTIVE_RGBPP } from "../../lib/rgbpp/config";
+import { landingMints, positionsOf, type Position } from "../../lib/holdings";
 import { planTransfer, type TokenCell } from "../../lib/rgbpp/operations";
 import { DECIMALS } from "../../lib/standard";
-import { useTokens, type Holdings, type Operation } from "../../state/TokensProvider";
+import { useTokens, type Operation } from "../../state/TokensProvider";
 import { Field, More, Notice, Panel } from "../../ui/primitives";
-import "./tokens.css";
 import { TokenImage } from "../../ui/TokenImage";
-
-export interface Position {
-  tokenId: string;
-  cells: TokenCell[];
-  total: bigint;
-}
-
-/** Every token held, largest balance first. */
-export function positionsOf(holdings: Holdings): Position[] {
-  return [...holdings.tokens.entries()]
-    .map(([tokenId, cells]) => ({ tokenId, cells, total: cells.reduce((n, c) => n + c.amount, 0n) }))
-    .sort((a, b) => (a.total === b.total ? 0 : a.total > b.total ? -1 : 1));
-}
-
-/**
- * Tokens minted from this browser whose Bitcoin transaction is sent but not
- * settled, by token. They are shown as landing, never added to the balance:
- * the balance is what the chain holds.
- */
-export function landingMints(operations: readonly Operation[]): Map<string, bigint> {
-  const out = new Map<string, bigint>();
-  for (const op of operations) {
-    if (op.kind !== "mint" || !op.atoms || (op.stage !== "sent" && op.stage !== "queued")) continue;
-    out.set(op.tokenId, (out.get(op.tokenId) ?? 0n) + BigInt(op.atoms));
-  }
-  return out;
-}
+import { TxLink } from "../../ui/TxLink";
+import "./tokens.css";
 
 /** The Tokens tab. The hub renders it only with a wallet connected. */
 export function WalletTokens() {
@@ -77,7 +52,7 @@ export function WalletTokens() {
       ) : (
         <ul className="tk-grid">
           {positions.map((position) => (
-            <TokenCard
+            <HoldingCard
               key={position.tokenId}
               position={position}
               landing={landing.get(position.tokenId) ?? 0n}
@@ -96,7 +71,7 @@ export function WalletTokens() {
  * stay pale while nothing is settled to move — tokens still landing cannot be
  * spent yet.
  */
-function TokenCard({ position, landing, launch }: { position: Position; landing: bigint; launch: Launch | undefined }) {
+function HoldingCard({ position, landing, launch }: { position: Position; landing: bigint; launch: Launch | undefined }) {
   const { tokenId, cells, total } = position;
   const [transferring, setTransferring] = useState(false);
   const symbol = launch?.symbol ?? "tokens";
@@ -215,7 +190,7 @@ function TransferForm({ launch, cells, total }: { launch: Launch; cells: TokenCe
       {error && <Notice tone="danger">{error}</Notice>}
       {sent && (
         <Notice tone="cyan">
-          Sent — <a href={txUrl(sent.btcTxid)} target="_blank" rel="noopener noreferrer">view the Bitcoin transaction</a>. It
+          Sent — <TxLink kind="btc" id={sent.btcTxid}>view the Bitcoin transaction</TxLink>. It
           settles on CKB after it confirms.
         </Notice>
       )}

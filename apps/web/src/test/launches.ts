@@ -2,11 +2,28 @@
  * published test key (`TEST_CERT_SECRET`), which test builds trust. Never
  * imported by the app. */
 
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { deriveKey } from "../lib/bitcoin/keys";
+import { TESTNET3, type NetworkConfig } from "../lib/bitcoin/network";
+import { bytesToHex, hexToBytes } from "../lib/bytes";
+import type { LaunchCommitment } from "../lib/launches/announcement";
+import { registrationCommitment, signCertificate, TEST_CERT_SECRET } from "../lib/launches/certificate";
+import { commitmentFor, draftTerms, NO_LINKS, NO_STORY, type LaunchDraft } from "../lib/launches/draft";
 
-import type { NetworkConfig } from "../bitcoin/network";
-import { registrationCommitment, signCertificate, TEST_CERT_SECRET } from "./certificate";
-import { commitmentFor, draftTerms, type LaunchCommitment, type LaunchDraft } from "./create";
+/** An identity that announces launches in tests. */
+export const TEST_CREATOR = "02" + "11".repeat(32);
+
+/** A complete, valid draft on testnet3, without links, story or image. */
+export const meshDraft: LaunchDraft = {
+  symbol: "MESH",
+  name: "Meshwork",
+  blurb: "Community token for a mesh-relay operators' group.",
+  accent: "var(--amber)",
+  promoter: deriveKey(new Uint8Array(32).fill(7), TESTNET3).address,
+  opensInBlocks: 6,
+  links: NO_LINKS,
+  story: NO_STORY,
+  image: "",
+};
 
 export const TEST_REGISTRATION_TXID = "ab".repeat(32);
 

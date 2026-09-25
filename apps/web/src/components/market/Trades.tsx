@@ -6,11 +6,11 @@
  */
 
 import type { MarketTrade } from "../../hooks/useMarket";
-import { txUrl } from "../../lib/bitcoin";
 import { atoms, group, satsPerToken } from "../../lib/format";
 import { unitPrice } from "../../lib/market/book";
 import { DECIMALS } from "../../lib/standard";
 import { Chip, More, Panel } from "../../ui/primitives";
+import { TxLink } from "../../ui/TxLink";
 
 const SHOWN = 12;
 
@@ -37,7 +37,7 @@ export function Trades({ trades, symbol }: { trades: MarketTrade[]; symbol: stri
                 <td className="mono">{group(trade.priceSats)} sats</td>
                 <td>
                   {!trade.confirmed && <Chip tone="warn">pending</Chip>}{" "}
-                  <a href={txUrl(trade.txid)} target="_blank" rel="noopener noreferrer" className="tiny">tx ↗</a>
+                  <TxLink kind="btc" id={trade.txid} className="tiny">tx ↗</TxLink>
                 </td>
               </tr>
             ))}

@@ -1,33 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { MinerCell } from "../rgbpp/operations";
+import { at, cell, op } from "../../test/loop";
+import { TICKET_VOUT, type MinerCell } from "../rgbpp/operations";
 import { MIN_CLZ } from "../standard";
-import { deriveLoop, inProgress, narrate, statusOf, TICKET_VOUT, type LoopInput, type LoopOperation } from "./loop";
-
-const cell = (state: "idle" | "armed" | "paid", txid = "aa".repeat(32), anchor = 900): MinerCell => ({
-  outPoint: { txHash: "0x" + "12".repeat(32), index: 0 },
-  capacity: 1n,
-  seal: { txid, vout: 1 },
-  data: { state, nonce: 0n, anchor },
-});
-const op = (kind: LoopOperation["kind"], btcTxid: string, stage: LoopOperation["stage"], extra: Partial<LoopOperation> = {}): LoopOperation => ({
-  kind,
-  btcTxid,
-  stage,
-  ckbTxHash: null,
-  failure: null,
-  ...extra,
-});
-
-const base: LoopInput = {
-  wallet: "local",
-  launchOpen: true,
-  miners: [],
-  operations: [],
-  bestClz: null,
-  dismissed: null,
-};
-const at = (input: Partial<LoopInput>) => deriveLoop({ ...base, ...input });
+import { inProgress, statusOf } from "./loop";
 
 describe("which step of the loop a miner is on", () => {
   it("asks for a wallet first, and reads the wallet's cells before deciding anything else", () => {
@@ -165,28 +141,5 @@ describe("which step of the loop a miner is on", () => {
     expect(inProgress(at({ miners: [cell("idle")] }).state)).toBe(false);
     expect(inProgress(at({ miners: [cell("armed")] }).state)).toBe(true);
     expect(inProgress(at({ miners: [cell("paid")] }).state)).toBe(true);
-  });
-});
-
-describe("what the page says is happening", () => {
-  const ctx = { symbol: "DEMO", running: false, unfunded: false, busy: false };
-
-  it("says what is happening now and what comes next", () => {
-    expect(narrate(at({ wallet: null, miners: null }).state, ctx)).toEqual({ now: "No wallet connected", next: "Pick one — then the ticket" });
-    expect(narrate(at({}).state, ctx)).toEqual({ now: "Buy the ticket", next: "Then mine at once" });
-    expect(narrate(at({ miners: [cell("idle")] }).state, { ...ctx, busy: true })?.now).toBe("Signing the ticket");
-    expect(narrate(at({ miners: [cell("paid")] }).state, ctx)?.next).toBe("Activate your ticket — network fee only");
-    expect(narrate(at({ miners: [cell("armed")] }).state, { ...ctx, running: true })).toEqual({
-      now: "Mining DEMO",
-      next: `Minting unlocks at ${MIN_CLZ} zero bits`,
-    });
-  });
-
-  it("puts a missing balance first", () => {
-    expect(narrate(at({}).state, { ...ctx, unfunded: true })?.now).toBe("Your wallet needs bitcoin");
-  });
-
-  it("leaves a launch that is not on offer to the page", () => {
-    expect(narrate(at({ launchOpen: false }).state, ctx)).toBeNull();
   });
 });

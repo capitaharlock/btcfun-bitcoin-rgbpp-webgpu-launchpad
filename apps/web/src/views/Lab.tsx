@@ -15,7 +15,7 @@ import { useMemo, useState } from "react";
 
 import { atoms, group, fixed } from "../lib/format";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, NEW_CELL, REUSE, reward, terminalHalving, TICKET_SATS } from "../lib/standard";
-import { RewardChart } from "../ui/RewardChart";
+import { RewardChart } from "../components/launch/RewardChart";
 import { Field, KV, More, PageHead, Panel, Stat } from "../ui/primitives";
 
 const DEVICES = [

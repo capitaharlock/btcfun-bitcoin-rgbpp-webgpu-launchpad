@@ -1,4 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+/* The shell: providers, the top bar, the footer and the page the route names.
+ *
+ * Routing itself lives in `lib/router.ts` and `hooks/useRoute.ts`, so the
+ * views depend on the router and never on the shell that renders them.
+ */
+
+import { lazy, Suspense } from "react";
 import { Launches } from "./views/Launches";
 import { LaunchView } from "./views/Launch";
 import { NETWORK, WalletProvider, useWallet } from "./state/WalletProvider";
@@ -10,7 +16,7 @@ import { BitcoinMark } from "./ui/PixelIcon";
 import { Chip } from "./ui/primitives";
 import { DemoBadge } from "./components/wallet/DemoBadge";
 import { WalletPill } from "./components/wallet/WalletPill";
-import type { WalletTab } from "./views/Wallet";
+import { useRoute } from "./hooks/useRoute";
 
 // Sections a visitor may never open load on demand; the front page and a
 // launch page, where nearly everyone starts, ship with the first chunk.
@@ -19,38 +25,8 @@ const ProofView = lazy(() => import("./views/Proof").then((m) => ({ default: m.P
 const WalletView = lazy(() => import("./views/Wallet").then((m) => ({ default: m.WalletView })));
 const Market = lazy(() => import("./views/Market").then((m) => ({ default: m.Market })));
 const Activity = lazy(() => import("./views/Activity").then((m) => ({ default: m.Activity })));
-const Create = lazy(() => import("./views/Create").then((m) => ({ default: m.Create })));
+const Create = lazy(() => import("./views/create").then((m) => ({ default: m.Create })));
 const Docs = lazy(() => import("./views/Docs").then((m) => ({ default: m.Docs })));
-
-type Route =
-  | { name: "launches" }
-  /** `mine` when arrived at from a MINE button: the page opens on the miner. */
-  | { name: "launch"; id: string; mine: boolean }
-  | { name: "proof"; txid?: string }
-  | { name: "lab" }
-  | { name: "create" }
-  | { name: "market" }
-  | { name: "activity" }
-  | { name: "wallet"; tab: WalletTab }
-  | { name: "docs"; page?: string };
-
-function parse(hash: string): Route {
-  const path = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-  if (path[0] === "launch" && path[1]) return { name: "launch", id: path[1], mine: path[2] === "mine" };
-  if (path[0] === "proof") return { name: "proof", txid: path[1] };
-  if (path[0] === "lab") return { name: "lab" };
-  if (path[0] === "create") return { name: "create" };
-  if (path[0] === "activity") return { name: "activity" };
-  // The old holdings page is the wallet's Tokens tab now; its links still work.
-  if (path[0] === "holdings") return { name: "wallet", tab: "tokens" };
-  if (path[0] === "market") return { name: "market" };
-  if (path[0] === "wallet") {
-    const tab = path[1] === "tokens" || path[1] === "activity" ? path[1] : "overview";
-    return { name: "wallet", tab };
-  }
-  if (path[0] === "docs") return { name: "docs", page: path[1] };
-  return { name: "launches" };
-}
 
 /**
  * The four things you can do, in the order you would do them.
@@ -65,18 +41,6 @@ const SECTIONS = [
   { tab: "activity", path: "/activity", label: "Activity" },
 ] as const;
 
-export function navigate(to: string): void {
-  window.location.hash = to;
-}
-
-/** A retired route rewritten in place, so the address bar shows where the
- *  visitor actually is and the back button does not return to the alias. */
-function canonicalise(): void {
-  if (/^#\/?holdings\/?$/.test(window.location.hash)) {
-    history.replaceState(history.state, "", "#/wallet/tokens");
-  }
-}
-
 export default function App() {
   return (
     <WalletProvider>
@@ -90,22 +54,7 @@ export default function App() {
 }
 
 function Shell() {
-  const [route, setRoute] = useState<Route>(() => parse(window.location.hash));
-  // Every arrival is a fresh page: following a link to the section you are
-  // already in (Create after announcing, say) must not show its old state.
-  const [visit, setVisit] = useState(0);
-
-  useEffect(() => {
-    canonicalise();
-    const onHash = () => {
-      canonicalise();
-      setRoute(parse(window.location.hash));
-      setVisit((v) => v + 1);
-      window.scrollTo({ top: 0 });
-    };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+  const { route, visit } = useRoute();
 
   // Detail pages belong to the section they were reached from, so the nav
   // never goes blank halfway through a flow.

@@ -11,9 +11,10 @@
  */
 
 import { memo, useEffect, useState } from "react";
-import type { Candidate } from "../lib/mining";
-import { group, shortHash, splitLeadingZeros } from "../lib/format";
-import { Chip } from "./primitives";
+import type { Candidate } from "../../lib/mining";
+import { group, shortHash, splitLeadingZeros } from "../../lib/format";
+import { Chip } from "../../ui/primitives";
+import "./hash-feed.css";
 
 /** Must match the `feed-strike` / `zeros-strike` duration in hash-feed.css. */
 const STRIKE_MS = 1800;

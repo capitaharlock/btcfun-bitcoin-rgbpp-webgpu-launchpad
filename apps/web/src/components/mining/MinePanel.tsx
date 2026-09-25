@@ -24,7 +24,7 @@ import { bytesToHex } from "../../lib/bytes";
 import { atoms, count, group, rate, shortHash } from "../../lib/format";
 import { DECIMALS, MIN_CLZ } from "../../lib/standard";
 import type { Ticket } from "../../lib/mining/loop";
-import { HashFeed, HashLog } from "../../ui/HashFeed";
+import { HashFeed, HashLog } from "./HashFeed";
 import { Chip, KV, Notice, Stat } from "../../ui/primitives";
 
 const CHOICES: Array<{ id: BackendChoice; label: string }> = [

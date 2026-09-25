@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from "react";
 
-import { navigate } from "../App";
+import { navigate } from "../lib/router";
 import { useActivity } from "../hooks/useActivity";
 import { useLaunches, useTip } from "../hooks/useLaunches";
 import { evidenceFor, KIND_LABEL, type ActivityEntry, type ActivityKind } from "../lib/activity";
@@ -19,6 +19,7 @@ import { useWallet } from "../state/WalletProvider";
 import type { Launch } from "../data/launches";
 import { Chip, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { TokenImage } from "../ui/TokenImage";
+import { ExternalLink } from "../ui/TxLink";
 
 type Filter = "all" | ActivityKind;
 
@@ -209,16 +210,14 @@ function Row({
           </a>
         )}
         {evidence.tx && (
-          <a
+          <ExternalLink
             href={evidence.tx.href}
-            target="_blank"
-            rel="noopener noreferrer"
             className="tx"
             title={`Bitcoin transaction ${evidence.tx.txid}`}
             aria-label={`Bitcoin transaction ${evidence.tx.short} on the explorer`}
           >
             {evidence.tx.short} <span aria-hidden="true">↗</span>
-          </a>
+          </ExternalLink>
         )}
         <span className="who">{body.actor.slice(2, 10)}</span>
         <span className="when">{ago(entry.receivedAt)}</span>

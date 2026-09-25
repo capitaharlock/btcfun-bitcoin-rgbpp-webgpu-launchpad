@@ -26,4 +26,4 @@ Build launch creation and the token page around immutable terms, allowed emissio
 
 ## Resolution
 
-`apps/web/src/views/Create.tsx` asks only for identity, income address and opening; `apps/web/src/views/Launch.tsx` shows the standard terms, the opening block, the promoter, the token id, supply read from CKB cells (labelled cells, not people) and the reward by halving. Covered by `e2e/ui/create-wizard.spec.ts` and `e2e/ui/time.spec.ts`. Reserve denomination and expired allowance no longer exist under the standard tokenomics.
+`apps/web/src/views/create/` asks only for identity, income address and opening; `apps/web/src/views/Launch.tsx` shows the standard terms, the opening block, the promoter, the token id, supply read from CKB cells (labelled cells, not people) and the reward by halving. Covered by `e2e/ui/create-wizard.spec.ts` and `e2e/ui/time.spec.ts`. Reserve denomination and expired allowance no longer exist under the standard tokenomics.

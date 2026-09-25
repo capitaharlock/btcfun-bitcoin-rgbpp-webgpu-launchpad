@@ -7,7 +7,8 @@ import type { Utxo } from "../bitcoin/provider";
 import { ARM_SHAPE, fundingNeeded, mintShape, networkFee, plainFunding, shapeOf, signOperation, strippedTx } from "./bitcoin";
 import { TESTNET } from "./config";
 import { metadataHash, type LaunchTerms } from "./launch";
-import { displayTxid, planArm, planMint, planTicket, SEAL_SATS, type MinerCell } from "./operations";
+import { displayTxid } from "../bitcoin/txid";
+import { planArm, planMint, planTicket, SEAL_SATS, type MinerCell } from "./operations";
 import { NEW_CELL, REUSE } from "../standard";
 
 const key = deriveKey(new Uint8Array(32).fill(7), TESTNET3);

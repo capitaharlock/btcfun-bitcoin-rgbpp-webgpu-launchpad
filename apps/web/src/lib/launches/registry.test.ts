@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LaunchCommitment } from "./create";
+import type { LaunchCommitment } from "./announcement";
 import { resolveAnnouncements } from "./registry";
 
 const launch = (id: string, creator: string, name: string): LaunchCommitment =>

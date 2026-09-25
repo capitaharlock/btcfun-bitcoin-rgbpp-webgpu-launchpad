@@ -1,7 +1,7 @@
 /* The docs pages, in reading order.
  *
  * `sources.json` is the single list of pages: the view builds its navigation
- * from it and `scripts/docs-check.mjs` reads it to decide which pages are
+ * from it and `scripts/docs/check.mjs` reads it to decide which pages are
  * stale. A page's component is the default export of `index.tsx` in the folder
  * the manifest names, so adding a page is one manifest entry and one folder.
  */

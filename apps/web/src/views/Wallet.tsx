@@ -16,10 +16,11 @@ import { ConnectOptions } from "../components/wallet/Connect";
 import { DemoBadge } from "../components/wallet/DemoBadge";
 import { KeysPanel } from "../components/wallet/Keys";
 import { WalletActivity } from "../components/wallet/Operations";
-import { WalletTokens, positionsOf } from "../components/wallet/Tokens";
+import { WalletTokens } from "../components/wallet/Tokens";
 import { useLaunchByToken } from "../hooks/useLaunches";
-import { addressUrl, type Vault } from "../lib/bitcoin";
+import type { Vault } from "../lib/bitcoin";
 import { atoms, group } from "../lib/format";
+import { positionsOf } from "../lib/holdings";
 import { DECIMALS } from "../lib/standard";
 import { useTokens } from "../state/TokensProvider";
 import { NETWORK, formatBtc, useWallet } from "../state/WalletProvider";
@@ -27,8 +28,8 @@ import { Copyable } from "../ui/Copyable";
 import { Chip, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { QrCode } from "../ui/QrCode";
 import { TokenImage } from "../ui/TokenImage";
-
-export type WalletTab = "overview" | "tokens" | "activity";
+import { ExternalLink, TxLink } from "../ui/TxLink";
+import type { WalletTab } from "../lib/router";
 
 export const WALLET_TABS: ReadonlyArray<{ tab: WalletTab; path: string; label: string }> = [
   { tab: "overview", path: "/wallet", label: "Overview" },
@@ -123,9 +124,9 @@ function Overview({ vault }: { vault: Vault }) {
             <div className="stack-sm grow">
               <p className="clamp">Send {NETWORK.label} coins to this address. This is the whole address — check it before you send.</p>
               <Copyable value={vault.address} label="address" />
-              <a className="tiny" href={addressUrl(vault.address)} target="_blank" rel="noopener noreferrer">
+              <TxLink kind="address" id={vault.address} className="tiny">
                 Inspect on mempool.space ↗
-              </a>
+              </TxLink>
             </div>
           </div>
 
@@ -154,9 +155,9 @@ function Overview({ vault }: { vault: Vault }) {
             <p className="clamp">Testnet coins are free play money. Paste your address into a faucet.</p>
             <div className="row wrapped">
               {NETWORK.faucets.map((faucet) => (
-                <a key={faucet.url} className="btn sm" href={faucet.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink key={faucet.url} className="btn sm" href={faucet.url}>
                   {faucet.name} ↗
-                </a>
+                </ExternalLink>
               ))}
             </div>
             <More>

@@ -14,6 +14,7 @@
  *   cares about, since §4.2 weights the single best candidate per ticket.
  */
 
+import { wordsToHex } from "../sha256";
 import { nonceWords } from "./progress";
 import {
   HIT_WORDS,
@@ -323,12 +324,6 @@ async function readWords(buffer: GPUBuffer): Promise<Uint32Array> {
   const copy = new Uint32Array(buffer.getMappedRange()).slice();
   buffer.unmap();
   return copy;
-}
-
-function wordsToHex(words: Uint32Array): string {
-  let s = "";
-  for (let i = 0; i < 8; i++) s += words[i].toString(16).padStart(8, "0");
-  return s;
 }
 
 function errorText(err: unknown): string {

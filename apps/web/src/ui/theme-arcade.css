@@ -36,7 +36,7 @@
  *   motion    --dur-{fast,base,slow}, --ease, --ease-out, --ease-step, --blink
  *   texture   --scanlines, --backdrop-grid (0 or 1: opacity multipliers)
  *
- * The six launch accents (`lib/launches/create.ts` ACCENTS) name
+ * The six launch accents (`lib/launches/draft.ts` ACCENTS) name
  * --amber --cyan --magenta --violet --mint --warn inside signed
  * announcements, so those six names are permanent; only their values belong
  * to a theme.

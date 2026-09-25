@@ -4,12 +4,11 @@
 
 import type { Launch } from "../../data/launches";
 import { useLaunchByToken } from "../../hooks/useLaunches";
-import { txUrl } from "../../lib/bitcoin/network";
 import { atoms, group, shortHash } from "../../lib/format";
-import { ACTIVE_RGBPP } from "../../lib/rgbpp/config";
 import { DECIMALS } from "../../lib/standard";
 import { useTokens, type Operation } from "../../state/TokensProvider";
 import { Chip, Panel } from "../../ui/primitives";
+import { TxLink } from "../../ui/TxLink";
 
 export function WalletActivity() {
   const { operations } = useTokens();
@@ -54,12 +53,12 @@ function OperationsTable({ operations, launchOf }: { operations: Operation[]; la
                     {op.atoms ? atoms(BigInt(op.atoms), DECIMALS, 2) : op.sats ? `${group(op.sats)} sats` : "—"}
                   </td>
                   <td><Chip tone={tone[op.stage]} live={op.stage === "sent" || op.stage === "queued"}>{op.stage}</Chip></td>
-                  <td><a href={txUrl(op.btcTxid)} target="_blank" rel="noopener noreferrer" className="mono">{op.btcTxid.slice(0, 10)}…</a></td>
+                  <td><TxLink kind="btc" id={op.btcTxid} className="mono">{op.btcTxid.slice(0, 10)}…</TxLink></td>
                   <td>
                     {op.ckbTxHash ? (
-                      <a href={`${ACTIVE_RGBPP.ckbExplorer}${op.ckbTxHash}`} target="_blank" rel="noopener noreferrer" className="mono">
+                      <TxLink kind="ckb" id={op.ckbTxHash} className="mono">
                         {op.ckbTxHash.slice(0, 12)}…
-                      </a>
+                      </TxLink>
                     ) : "—"}
                   </td>
                 </tr>

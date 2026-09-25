@@ -20,7 +20,9 @@
 
 import { schnorr } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha2";
-import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes } from "@noble/hashes/utils";
+
+import { txidToInternal } from "../bitcoin/txid";
+import { bytesToHex, concatBytes, hexToBytes } from "../bytes";
 
 /** Sats a registration pays the platform (`contracts/mint-core` `REGISTRATION_SATS`). */
 export const REGISTRATION_SATS = 20_000;
@@ -42,14 +44,9 @@ export const PLATFORM_CERT_KEY: string =
   (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_PLATFORM_CERT_KEY ??
   "9f21697aa0e61bc65c23eb84a525bb1a4282211d265d3d080e49371ef809bdfa";
 
-const CERTIFICATE_DOMAIN = utf8ToBytes("btc.fun/launch-certificate/v1");
-const REGISTRATION_DOMAIN = utf8ToBytes("btc.fun/launch-registration/v1");
-
-/** A txid as explorers print it, in the byte order Bitcoin hashes it. */
-function internal(txid: string): Uint8Array {
-  if (!/^[0-9a-f]{64}$/.test(txid)) throw new RangeError("a txid is 64 lowercase hex characters");
-  return hexToBytes(txid).reverse();
-}
+const encoder = new TextEncoder();
+const CERTIFICATE_DOMAIN = encoder.encode("btc.fun/launch-certificate/v1");
+const REGISTRATION_DOMAIN = encoder.encode("btc.fun/launch-registration/v1");
 
 /** The 32 bytes a registration's OP_RETURN carries: `sha256(domain ‖ terms args)`. */
 export function registrationCommitment(args: Uint8Array): Uint8Array {
@@ -58,7 +55,7 @@ export function registrationCommitment(args: Uint8Array): Uint8Array {
 
 /** What a certificate signs: `sha256(domain ‖ terms args ‖ registration txid)`. */
 export function certificateMessage(args: Uint8Array, registration: string): Uint8Array {
-  return sha256(concatBytes(CERTIFICATE_DOMAIN, args, internal(registration)));
+  return sha256(concatBytes(CERTIFICATE_DOMAIN, args, txidToInternal(registration)));
 }
 
 /**
@@ -87,7 +84,7 @@ export function admitted(args: Uint8Array, registration: string, certificate: st
 
 /** The admission as the arming of a paid cell carries it: registration txid (internal order) ‖ signature. */
 export function admissionBytes(registration: string, certificate: string): Uint8Array {
-  return concatBytes(internal(registration), hexToBytes(certificate));
+  return concatBytes(txidToInternal(registration), hexToBytes(certificate));
 }
 
 /** A Bitcoin output as an explorer reports it. */

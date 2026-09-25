@@ -21,7 +21,6 @@ import type { Launch } from "../data/launches";
 import { useLaunches } from "../hooks/useLaunches";
 import { asOrder, useMarket, type OpenListing, type PublishedBid } from "../hooks/useMarket";
 import { useMarketActions } from "../hooks/useMarketActions";
-import { txUrl } from "../lib/bitcoin/network";
 import { atoms, group, satsPerToken } from "../lib/format";
 import { buildBook, compareRate, unitPrice, type Order } from "../lib/market/book";
 import type { Seal } from "../lib/rgbpp/seal";
@@ -30,6 +29,7 @@ import { useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
 import { Chip, Field, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { TokenImage } from "../ui/TokenImage";
+import { TxLink } from "../ui/TxLink";
 
 const bidOrder = ({ bid }: PublishedBid): Order => ({ priceSats: bid.priceSats, amount: BigInt(bid.amount) });
 const sealKey = (seal: Seal) => `${seal.txid}:${seal.vout}`;
@@ -158,7 +158,7 @@ export function Market() {
 
 function OperationNotice({ op, symbol }: { op: Operation; symbol: string }) {
   const amount = `${atoms(BigInt(op.atoms ?? "0"), DECIMALS, 2)} ${symbol}`;
-  const link = <a href={txUrl(op.btcTxid)} target="_blank" rel="noopener noreferrer">view the Bitcoin transaction</a>;
+  const link = <TxLink kind="btc" id={op.btcTxid}>view the Bitcoin transaction</TxLink>;
   switch (op.kind) {
     case "buy":
       return (

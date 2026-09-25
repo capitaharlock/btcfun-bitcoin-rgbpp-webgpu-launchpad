@@ -21,3 +21,8 @@ export function ckbTokenUrl(tokenId: string, config: RgbppConfig = ACTIVE_RGBPP)
 export function ckbMintScriptUrl(config: RgbppConfig = ACTIVE_RGBPP): string {
   return `${root(config)}/script/${config.mint.codeHash}/${config.mint.hashType}`;
 }
+
+/** A CKB transaction's page. */
+export function ckbTxUrl(txHash: string, config: RgbppConfig = ACTIVE_RGBPP): string {
+  return `${config.ckbExplorer}${txHash}`;
+}

@@ -10,6 +10,9 @@
 
 import { sha256 } from "@noble/hashes/sha2";
 
+import { txidToInternal } from "./bitcoin/txid";
+import { concatBytes } from "./bytes";
+
 export const DECIMALS = 8;
 /** Atoms minted per `clz²` before any halving: one whole token. */
 export const UNIT = 10n ** BigInt(DECIMALS);
@@ -107,16 +110,11 @@ export function blocksToNextHalving(h0: number, height: number): number {
  * done against it in advance, and it can be spent once, so no work is reused.
  */
 export function ticketChallenge(txidDisplayHex: string, vout: number): Uint8Array {
-  if (!/^[0-9a-f]{64}$/.test(txidDisplayHex)) {
-    throw new RangeError("a txid is 64 lowercase hexadecimal characters");
-  }
+  const txid = txidToInternal(txidDisplayHex);
   if (!Number.isInteger(vout) || vout < 0 || vout > 0xffff_ffff) {
     throw new RangeError(`output index out of range: ${vout}`);
   }
-  const outpoint = new Uint8Array(36);
-  for (let i = 0; i < 32; i++) {
-    outpoint[i] = parseInt(txidDisplayHex.slice(62 - 2 * i, 64 - 2 * i), 16);
-  }
-  new DataView(outpoint.buffer).setUint32(32, vout, true);
-  return sha256(outpoint);
+  const index = new Uint8Array(4);
+  new DataView(index.buffer).setUint32(0, vout, true);
+  return sha256(concatBytes(txid, index));
 }

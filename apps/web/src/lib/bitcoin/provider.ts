@@ -13,6 +13,7 @@
  */
 
 import { ACTIVE, FALLBACK_FEE_RATE, type NetworkConfig } from "./network";
+import { TXID_PATTERN } from "./txid";
 
 export interface Utxo {
   txid: string;
@@ -170,7 +171,7 @@ export async function broadcast(rawHex: string, network: NetworkConfig = ACTIVE)
     body: rawHex,
   });
   const txid = (await response.text()).trim();
-  if (!/^[0-9a-f]{64}$/.test(txid)) throw new ProviderError(`Unexpected broadcast reply: ${txid}`);
+  if (!TXID_PATTERN.test(txid)) throw new ProviderError(`Unexpected broadcast reply: ${txid}`);
   return txid;
 }
 
@@ -217,7 +218,7 @@ export interface ChainTx {
 function toChainTx(raw: unknown): ChainTx {
   const tx = raw as Record<string, unknown>;
   const status = (tx.status ?? {}) as Record<string, unknown>;
-  if (typeof tx.txid !== "string" || !/^[0-9a-f]{64}$/.test(tx.txid) || !Array.isArray(tx.vout) || !Array.isArray(tx.vin)) {
+  if (typeof tx.txid !== "string" || !TXID_PATTERN.test(tx.txid) || !Array.isArray(tx.vout) || !Array.isArray(tx.vin)) {
     throw new ProviderError("Malformed transaction in provider response");
   }
   return {

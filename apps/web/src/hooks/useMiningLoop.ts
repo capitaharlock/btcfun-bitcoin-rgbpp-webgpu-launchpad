@@ -13,10 +13,9 @@
  * confirmation; a passkey wallet asks for the passkey when it is pressed —
  * the same path, through `Vault.use()`.
  *
- * Before the ticket is signed the wallet must hold the whole round: the ticket,
- * its network fee, and the network fees still to come (the arming, when there
- * is one, and the mint). A ticket paid without the means to mint it would be
- * lost, so a short wallet signs nothing and is told how much is missing.
+ * Before the ticket is signed the wallet must hold the whole round
+ * (`lib/mining/costs.ts`): a short wallet signs nothing and is told how much
+ * is missing.
  *
  * MINE on the header or on a launch's card opens the wizard; that press, and
  * the hash the person chose to keep, are kept on the device (localStorage) so
@@ -29,41 +28,26 @@ import type { Launch } from "../data/launches";
 import { InsufficientFunds } from "../lib/bitcoin";
 import { fastFeeRate, getTxHex } from "../lib/bitcoin/provider";
 import { ticketKey } from "../lib/mining";
-import { deriveLoop, inProgress, narrate, type Loop, type Narration } from "../lib/mining/loop";
-import { ARM_SHAPE, fundingNeeded, mintShape, networkFee, plainFunding, shapeOf, strippedTx } from "../lib/rgbpp/bitcoin";
+import { costsFor, planFor, type Costs, type SigningStep } from "../lib/mining/costs";
+import { deriveLoop, inProgress, type Loop } from "../lib/mining/loop";
+import { narrate, type Narration } from "../lib/mining/narration";
+import { strippedTx } from "../lib/rgbpp/bitcoin";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
 import { mintScript } from "../lib/rgbpp/launch";
-import { armAnchor, planArm, planMint, planTicket, SEAL_SATS, type Paymaster, type Plan } from "../lib/rgbpp/operations";
-import { NEW_CELL, REUSE, reward, TICKET_SATS, ticketChallenge, type Split } from "../lib/standard";
+import { armAnchor, type Paymaster } from "../lib/rgbpp/operations";
+import { reward, TICKET_SATS, ticketChallenge } from "../lib/standard";
 import { landingTxids, useTokens, type Operation } from "../state/TokensProvider";
 import { useWallet } from "../state/WalletProvider";
 import { useAnnounce } from "./useAnnounce";
 import { useMiningSession, type MiningTarget, type UseMiningSession } from "./useMiningSession";
+import { useStored } from "./useStored";
 
 const INTENT_KEY = "btcfun:mine-intent:v1";
 const KEEP_KEY = "btcfun:kept-hash:v1";
 /** How often a step short of bitcoin re-reads the wallet's balance. */
 export const FUNDS_POLL_MS = 10_000;
 
-/** What signing the current step costs, and whether the wallet can pay for the rest of the round. */
-export interface Costs {
-  /** The ticket's split, for the ticket step; null for a step that pays only the network. */
-  split: Split | null;
-  /** What the paymaster asks beyond the ticket's budget for it, paid on top. */
-  paymasterExtra: number;
-  /** This transaction's network fee. */
-  network: number;
-  /** Network fees the round still has after this transaction: the arming, if any, and the mint. */
-  later: number;
-  /** Plain sats the wallet must hold before signing: this step and the fees still to come. */
-  reserve: number;
-  /** Confirmed plain sats: what an operation can be funded from now. */
-  spendable: number;
-  /** Plain sats still waiting for a block. */
-  pending: number;
-  short: boolean;
-  feeRate: number;
-}
+export type { Costs } from "../lib/mining/costs";
 
 export interface MiningLoop {
   loop: Loop;
@@ -92,36 +76,6 @@ export interface MiningLoop {
   /** Sign and send the mint. */
   signMint: () => void;
   again: () => void;
-}
-
-function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeStored(key: string, value: string | null): void {
-  try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
-  } catch {
-    // Storage blocked: the choice still holds for this page.
-  }
-}
-
-/** A value kept on the device under `key`, read once per key. */
-function useStored(key: string): [string | null, (value: string | null) => void] {
-  const [value, setValue] = useState(() => readStored(key));
-  const set = useCallback(
-    (next: string | null) => {
-      writeStored(key, next);
-      setValue(next);
-    },
-    [key],
-  );
-  return [value, set];
 }
 
 export function useMiningLoop(launch: Launch, tip: number, focus: boolean): MiningLoop {
@@ -218,37 +172,21 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
   // Keyed by what shapes it — not by `state`, which is rebuilt every render.
   const buyCell = state.at === "buy" ? state.cell : undefined;
   const mintCell = state.at === "mint" ? state.cell : null;
-  const plan = useMemo<Plan | null>(() => {
-    try {
-      if (buyCell !== undefined) {
-        if (buyCell === null && !paymaster) return null;
-        return planTicket(ACTIVE_RGBPP, launch.terms, { idle: buyCell, paymaster, tip });
-      }
-      if (armCell) {
-        return creating?.txid === armCell.seal.txid ? planArm(ACTIVE_RGBPP, launch.terms, armCell, creating.bytes, tip, launch.admission) : null;
-      }
-      if (mintCell && best) {
-        return planMint(ACTIVE_RGBPP, launch.terms, { miner: mintCell, held: holding, nonce: best.nonce, reward: mintable });
-      }
-    } catch {
-      // A tip behind the opening block: the step is not offered, so nothing to price.
-    }
+  const step = useMemo<SigningStep | null>(() => {
+    if (buyCell !== undefined) return { kind: "ticket", idle: buyCell, paymaster, held: holding };
+    if (armCell) return { kind: "arm", paid: armCell, creating: creating?.txid === armCell.seal.txid ? creating.bytes : null, held: holding };
+    if (mintCell) return { kind: "mint", miner: mintCell, nonce: best?.nonce ?? null, reward: mintable, held: holding };
     return null;
-  }, [buyCell, armCell, mintCell, paymaster, creating, launch.terms, launch.admission, tip, holding, best, mintable]);
+  }, [buyCell, armCell, mintCell, paymaster, creating, holding, best, mintable]);
+  const plan = useMemo(
+    () => (step ? planFor(ACTIVE_RGBPP, { terms: launch.terms, admission: launch.admission }, step, tip) : null),
+    [step, launch.terms, launch.admission, tip],
+  );
 
   const costs = useMemo<Costs | null>(() => {
-    if (!plan || feeRate === null || !wallet.balance) return null;
-    const landing = landingTxids(tokens.operations);
-    const spendable = plainFunding(wallet.balance.utxos, landing).reduce((n, u) => n + u.value, 0);
-    const pending = wallet.balance.utxos.filter((u) => !u.confirmed && u.value !== SEAL_SATS).reduce((n, u) => n + u.value, 0);
-    const network = networkFee(shapeOf(plan), feeRate);
-    const mintLater = fundingNeeded(mintShape(holding !== null), feeRate);
-    const later = buyCell !== undefined ? (buyCell === null ? fundingNeeded(ARM_SHAPE, feeRate) : 0) + mintLater : armCell ? mintLater : 0;
-    const reserve = fundingNeeded(plan, feeRate) + later;
-    const split = buyCell === undefined ? null : buyCell === null ? NEW_CELL : REUSE;
-    const paymasterExtra = buyCell === null && paymaster ? Math.max(0, paymaster.feeSats - NEW_CELL.paymaster) : 0;
-    return { split, paymasterExtra, network, later, reserve, spendable, pending, short: spendable < reserve, feeRate };
-  }, [plan, feeRate, wallet.balance, tokens.operations, holding, buyCell, armCell, paymaster]);
+    if (!plan || !step || feeRate === null || !wallet.balance) return null;
+    return costsFor(plan, step, { utxos: wallet.balance.utxos, landing: landingTxids(tokens.operations), feeRate });
+  }, [plan, step, feeRate, wallet.balance, tokens.operations]);
 
   // Short of bitcoin: ask for the balance every 10 s rather than the wallet's
   // usual pace, so coins from a faucet unlock the step soon after they land.

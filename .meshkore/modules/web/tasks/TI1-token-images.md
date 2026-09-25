@@ -30,7 +30,7 @@ know to click.
 
 ## Resolution
 
-- `lib/launches/progress.ts` (position, labels, ladder), `ui/HalvingBar.tsx`.
+- `lib/launches/progress.ts` (position, labels, ladder), `components/launch/HalvingBar.tsx`.
 - `data/showcase.ts`: six examples (halving 0, 2, 3, 9, spent, opening) whose supply is the sum of
   their mint tallies at `reward()`; `showcase.test.ts` checks it and, with `@ts-expect-error`, that
   an example cannot reach the miner or the market.

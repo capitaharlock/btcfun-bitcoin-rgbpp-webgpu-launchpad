@@ -9,7 +9,7 @@
  * says, so it cannot decide who came first.
  */
 
-import type { LaunchCommitment } from "./create";
+import type { LaunchCommitment } from "./announcement";
 
 export interface Heard {
   commitment: LaunchCommitment;

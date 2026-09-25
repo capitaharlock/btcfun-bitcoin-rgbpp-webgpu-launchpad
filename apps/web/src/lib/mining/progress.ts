@@ -16,6 +16,7 @@
  * written before `next` existed still restore their best and resume from 0.
  */
 
+import { readStored, writeStored } from "../storage";
 import { NONCE_LIMIT, recompute } from "./verify";
 import type { Candidate } from "./types";
 
@@ -124,18 +125,11 @@ export interface ProgressStore {
 
 export const browserProgressStore: ProgressStore = {
   read(key, challenge) {
-    try {
-      return readProgress(localStorage.getItem(PROGRESS_KEY), key, challenge);
-    } catch {
-      return NO_PROGRESS;
-    }
+    return readProgress(readStored(PROGRESS_KEY), key, challenge);
   },
   write(key, progress, challenge) {
-    try {
-      localStorage.setItem(PROGRESS_KEY, writeProgress(localStorage.getItem(PROGRESS_KEY), key, progress, challenge));
-    } catch {
-      // Storage blocked or full: the running session still holds the progress.
-    }
+    // Storage refused or full: the running session still holds the progress.
+    writeStored(PROGRESS_KEY, writeProgress(readStored(PROGRESS_KEY), key, progress, challenge));
   },
 };
 

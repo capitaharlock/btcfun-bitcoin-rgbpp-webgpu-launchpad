@@ -15,7 +15,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { FALLBACK_TIP, specFor, type LaunchSpec } from "../data/launches";
 import { feed, faultIn as activityFault, type ActivityEntry } from "../lib/activity";
-import { createdLocally, idMatches, LAUNCH_ID_PATTERN, type LaunchCommitment } from "../lib/launches/create";
+import { idMatches, LAUNCH_ID_PATTERN, type LaunchCommitment } from "../lib/launches/announcement";
+import { createdLocally } from "../lib/launches/create";
 import { resolveAnnouncements, type Heard } from "../lib/launches/registry";
 import { useWallet } from "./WalletProvider";
 

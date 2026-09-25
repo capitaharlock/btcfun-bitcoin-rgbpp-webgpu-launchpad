@@ -1,5 +1,5 @@
 {
-  "$comment": "Each docs page and the files whose behaviour it describes. Paths are relative to the repository root. `npm run docs:check` fails when a source changed after its page (scripts/docs-check.mjs); the docs view reads the same list for its navigation.",
+  "$comment": "Each docs page and the files whose behaviour it describes. Paths are relative to the repository root. `npm run docs:check` fails when a source changed after its page (scripts/docs/check.mjs); the docs view reads the same list for its navigation.",
   "pages": [
     {
       "slug": "overview",
@@ -12,7 +12,11 @@
         "apps/web/src/lib/rgbpp/service.ts",
         "apps/web/src/lib/mining/session.ts",
         "apps/web/src/lib/bitcoin/keys.ts",
-        "apps/web/worker/index.ts"
+        "apps/web/worker/index.ts",
+        "apps/web/worker/certify.ts",
+        "apps/web/worker/events.ts",
+        "apps/web/worker/feed.ts",
+        "apps/web/worker/http.ts"
       ]
     },
     {
@@ -27,6 +31,7 @@
         ".meshkore/context/decisions/2026-09-25-paid-registration-and-certificate.md",
         ".meshkore/context/decisions/2026-09-26-every-launch-registered-and-mineable.md",
         "apps/web/src/lib/launches/certificate.ts",
+        "apps/web/src/lib/bitcoin/txid.ts",
         "apps/web/src/lib/standard.ts",
         "contracts/mint-core/src/lib.rs"
       ]
@@ -38,11 +43,15 @@
       "page": "apps/web/src/docs/pages/mint",
       "sources": [
         "apps/web/src/lib/rgbpp/operations.ts",
+        "apps/web/src/lib/rgbpp/cells",
+        "apps/web/src/lib/rgbpp/plans",
         "apps/web/src/lib/rgbpp/bitcoin.ts",
         "apps/web/src/lib/rgbpp/service.ts",
-        "apps/web/src/components/mining/MiningWizard.tsx",
+        "apps/web/src/components/mining/wizard",
         "apps/web/src/hooks/useMiningLoop.ts",
         "apps/web/src/lib/mining/loop.ts",
+        "apps/web/src/lib/mining/costs.ts",
+        "apps/web/src/lib/mining/narration.ts",
         "apps/web/src/lib/mining/progress.ts",
         "apps/web/src/lib/launches/featured.ts",
         "contracts/mint/src/main.rs"
@@ -66,6 +75,8 @@
       "page": "apps/web/src/docs/pages/transfers",
       "sources": [
         "apps/web/src/lib/rgbpp/operations.ts",
+        "apps/web/src/lib/rgbpp/cells",
+        "apps/web/src/lib/rgbpp/plans",
         "apps/web/src/lib/rgbpp/bitcoin.ts"
       ]
     },

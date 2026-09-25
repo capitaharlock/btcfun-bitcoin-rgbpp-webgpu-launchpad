@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { atoms, count, parseAmount } from "./format";
+import { atoms, blocksLabel, count, parseAmount } from "./format";
 
 describe("count", () => {
   it("is exact below a million", () => {
@@ -32,5 +32,14 @@ describe("atoms", () => {
 
   it("round-trips through parseAmount", () => {
     expect(parseAmount(atoms(102_427_000_000n, 8).replace(",", ""), 8)).toBe(102_427_000_000n);
+  });
+});
+
+describe("blocksLabel", () => {
+  it("says one block in the singular and groups the plural", () => {
+    expect(blocksLabel(1)).toBe("1 block");
+    expect(blocksLabel(0)).toBe("0 blocks");
+    expect(blocksLabel(6)).toBe("6 blocks");
+    expect(blocksLabel(1008)).toBe("1,008 blocks");
   });
 });

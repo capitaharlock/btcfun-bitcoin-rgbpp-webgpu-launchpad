@@ -19,7 +19,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { navigate } from "../App";
+import { navigate } from "../lib/router";
 import type { Launch } from "../data/launches";
 import { showcase } from "../data/showcase";
 import { useActivity, useLaunchActivity } from "../hooks/useActivity";
@@ -30,9 +30,9 @@ import { featuredLaunch } from "../lib/launches/featured";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_PERCENT, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
 import { ArcadeScene } from "../ui/arcade/ArcadeScene";
-import { RewardChart } from "../ui/RewardChart";
+import { RewardChart } from "../components/launch/RewardChart";
 import { More, Panel, SectionHead } from "../ui/primitives";
-import { actionFor, TokenCard, type CardAction } from "../ui/TokenCard";
+import { actionFor, TokenCard, type CardAction } from "../components/launches/TokenCard";
 
 type Sort = "hot" | "new" | "halving";
 type Filter = "all" | CardAction;

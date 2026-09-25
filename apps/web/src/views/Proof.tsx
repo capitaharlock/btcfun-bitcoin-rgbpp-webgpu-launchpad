@@ -10,9 +10,8 @@
 
 import { useEffect, useState } from "react";
 
-import { navigate } from "../App";
+import { navigate } from "../lib/router";
 import { getTx } from "../lib/bitcoin";
-import { txUrl } from "../lib/bitcoin/network";
 import { atoms } from "../lib/format";
 import { ACTIVE_RGBPP } from "../lib/rgbpp/config";
 import { ckbClient } from "../lib/rgbpp/ckb";
@@ -20,6 +19,7 @@ import { verifyMint, type MintVerdict } from "../lib/rgbpp/verify";
 import { DECIMALS } from "../lib/standard";
 import { useTokens } from "../state/TokensProvider";
 import { Chip, Field, More, Notice, PageHead, Panel } from "../ui/primitives";
+import { TxLink } from "../ui/TxLink";
 
 
 type State =
@@ -117,9 +117,9 @@ export function ProofView({ txid }: { txid?: string }) {
           )}
           <div className="rule" />
           <div className="tiny faint anywhere">
-            Bitcoin <a href={txUrl(txid)} target="_blank" rel="noopener noreferrer">{txid}</a>
+            Bitcoin <TxLink kind="btc" id={txid}>{txid}</TxLink>
             <br />
-            CKB <a href={`${ACTIVE_RGBPP.ckbExplorer}${state.ckbTxHash}`} target="_blank" rel="noopener noreferrer">{state.ckbTxHash}</a>
+            CKB <TxLink kind="ckb" id={state.ckbTxHash}>{state.ckbTxHash}</TxLink>
           </div>
         </Panel>
       )}

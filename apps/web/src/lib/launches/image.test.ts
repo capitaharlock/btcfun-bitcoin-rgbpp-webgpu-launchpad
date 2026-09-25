@@ -1,11 +1,12 @@
-import { certifiedFor } from "./testkit";
+import { certifiedFor } from "../../test/launches";
 import { sha256 } from "@noble/hashes/sha2";
 import { describe, expect, it } from "vitest";
 
 import { bytesToHex } from "../bytes";
 import { deriveKey } from "../bitcoin/keys";
 import { TESTNET3 } from "../bitcoin/network";
-import { commitmentId, idMatches, NO_LINKS, NO_STORY } from "./create";
+import { commitmentId, idMatches } from "./announcement";
+import { NO_LINKS, NO_STORY } from "./draft";
 import { artFor, imageFor, imageMatches, MAX_IMAGE_LENGTH, PLATFORM_IMAGES } from "./image";
 
 describe("image references", () => {

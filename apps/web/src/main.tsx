@@ -8,7 +8,6 @@ import "./ui/theme-clean.css";
 import "./ui/base.css";
 import "./ui/components.css";
 import "./ui/surfaces.css";
-import "./ui/hash-feed.css";
 
 applyTheme();
 

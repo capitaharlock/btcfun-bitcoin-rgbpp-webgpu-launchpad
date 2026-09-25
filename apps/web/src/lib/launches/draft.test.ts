@@ -1,41 +1,12 @@
-import { certifiedFor } from "./testkit";
 import { describe, expect, it } from "vitest";
 
-import { deriveKey } from "../bitcoin/keys";
+import { meshDraft as draft, TEST_CREATOR as creator, certifiedFor } from "../../test/launches";
 import { TESTNET3 } from "../bitcoin/network";
-import { ACTIVE_RGBPP } from "../rgbpp/config";
-import { tokenId } from "../rgbpp/launch";
 import { ACTIVITY_VERSION } from "../activity";
 import { MAX_META } from "../activity/verify";
-import {
-  commitmentId,
-  EXTRAS_WIRE_BUDGET,
-  idMatches,
-  LAUNCH_ID_PATTERN,
-  linkFor,
-  MAX_LINK_LENGTH,
-  MAX_STORY_LENGTH,
-  NO_LINKS,
-  NO_STORY,
-  publicExtras,
-  termsOf,
-  validate,
-  type LaunchDraft,
-} from "./create";
+import { NO_LINKS, validate, type LaunchDraft } from "./draft";
+import { EXTRAS_WIRE_BUDGET, MAX_LINK_LENGTH, MAX_STORY_LENGTH } from "./extras";
 import { MAX_IMAGE_LENGTH } from "./image";
-
-const promoter = deriveKey(new Uint8Array(32).fill(7), TESTNET3).address;
-const draft: LaunchDraft = {
-  symbol: "MESH",
-  name: "Meshwork",
-  blurb: "Community token for a mesh-relay operators' group.",
-  accent: "var(--amber)",
-  promoter,
-  opensInBlocks: 6,
-  links: NO_LINKS,
-  story: NO_STORY,
-  image: "",
-};
 
 describe("launch drafts", () => {
   it("accept a complete draft and name each fault in place", () => {
@@ -52,54 +23,7 @@ describe("launch drafts", () => {
   });
 });
 
-describe("launch identity", () => {
-  const c = certifiedFor(draft, "02" + "11".repeat(32), 150_000, TESTNET3);
-
-  it("derives the id from the token its terms produce", () => {
-    expect(c.h0).toBe(150_006);
-    expect(c.tokenId).toBe(tokenId(ACTIVE_RGBPP, termsOf(c, TESTNET3)));
-    expect(c.id).toBe(`mesh-${c.tokenId.slice(2, 18)}`);
-    expect(LAUNCH_ID_PATTERN.test(c.id)).toBe(true);
-    expect(idMatches(c, TESTNET3)).toBe(true);
-  });
-
-  it("stops matching when any term is changed after the fact", () => {
-    expect(idMatches({ ...c, h0: c.h0 + 1 }, TESTNET3)).toBe(false);
-    expect(idMatches({ ...c, name: "Other" }, TESTNET3)).toBe(false);
-    expect(idMatches({ ...c, promoter: deriveKey(new Uint8Array(32).fill(8), TESTNET3).address }, TESTNET3)).toBe(false);
-    expect(idMatches({ ...c, promoter: "not an address" }, TESTNET3)).toBe(false);
-  });
-
-  it("does not depend on presentation: the accent is not part of the token", () => {
-    expect(certifiedFor({ ...draft, accent: "var(--cyan)" }, "02" + "11".repeat(32), 150_000, TESTNET3).tokenId).toBe(c.tokenId);
-  });
-});
-
-describe("launch links and story", () => {
-  const creator = "02" + "11".repeat(32);
-
-  it("accept only https links on the host each kind promises", () => {
-    expect(linkFor("website", "https://mesh.example/about")).toBe("https://mesh.example/about");
-    expect(linkFor("website", "http://mesh.example")).toBeNull();
-    expect(linkFor("website", "javascript:alert(1)")).toBeNull();
-    expect(linkFor("website", "https://user:pw@mesh.example")).toBeNull();
-    expect(linkFor("website", "mesh.example")).toBeNull();
-    expect(linkFor("github", "https://github.com/meshwork")).toBe("https://github.com/meshwork");
-    expect(linkFor("github", "https://gitlab.com/meshwork")).toBeNull();
-    expect(linkFor("github", "https://github.com/")).toBeNull();
-    expect(linkFor("telegram", "https://t.me/meshwork")).toBe("https://t.me/meshwork");
-    expect(linkFor("discord", "https://discord.gg/abc123")).toBe("https://discord.gg/abc123");
-    expect(linkFor("discord", "https://discord.evil.example/abc")).toBeNull();
-    expect(linkFor("website", `https://mesh.example/${"a".repeat(MAX_LINK_LENGTH)}`)).toBeNull();
-  });
-
-  it("turn an X handle into its x.com address", () => {
-    expect(linkFor("x", "@meshwork")).toBe("https://x.com/meshwork");
-    expect(linkFor("x", "meshwork")).toBe("https://x.com/meshwork");
-    expect(linkFor("x", "https://twitter.com/meshwork")).toBe("https://twitter.com/meshwork");
-    expect(linkFor("x", "@not a handle")).toBeNull();
-  });
-
+describe("launch links and story in a draft", () => {
   it("name each bad link and each long paragraph in place", () => {
     const faults = validate(
       {
@@ -111,36 +35,6 @@ describe("launch links and story", () => {
       TESTNET3,
     );
     expect(Object.keys(faults).sort()).toEqual(["image", "links.github", "links.website", "story.why"]);
-  });
-
-  it("are optional, and leave an announcement without them exactly as before", () => {
-    const plain = certifiedFor(draft, creator, 150_000, TESTNET3);
-    expect("links" in plain).toBe(false);
-    expect("story" in plain).toBe(false);
-    expect("image" in plain).toBe(false);
-    const withExtras = certifiedFor(
-      { ...draft, links: { ...NO_LINKS, x: "@meshwork" }, story: { why: "Relays cost money.", plan: "" } },
-      creator,
-      150_000,
-      TESTNET3,
-    );
-    expect(withExtras.links).toEqual({ x: "https://x.com/meshwork" });
-    expect(withExtras.story).toEqual({ why: "Relays cost money." });
-    // Not part of the token: the id does not move.
-    expect(withExtras.tokenId).toBe(plain.tokenId);
-    expect(withExtras.id).toBe(plain.id);
-    // But part of what the creator signed.
-    expect(commitmentId({ ...withExtras, at: plain.at })).not.toBe(commitmentId(plain));
-    expect(commitmentId({ ...plain, links: undefined, story: undefined })).toBe(commitmentId(plain));
-  });
-
-  it("drop whatever does not pass when read back from anywhere", () => {
-    const tampered = {
-      links: { website: "javascript:alert(1)", github: "https://github.com/ok", extra: "https://x.example" },
-      story: { why: 42, plan: "p".repeat(MAX_STORY_LENGTH + 1) },
-    } as unknown as Parameters<typeof publicExtras>[0];
-    expect(publicExtras(tampered)).toEqual({ links: { github: "https://github.com/ok" }, story: {} });
-    expect(publicExtras({})).toEqual({ links: {}, story: {} });
   });
 
   it("keep the largest valid announcement inside the index's payload and request limits", () => {

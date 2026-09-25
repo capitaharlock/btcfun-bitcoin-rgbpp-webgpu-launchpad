@@ -1,3 +1,8 @@
+/* The generic building blocks every page is made of: panels, stats, chips,
+ * notices, fields, the dialog. They know nothing about launches or chains, so
+ * a page reads as its own content and the look stays in the theme's tokens.
+ */
+
 import {
   cloneElement,
   isValidElement,
@@ -343,5 +348,18 @@ export function Dialog({
         </div>
       )}
     </dialog>
+  );
+}
+
+/**
+ * A large button standing in for an action already under way: disabled, and
+ * announced as busy, with what is happening as its label. Pass a spinner among
+ * the children where the surrounding design has one.
+ */
+export function BusyButton({ children }: { children: ReactNode }) {
+  return (
+    <button className="btn lg working" disabled aria-busy="true">
+      {children}
+    </button>
   );
 }

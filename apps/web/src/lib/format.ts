@@ -103,6 +103,11 @@ export function blocksAsTime(blocks: number | bigint): string {
   return `~${fixed(hours / 24, 1)}d`;
 }
 
+/** A count of blocks in words: "1 block", "1,008 blocks". */
+export function blocksLabel(blocks: number): string {
+  return blocks === 1 ? "1 block" : `${group(blocks)} blocks`;
+}
+
 export function shortHash(hex: string, head = 10, tail = 8): string {
   if (hex.length <= head + tail + 1) return hex;
   return `${hex.slice(0, head)}…${hex.slice(-tail)}`;

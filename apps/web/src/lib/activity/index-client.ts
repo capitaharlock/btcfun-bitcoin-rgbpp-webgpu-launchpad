@@ -11,6 +11,7 @@
  * ownership. A wallet that has published nothing still holds its tokens.
  */
 
+import { readStoredList } from "../storage";
 import { activityId, faultIn } from "./verify";
 import { ActivityError, type ActivityEntry, type ActivityKind, type SignedActivity } from "./types";
 
@@ -37,14 +38,7 @@ export interface Feed {
 // ── local mirror ─────────────────────────────────────────────────────────────
 
 function readLocal(): ActivityEntry[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as ActivityEntry[]) : [];
-  } catch {
-    return [];
-  }
+  return readStoredList<ActivityEntry>(LOCAL_KEY);
 }
 
 function writeLocal(entries: ActivityEntry[]): void {

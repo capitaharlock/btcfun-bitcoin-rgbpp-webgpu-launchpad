@@ -7,9 +7,9 @@
  * (`lib/launches/progress.ts`).
  */
 
-import { group } from "../lib/format";
-import { divisorLabel, halvingLabel, ladder, LADDER_RUNGS, periodShare, whereNow, type HalvingPosition } from "../lib/launches/progress";
-import { Meter } from "./primitives";
+import { group } from "../../lib/format";
+import { divisorLabel, halvingLabel, ladder, LADDER_RUNGS, periodShare, whereNow, type HalvingPosition } from "../../lib/launches/progress";
+import { Meter } from "../../ui/primitives";
 
 export function HalvingBar({
   position,

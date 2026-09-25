@@ -15,14 +15,14 @@
 
 import { memo } from "react";
 
-import type { CatalogueEntry } from "../data/showcase";
-import type { LaunchStats } from "../hooks/useLaunchStats";
-import { atoms, compact, group } from "../lib/format";
-import { DECIMALS, reward } from "../lib/standard";
-import { HalvingBar } from "./HalvingBar";
-import { ExplorerLinks, launchExplorers, offExplorers, ProjectLinks } from "./PixelIcon";
-import { Chip } from "./primitives";
-import { TokenImage } from "./TokenImage";
+import type { CatalogueEntry } from "../../data/showcase";
+import type { LaunchStats } from "../../hooks/useLaunchStats";
+import { atoms, compact, group } from "../../lib/format";
+import { DECIMALS, reward } from "../../lib/standard";
+import { HalvingBar } from "../launch/HalvingBar";
+import { ExplorerLinks, launchExplorers, offExplorers, ProjectLinks } from "../launch/Links";
+import { Chip } from "../../ui/primitives";
+import { TokenImage } from "../../ui/TokenImage";
 
 export type CardAction = "mine" | "soon" | "view";
 

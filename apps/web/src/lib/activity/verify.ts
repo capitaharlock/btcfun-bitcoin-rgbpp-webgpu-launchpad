@@ -11,6 +11,7 @@ import { sha256 } from "@noble/hashes/sha2";
 import { canonicalDigest, canonicalId, IDENTITY_PATTERN, type Field } from "../canonical";
 import { verifySignature } from "../signatures";
 import { bytesToHex, hexToBytes } from "../bytes";
+import { TXID_PATTERN } from "../bitcoin/txid";
 import { ACTIVITY_VERSION, type ActivityBody, type SignedActivity } from "./types";
 
 function fieldsOf(body: ActivityBody): Field[] {
@@ -39,7 +40,7 @@ export function activityId(body: ActivityBody): string {
 /**
  * Largest inline payload, in characters. A launch announcement is a few
  * hundred, and up to about 3,000 with its optional links and story
- * (`lib/launches/create.ts` bounds those so the whole event still fits the
+ * (`lib/launches/extras.ts` bounds those so the whole event still fits the
  * index's request limit).
  */
 export const MAX_META = 3000;
@@ -62,7 +63,7 @@ export function faultIn(signed: SignedActivity): string | null {
   }
   if (!IDENTITY_PATTERN.test(body.actor ?? "")) return "Malformed actor key.";
   if (!/^[0-9a-f]{64}$/.test(body.ref ?? "")) return "Malformed reference digest.";
-  if (body.txid !== undefined && !/^[0-9a-f]{64}$/.test(body.txid)) return "Malformed txid.";
+  if (body.txid !== undefined && !TXID_PATTERN.test(body.txid)) return "Malformed txid.";
   if (!/^(0|[1-9][0-9]*)$/.test(body.amount ?? "")) return "Malformed amount.";
   if (!Number.isInteger(body.sats) || body.sats < 0) return "Malformed satoshi amount.";
   if (typeof body.at !== "string" || body.at.length > 40) return "Malformed timestamp.";

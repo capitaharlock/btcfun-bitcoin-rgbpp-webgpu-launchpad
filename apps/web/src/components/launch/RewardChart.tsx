@@ -9,8 +9,8 @@
 
 import { useId } from "react";
 
-import { atoms, group } from "../lib/format";
-import { DECIMALS, HALVING_BLOCKS, reward } from "../lib/standard";
+import { atoms, group } from "../../lib/format";
+import { DECIMALS, HALVING_BLOCKS, reward } from "../../lib/standard";
 
 const SPAN_HALVINGS = 8;
 const SHOWN_CLZ = [16, 24, 32, 40];

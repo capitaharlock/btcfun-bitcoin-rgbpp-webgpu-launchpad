@@ -10,6 +10,7 @@
  */
 
 import { ccc } from "@ckb-ccc/core";
+import { txidFromInternal, txidToInternal } from "../bitcoin/txid";
 import type { RgbppConfig } from "./config";
 
 export interface Seal {
@@ -20,16 +21,11 @@ export interface Seal {
 
 export const PLACEHOLDER_TXID = "0".repeat(64);
 
-export function reverseHex(hex: string): string {
-  return hex.match(/../g)!.reverse().join("");
-}
-
 export function sealArgs(seal: Seal): ccc.Hex {
-  if (!/^[0-9a-f]{64}$/.test(seal.txid)) throw new RangeError("a txid is 64 lowercase hex characters");
   if (!Number.isInteger(seal.vout) || seal.vout < 0 || seal.vout > 0xffff_ffff) {
     throw new RangeError(`output index out of range: ${seal.vout}`);
   }
-  return ccc.hexFrom(ccc.bytesConcat(ccc.numLeToBytes(seal.vout, 4), ccc.bytesFrom(reverseHex(seal.txid), "hex")));
+  return ccc.hexFrom(ccc.bytesConcat(ccc.numLeToBytes(seal.vout, 4), txidToInternal(seal.txid)));
 }
 
 export function sealFromArgs(args: ccc.HexLike): Seal {
@@ -37,7 +33,7 @@ export function sealFromArgs(args: ccc.HexLike): Seal {
   if (bytes.length !== 36) throw new RangeError(`RGB++ lock args are 36 bytes, got ${bytes.length}`);
   return {
     vout: Number(ccc.numLeFromBytes(bytes.slice(0, 4))),
-    txid: reverseHex(ccc.hexFrom(bytes.slice(4)).slice(2)),
+    txid: txidFromInternal(bytes.slice(4)),
   };
 }
 
