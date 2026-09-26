@@ -17,7 +17,7 @@ wallet buys it with the seller offline.
 
 ## Done when
 
-- Every step is confirmed on-chain and linked from `.meshkore/docs/test-results.md`.
+- Every step is confirmed on-chain and linked from `.meshkore/docs/testing/results.md`.
 - The invalid-mint cases from `OC2` are attempted from the browser and rejected.
 
 ## Resolution

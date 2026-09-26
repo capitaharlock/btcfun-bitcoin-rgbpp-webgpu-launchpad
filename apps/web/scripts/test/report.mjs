@@ -1,4 +1,4 @@
-/* Render the browser suite's latest results into .meshkore/docs/test-results.md.
+/* Render the browser suite's latest results into .meshkore/docs/testing/results.md.
  *
  * Reads Playwright's JSON report and replaces the section between the
  * `results:start` / `results:end` markers in the test-results doc. Everything
@@ -13,7 +13,7 @@ import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 
 const RESULTS = argv[2] ?? fileURLToPath(new URL("../../e2e-output/results.json", import.meta.url));
-const DOC = fileURLToPath(new URL("../../../../.meshkore/docs/test-results.md", import.meta.url));
+const DOC = fileURLToPath(new URL("../../../../.meshkore/docs/testing/results.md", import.meta.url));
 const START = "<!-- results:start -->";
 const END = "<!-- results:end -->";
 
@@ -69,4 +69,4 @@ const doc = readFileSync(DOC, "utf8");
 const [before] = doc.split(START);
 const after = doc.includes(END) ? doc.split(END)[1] : "\n";
 writeFileSync(DOC, `${before}${md}${after}`);
-console.log(`test-results.md updated: ${rows.length} tests from ${RESULTS}`);
+console.log(`testing/results.md updated: ${rows.length} tests from ${RESULTS}`);

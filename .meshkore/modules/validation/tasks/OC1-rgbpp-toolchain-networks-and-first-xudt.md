@@ -20,8 +20,8 @@ plain xUDT from one wallet to the other.
 - The supported network is recorded with evidence (service health, SPV tip).
 - Both wallets hold testnet BTC and CKB; the secrets stay out of the repository.
 - An xUDT is issued to a Bitcoin UTXO and transferred to the second wallet;
-  both transactions are linked from `.meshkore/docs/test-results.md`.
+  both transactions are linked from `.meshkore/docs/testing/results.md`.
 
 ## Resolution
 
-The public RGB++ services verify Bitcoin testnet3, which is now the app's only network. With both wallets funded, a launch was opened, ticketed, mined, minted, transferred and sold on testnet3 and CKB testnet; every transaction is linked from `.meshkore/docs/test-results.md` (live section). The one failure on the way — the paymaster lock's missing dependency — was fixed in the planner and is now refused by the simulated queue.
+The public RGB++ services verify Bitcoin testnet3, which is now the app's only network. With both wallets funded, a launch was opened, ticketed, mined, minted, transferred and sold on testnet3 and CKB testnet; every transaction is linked from `.meshkore/docs/testing/results.md` (live section). The one failure on the way — the paymaster lock's missing dependency — was fixed in the planner and is now refused by the simulated queue.

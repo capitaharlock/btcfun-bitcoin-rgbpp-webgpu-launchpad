@@ -46,7 +46,7 @@ RGB++ and CKB and removes everything the old epoch and reserve model needed.
 - A mint on testnet produces an xUDT balance that an RGB++ explorer shows under
   the launch's type hash, for the amount the app displayed while mining.
 - Invalid mints — weak hash, reused ticket, inflated amount, unpaid ticket — are
-  rejected on-chain, with the rejection recorded in `.meshkore/docs/test-results.md`.
+  rejected on-chain, with the rejection recorded in `.meshkore/docs/testing/results.md`.
 - A transfer between two wallets and a sale completed by a buyer while the
   seller is offline are confirmed on-chain.
 - Costs, cycles and capacity are measured and published.

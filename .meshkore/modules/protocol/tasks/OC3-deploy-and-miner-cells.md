@@ -18,7 +18,7 @@ provides the capacity that opening a miner cell needs.
 ## Done when
 
 - The deployment transaction and code hash are recorded in the app's network
-  configuration and in `.meshkore/docs/test-results.md`.
+  configuration and in `.meshkore/docs/testing/results.md`.
 - Opening a miner cell works for a wallet that holds only Bitcoin, with the
   capacity policy written down and its cost measured.
 
