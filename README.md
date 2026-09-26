@@ -89,6 +89,12 @@ unions over optional soup; comments that explain *why*. Every rule that can be
 tested is tested, and the UI is verified in a real browser before it is called
 done. Nothing is named more strongly than the code can support.
 
+The client is hexagonal: `domain/` holds the rules with no I/O, `ports/` the
+interfaces the application needs, `adapters/` one implementation per external
+technology, `app/` the composition and use cases, `ui/`, `features/` and
+`pages/` the rendering. A unit test reads every import and fails on the first
+one that points the wrong way (`.meshkore/context/architecture.md`).
+
 ## Read next
 
 - [Protocol specification](PROTOCOL.md)

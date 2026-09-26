@@ -1,6 +1,6 @@
 ---
 title: Architecture
-updated: 2026-09-24
+updated: 2026-09-26
 status: draft
 ---
 
@@ -68,3 +68,48 @@ inherently a leap and is deferred.
 **Repository:** `contracts/` (mint script, shared core, CKB-VM tests, reward
 vectors, deployment record) and `apps/web` (client, miner, Worker). Do not
 scaffold empty packages to demonstrate breadth.
+
+## Code architecture — `apps/web`
+
+The client is organised as ports and adapters (hexagonal), because it is a
+client of three externals it must not trust — a Bitcoin data provider, the
+RGB++ assets service, a CKB node — and two device capabilities — WebAuthn PRF,
+WebGPU — each of which must be swappable, and because the rules that decide
+money have to be readable and testable with no network at all.
+
+```text
+src/
+  domain/    the rules: protocol (tokenomics, challenge), codecs, Bitcoin and
+             RGB++ transaction shapes and plans, launches, market, mining,
+             signed activity. No I/O, no React, no browser API.
+  ports/     the interfaces the application needs from outside: ChainProvider,
+             RgbppGateway, CkbCells, Ledger, Certifier, Vault, MiningBackends,
+             DeviceStore. Each names the second implementation it foresees.
+  adapters/  one folder per external technology, implementing a port:
+             mempool.space, the RGB++ service, a CKB node, the activity index,
+             the vault (passkey, local, demo), CPU/GPU mining, browser storage.
+  app/       composition and use cases: `services.ts` builds the adapters once;
+             providers, hooks, the router, launch creation, mining sessions,
+             the operation store and the submit use case.
+  ui/        the design system: primitives with their own stylesheets, theme
+             tokens, formatting, pixel art.
+  features/  feature components (arcade, launch, launches, market, mining,
+             wallet, diagram).
+  pages/     route targets. docs/ the public documentation, itself pages.
+  config/    build-time configuration, read in one place.
+```
+
+Dependency direction: `domain ← ports ← adapters ← app ← features/pages`;
+`ui` serves the layers above it and never reaches into the app. Adapters are
+constructed only in `app/services.ts` and the providers; everything else
+receives them through `useServices()`, so a test or a script can supply a
+double. Cross-module imports use the `@/` alias and the module's explicit
+barrel; inside a module, imports are relative. `src/architecture.test.ts`
+reads every import and fails the unit suite on the first one that points the
+wrong way, on a domain module that does I/O, or on an import that bypasses a
+barrel.
+
+The same separation holds outside `src/`: `worker/` is the index's server side
+and depends only on `domain/`; `e2e/support/` simulates the ports in a browser;
+`scripts/` drives the real testnet through the same modules the browser runs.
+

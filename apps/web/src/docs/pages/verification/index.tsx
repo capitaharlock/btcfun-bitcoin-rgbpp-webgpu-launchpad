@@ -82,7 +82,8 @@ export default function VerificationPage() {
         <Technical>
           <ul>
             <li>
-              <code>verifyMint</code> (<code>domain/rgbpp/verify.ts</code>) takes data, not a network: the Bitcoin outputs, the
+              <code>verifyMint</code> (<code>domain/rgbpp/verify.ts</code>) takes data, not a network — the Proof page
+              fetches it through the chain and CKB ports and hands it over: the Bitcoin outputs, the
               CKB transaction and its consumed cells. Fetching is the caller's business, so the checks are unit-tested and
               can be fed from any node.
             </li>

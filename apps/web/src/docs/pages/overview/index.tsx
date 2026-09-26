@@ -100,6 +100,12 @@ export default function OverviewPage() {
         <Technical>
           <ul>
             <li>
+              <strong>Client.</strong> The rules — tokenomics, transaction plans, encodings, signatures — live in a
+              domain layer that does no I/O and is unit-tested on its own. Everything external (the Bitcoin provider, the
+              RGB++ service, a CKB node, the index, the wallet, the miners) sits behind an interface with one adapter each,
+              so any of them can be replaced by a node of your own or a test double without touching the rules.
+            </li>
+            <li>
               <strong>Wallet.</strong> A passkey (WebAuthn PRF) yields 32 bytes of entropy, which become a BIP39 mnemonic
               and the BIP84 key at <code>m/84'/1'/0'/0/0</code> — a standard path, so the coins can be swept by any BIP39
               wallet. A demo key kept in the browser is also available.
