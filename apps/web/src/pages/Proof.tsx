@@ -11,13 +11,11 @@
 import { useEffect, useState } from "react";
 
 import { navigate } from "@/app/router";
-import { getTx } from "@/adapters/mempool";
 import { atoms } from "@/ui/format";
 import { ACTIVE_RGBPP } from "@/domain/rgbpp";
-import { ckbClient } from "@/adapters/ckb";
 import { verifyMint, type MintVerdict } from "@/domain/rgbpp";
 import { DECIMALS } from "@/domain/protocol";
-import { useTokens } from "@/app/providers/TokensProvider";
+import { useServices } from "@/app/providers/ServicesProvider";
 import { Chip, Field, More, Notice, PageHead, Panel } from "@/ui/primitives";
 import { TxLink } from "@/ui/TxLink";
 
@@ -30,7 +28,7 @@ type State =
   | { kind: "error"; message: string };
 
 export function ProofView({ txid }: { txid?: string }) {
-  const tokens = useTokens();
+  const { chain, rgbpp, ckb } = useServices();
   const [input, setInput] = useState(txid ?? "");
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -39,17 +37,16 @@ export function ProofView({ txid }: { txid?: string }) {
     let live = true;
     setState({ kind: "reading" });
     (async () => {
-      const btc = await getTx(txid);
-      const status = await tokens.service.status(txid);
+      const btc = await chain.getTx(txid);
+      const status = await rgbpp.status(txid);
       if (!status.ckbTxHash) {
         return { kind: "pending", detail: `The RGB++ queue has not settled it on CKB yet (${status.state}).` } as State;
       }
-      const response = await ckbClient().getTransaction(status.ckbTxHash);
-      if (!response) return { kind: "error", message: "The CKB node does not know that transaction." } as State;
-      const tx = response.transaction;
+      const tx = await ckb.transaction(status.ckbTxHash);
+      if (!tx) return { kind: "error", message: "The CKB node does not know that transaction." } as State;
       const inputs = await Promise.all(
         tx.inputs.map(async (i) => {
-          const cell = await ckbClient().getCell(i.previousOutput);
+          const cell = await ckb.cell(i.previousOutput);
           if (!cell) throw new Error("A consumed cell could not be fetched from the CKB node.");
           return { output: cell.cellOutput, data: cell.outputData };
         }),
@@ -68,7 +65,7 @@ export function ProofView({ txid }: { txid?: string }) {
     return () => {
       live = false;
     };
-  }, [txid, tokens.service]);
+  }, [txid, chain, rgbpp, ckb]);
 
   const valid = /^[0-9a-f]{64}$/.test(input.trim());
 

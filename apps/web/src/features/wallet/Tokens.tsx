@@ -22,6 +22,7 @@ import { landingMints, positionsOf, type Position } from "@/domain/rgbpp";
 import { planTransfer } from "@/domain/rgbpp";
 import type { TokenCell } from "@/domain/rgbpp";
 import { DECIMALS } from "@/domain/protocol";
+import { useServices } from "@/app/providers/ServicesProvider";
 import { useTokens, type Operation } from "@/app/providers/TokensProvider";
 import { Field, More, Notice, Panel } from "@/ui/primitives";
 import { TokenImage } from "@/ui/TokenImage";
@@ -128,6 +129,7 @@ function HoldingCard({ position, landing, launch }: { position: Position; landin
 
 function TransferForm({ launch, cells, total }: { launch: Launch; cells: TokenCell[]; total: bigint }) {
   const tokens = useTokens();
+  const { rgbpp } = useServices();
   const [to, setTo] = useState("");
   const [amountText, setAmountText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,7 +155,7 @@ function TransferForm({ launch, cells, total }: { launch: Launch; cells: TokenCe
         from: cells,
         amount,
         to,
-        paymaster: await tokens.service.paymaster(),
+        paymaster: await rgbpp.paymaster(),
       });
       setSent(
         await tokens.submit(plan, {

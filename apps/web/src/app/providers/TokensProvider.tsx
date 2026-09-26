@@ -3,72 +3,28 @@
  * One provider owns both because they are the same question asked twice: the
  * cells sealed to this wallet's UTXOs are what every screen renders, and an
  * operation in flight is a change to those cells that has not landed yet.
- *
- * An RGB++ operation lands in stages, and each stage is shown as what it is:
- *
- *   sent      the Bitcoin transaction is broadcast; nothing is final
- *   queued    Bitcoin has confirmed it or is about to; the RGB++ queue holds the CKB side
- *   settled   the CKB transaction is committed; the cells exist
- *   failed    the queue gave up; the Bitcoin transaction still stands
- *
- * Operations are kept per address in localStorage, so a reload in the middle
- * of a mint does not forget it. They are a convenience, not a record: the
- * chain is re-read on every poll and is what balances come from.
+ * The stages an operation passes through are `app/tokens/operations.ts`; how
+ * one is sent is `app/tokens/submit.ts`. This keeps the React state and the
+ * polling that advances it.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { getFeeRate, getUtxos } from "@/adapters/mempool";
-import type { Utxo } from "@/domain/bitcoin";
-import type { WalletKey } from "@/domain/bitcoin";
-import { plainFunding, signOperation } from "@/domain/rgbpp";
-import { ACTIVE_RGBPP } from "@/domain/rgbpp";
-import { decodeAmount, type TokenCell } from "@/domain/rgbpp";
-import { decodeMinerCell, type MinerCell } from "@/domain/rgbpp";
-import type { Plan } from "@/domain/rgbpp";
-import { sealFromArgs } from "@/domain/rgbpp";
-import { RgbppService, type ServiceCell } from "@/adapters/rgbpp";
+import { ACTIVE_RGBPP, type Plan } from "@/domain/rgbpp";
+import { groupCells, type Holdings } from "@/app/tokens/holdings";
+import { advanced, isLanding, type Operation, type OperationMeta } from "@/app/tokens/operations";
+import { operationsStore } from "@/app/tokens/operations-store";
+import { submitOperation, type SubmitOptions } from "@/app/tokens/submit";
+import { useServices } from "./ServicesProvider";
 import { useWallet } from "./WalletProvider";
 
+export type { Holdings } from "@/app/tokens/holdings";
+export type { Operation, OperationKind, OperationStage } from "@/app/tokens/operations";
+export type { Signer, SubmitOptions } from "@/app/tokens/submit";
+
 const POLL_MS = 20_000;
-const OPS_KEY = "btcfun:operations:v1";
-
-export type OperationKind = "open" | "ticket" | "arm" | "mint" | "transfer" | "list" | "buy" | "cancel";
-export type OperationStage = "sent" | "queued" | "settled" | "failed";
-
-export interface Operation {
-  kind: OperationKind;
-  /** Bitcoin txid: the operation's identity. */
-  btcTxid: string;
-  launchId: string;
-  tokenId: string;
-  stage: OperationStage;
-  ckbTxHash: string | null;
-  failure: string | null;
-  /** What the operation moves, for display: atoms minted or sent, sats paid. */
-  atoms?: string;
-  sats?: number;
-  /** A ticket's anchor, so mining can start before the ticket settles. */
-  anchor?: number;
-  /** A ticket that created its miner cell, paid: it is armed by a second transaction. */
-  newCell?: boolean;
-  /**
-   * The signed transaction, kept for a ticket that creates its cell: arming
-   * the cell carries it whole (`planArm`), and this saves fetching it back.
-   */
-  hex?: string;
-  at: string;
-}
-
-export interface Holdings {
-  /** Miner cells, by mint script hash. */
-  miners: Map<string, MinerCell[]>;
-  /** Token cells, by xUDT type hash. */
-  tokens: Map<string, TokenCell[]>;
-}
 
 interface TokensContextValue {
-  service: RgbppService;
   holdings: Holdings | null;
   /** True while the first read is outstanding. */
   loading: boolean;
@@ -79,34 +35,15 @@ interface TokensContextValue {
    * Sign the Bitcoin transaction for `plan`, broadcast it and hand the CKB side
    * to the queue. Returns the operation as recorded.
    */
-  submit: (
-    plan: Plan,
-    meta: Pick<Operation, "kind" | "launchId" | "tokenId" | "atoms" | "sats" | "anchor" | "newCell">,
-    options?: SubmitOptions,
-  ) => Promise<Operation>;
-}
-
-/**
- * How the Bitcoin transaction for a plan is signed. The default spends the
- * plan's sealed UTXOs from this wallet; a purchase instead completes a
- * seller's signed input (`domain/rgbpp/sale.ts`), so it brings its own.
- */
-export type Signer = (key: WalletKey, sealed: Utxo[], free: Utxo[], feeRate: number) => { hex: string; txid: string };
-
-export interface SubmitOptions {
-  sign?: Signer;
-  /**
-   * The fee rate to pay, when the caller showed the person a cost at a given
-   * rate; without it the provider's recommendation is fetched at send time.
-   */
-  feeRate?: number;
+  submit: (plan: Plan, meta: OperationMeta, options?: SubmitOptions) => Promise<Operation>;
 }
 
 const TokensContext = createContext<TokensContextValue | null>(null);
 
 export function TokensProvider({ children }: { children: ReactNode }) {
   const { vault, refresh: refreshWallet } = useWallet();
-  const service = useMemo(() => new RgbppService(ACTIVE_RGBPP), []);
+  const { chain, rgbpp, storage } = useServices();
+  const store = useMemo(() => operationsStore(storage), [storage]);
   const [holdings, setHoldings] = useState<Holdings | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,52 +53,35 @@ export function TokensProvider({ children }: { children: ReactNode }) {
   const address = vault?.address ?? null;
 
   useEffect(() => {
-    setOperations(address ? readOps(address) : []);
+    setOperations(address ? store.read(address) : []);
     setHoldings(null);
     loaded.current = false;
-  }, [address]);
-
-  const persist = useCallback(
-    (next: Operation[]) => {
-      if (address) writeOps(address, next);
-      setOperations(next);
-    },
-    [address],
-  );
+  }, [address, store]);
 
   const refresh = useCallback(async () => {
     if (!address || inFlight.current) return;
     inFlight.current = true;
     if (!loaded.current) setLoading(true);
     try {
-      const cells = await service.cells(address);
-      setHoldings(group(cells));
+      const cells = await rgbpp.cells(address);
+      setHoldings(groupCells(ACTIVE_RGBPP, cells));
       loaded.current = true;
       setError(null);
 
       // Advance whatever is still in flight. Each is independent: one the
       // service no longer knows about must not stop the others updating.
-      const current = readOps(address);
-      const open = current.filter((op) => op.stage === "sent" || op.stage === "queued");
+      const current = store.read(address);
+      const open = current.filter(isLanding);
       if (open.length > 0) {
-        const updates = await Promise.all(
-          open.map(async (op) => {
-            try {
-              const status = await service.status(op.btcTxid);
-              const stage: OperationStage =
-                status.state === "completed" ? "settled" : status.state === "failed" ? "failed" : "queued";
-              return { ...op, stage, ckbTxHash: status.ckbTxHash, failure: status.failure };
-            } catch {
-              return op;
-            }
-          }),
-        );
+        const updates = await Promise.all(open.map(async (op) => rgbpp.status(op.btcTxid).then((s) => advanced(op, s), () => op)));
         const byTx = new Map(updates.map((op) => [op.btcTxid, op]));
         // The cells were read before these statuses: one that just settled is
         // not in them yet, and the page must never show a settled operation
         // beside the cells it replaced — a paid ticket would look unbought.
-        if (updates.some((op) => op.stage === "settled")) setHoldings(group(await service.cells(address)));
-        persist(current.map((op) => byTx.get(op.btcTxid) ?? op));
+        if (updates.some((op) => op.stage === "settled")) setHoldings(groupCells(ACTIVE_RGBPP, await rgbpp.cells(address)));
+        const next = current.map((op) => byTx.get(op.btcTxid) ?? op);
+        store.write(address, next);
+        setOperations(next);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -169,7 +89,7 @@ export function TokensProvider({ children }: { children: ReactNode }) {
       inFlight.current = false;
       setLoading(false);
     }
-  }, [address, service, persist]);
+  }, [address, rgbpp, store]);
 
   useEffect(() => {
     if (!address) return;
@@ -179,64 +99,23 @@ export function TokensProvider({ children }: { children: ReactNode }) {
   }, [address, refresh]);
 
   const submit = useCallback<TokensContextValue["submit"]>(
-    async (plan, meta, options = {}) => {
-      const { sign } = options;
+    async (plan, meta, options) => {
       if (!vault) throw new Error("Connect a wallet first.");
-      // Fresh UTXOs at send time: the polled snapshot may already be spent.
-      const [all, free, feeRate] = await Promise.all([
-        getUtxos(vault.address),
-        service.freeUtxos(vault.address),
-        options.feeRate ?? getFeeRate(),
-      ]);
-      const sealed = sign
-        ? []
-        : plan.sealsSpent.map((seal) => {
-            const utxo = all.find((u: Utxo) => u.txid === seal.txid && u.vout === seal.vout);
-            if (!utxo) throw new Error("A cell this operation moves is sealed to a UTXO that is not spendable yet.");
-            return utxo;
-          });
-      const funding = plainFunding(free, landingTxids(readOps(vault.address)));
-      const rate = Math.max(1, feeRate);
-      const signed = await vault.use((key) =>
-        sign ? sign(key, sealed, funding, rate) : signOperation(key, plan, sealed, funding, rate),
-      );
-      const serviceTxid = await service.broadcast(signed.hex);
-      const btcTxid = signed.txid;
-      const operation: Operation = {
-        ...meta,
-        btcTxid,
-        stage: "sent",
-        ckbTxHash: null,
-        failure: null,
-        at: new Date().toISOString(),
-        ...(meta.newCell ? { hex: signed.hex } : {}),
-      };
-      // Persist the Bitcoin spend before calling the CKB queue. If enqueue
-      // fails, the spend still exists and its seals must remain reserved.
-      persist([operation, ...readOps(vault.address)]);
-      if (serviceTxid !== btcTxid) {
-        throw new Error(`The Bitcoin service returned ${serviceTxid} for a transaction whose local txid is ${btcTxid}.`);
+      try {
+        return await submitOperation({ vault, chain, rgbpp, store }, plan, meta, options);
+      } finally {
+        // Whatever happened, the store is the record: a spend recorded before
+        // a failed enqueue must show, and the wallet's coins have moved.
+        setOperations(store.read(vault.address));
+        void refreshWallet();
       }
-      const queued = await service.enqueue(plan, btcTxid);
-      persist([{ ...operation, stage: queued === "failed" ? "failed" : "queued" },
-        ...readOps(vault.address).filter((op) => op.btcTxid !== btcTxid)]);
-      void refreshWallet();
-      return { ...operation, stage: queued === "failed" ? "failed" : "queued" };
     },
-    [vault, service, persist, refreshWallet],
+    [vault, chain, rgbpp, store, refreshWallet],
   );
 
   const value = useMemo<TokensContextValue>(
-    () => ({
-      service,
-      holdings: address ? holdings : null,
-      loading,
-      error,
-      operations,
-      refresh,
-      submit,
-    }),
-    [service, address, holdings, loading, error, operations, refresh, submit],
+    () => ({ holdings: address ? holdings : null, loading, error, operations, refresh, submit }),
+    [address, holdings, loading, error, operations, refresh, submit],
   );
 
   return <TokensContext.Provider value={value}>{children}</TokensContext.Provider>;
@@ -246,60 +125,4 @@ export function useTokens(): TokensContextValue {
   const ctx = useContext(TokensContext);
   if (!ctx) throw new Error("useTokens must be used inside <TokensProvider>");
   return ctx;
-}
-
-/** Sort the service's cells into miner cells and token cells by type hash. */
-function group(cells: ServiceCell[]): Holdings {
-  const holdings: Holdings = { miners: new Map(), tokens: new Map() };
-  for (const cell of cells) {
-    const type = cell.cellOutput.type;
-    if (!type || !cell.typeHash) continue;
-    let seal;
-    try {
-      seal = sealFromArgs(cell.cellOutput.lock.args);
-    } catch {
-      continue;
-    }
-    const base = {
-      outPoint: { txHash: cell.outPoint.txHash, index: Number(cell.outPoint.index) },
-      capacity: BigInt(cell.cellOutput.capacity),
-      seal,
-    };
-    if (type.codeHash === ACTIVE_RGBPP.mint.codeHash && type.hashType === ACTIVE_RGBPP.mint.hashType) {
-      const data = decodeMinerCell(cell.data);
-      if (!data) continue;
-      push(holdings.miners, cell.typeHash, { ...base, data });
-    } else if (type.codeHash === ACTIVE_RGBPP.xudt.codeHash && type.hashType === ACTIVE_RGBPP.xudt.hashType) {
-      push(holdings.tokens, cell.typeHash, { ...base, amount: decodeAmount(cell.data) });
-    }
-  }
-  return holdings;
-}
-
-function push<T>(map: Map<string, T[]>, key: string, value: T): void {
-  map.set(key, [...(map.get(key) ?? []), value]);
-}
-
-/** Bitcoin txids of operations still landing: their outputs are not plain funding yet. */
-export function landingTxids(ops: readonly Operation[]): Set<string> {
-  return new Set(ops.filter((op) => op.stage === "sent" || op.stage === "queued").map((op) => op.btcTxid));
-}
-
-function readOps(address: string): Operation[] {
-  try {
-    const all = JSON.parse(localStorage.getItem(OPS_KEY) ?? "{}") as Record<string, Operation[]>;
-    return Array.isArray(all[address]) ? all[address] : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeOps(address: string, ops: Operation[]): void {
-  try {
-    const all = JSON.parse(localStorage.getItem(OPS_KEY) ?? "{}") as Record<string, Operation[]>;
-    all[address] = ops.slice(0, 100);
-    localStorage.setItem(OPS_KEY, JSON.stringify(all));
-  } catch {
-    // Storage blocked: operations still show for this session.
-  }
 }

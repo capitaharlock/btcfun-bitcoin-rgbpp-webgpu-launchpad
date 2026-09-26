@@ -1,10 +1,10 @@
-/* Mining port.
+/* What mining produces, whichever device produced it.
  *
- * Both backends grind the same preimage — `sha256d(challenge32 || nonce_le64)`,
- * PROTOCOL.md §4.2 — and report the same shape, so the session layer, the UI and
- * the verifier never branch on which device produced a candidate. A candidate is
- * reproducible from `(challenge, nonce)` alone by `lib/sha256`, which is what
- * makes the Proof Explorer's client-side recheck possible for either backend.
+ * A candidate is reproducible from `(challenge, nonce)` alone by `verify.ts`,
+ * which is what makes the Proof Explorer's client-side recheck possible for
+ * either backend, and why nothing here says how a candidate was found. The
+ * device interface itself is a port (`ports/mining.ts`): the domain only names
+ * the two kinds so a sample can say which one it came from.
  */
 
 /** Length of the preimage the backends hash: 32-byte digest + 8-byte nonce. */
@@ -22,54 +22,7 @@ export interface Candidate {
   hash: string;
 }
 
-/** One report from a backend. Counts are deltas; the session accumulates. */
-export interface BackendProgress {
-  /** Attempts completed since the previous report. */
-  hashes: number;
-  /** Candidates that beat the backend's running best, oldest first. */
-  improvements: Candidate[];
-  /** An arbitrary recent digest, for the live readout. Never null once running. */
-  current: string;
-  /** Every nonce from the run's start up to this one (exclusive) has been tried. Absolute, not a delta. */
-  frontier: bigint;
-}
-
-/**
- * A device that can grind a challenge.
- *
- * Implementations own their own scheduling and must return from `stop()` with no
- * further `onProgress` calls pending, so a view can swap backends without
- * leaking work.
- */
-export interface MiningBackend {
-  readonly kind: BackendKind;
-
-  /** Short human description of the device and its parallelism, for the UI. */
-  describe(): string;
-
-  /** How many parallel lanes are grinding (workers, or shader invocations). */
-  readonly lanes: number;
-
-  /**
-   * Begin grinding from nonce `from` upwards. Resolves when the loop has been
-   * set up, not when it ends. Starting anywhere but 0 is how a paused or
-   * reloaded search resumes (`progress.ts`).
-   */
-  start(challenge: Uint8Array, from: bigint, onProgress: (p: BackendProgress) => void): Promise<void>;
-
-  /** Stop grinding and release device resources. Safe to call when not started. */
-  stop(): void;
-}
-
-/** What a backend's factory reports before anyone commits to using it. */
-export interface BackendAvailability {
-  kind: BackendKind;
-  available: boolean;
-  /** Why it is or is not available, shown verbatim in the UI. */
-  detail: string;
-}
-
-/** Aggregated state the UI renders. Produced by `MiningSession`. */
+/** Aggregated state the UI renders. Produced by `app/mining/session.ts`. */
 export interface MiningSample {
   backend: BackendKind;
   /** Total attempts this session. */

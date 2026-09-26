@@ -1,35 +1,15 @@
 /* Where a launch stands in its halving schedule, in words and in a bar.
  *
  * The catalogue's segmented bar is the current halving period filling up:
- * blocks since the last halving out of `HALVING_BLOCKS`. It is protocol
- * arithmetic on the Bitcoin tip and nothing else, so a real launch and a
- * simulated one are placed by the same code.
- *
- * Three states, never mixed: not open yet, minting inside some halving, or
- * past the last halving at which any hash can mint (`TERMINAL_HALVING`).
+ * blocks since the last halving out of `HALVING_BLOCKS`. The position itself
+ * is domain (`domain/launches/halvings.ts`); this is how it is worded and drawn.
  */
 
 import { blocksAsTime, group } from "@/ui/format";
-import { HALVING_BLOCKS, MAX_CLZ, terminalHalving } from "@/domain/protocol";
+import { HALVING_BLOCKS } from "@/domain/protocol";
+import { halvingPosition, TERMINAL_HALVING, type HalvingPosition } from "@/domain/launches";
 
-/**
- * Halvings after which even the strongest possible hash mints nothing. From
- * this halving on a launch is spent: tokens still move, but no ticket mints.
- */
-export const TERMINAL_HALVING = terminalHalving(MAX_CLZ);
-
-export type HalvingPosition =
-  | { state: "announced"; blocksToOpen: number }
-  | { state: "minting"; halving: number; elapsed: number; remaining: number }
-  | { state: "terminal"; halving: number };
-
-export function halvingPosition(h0: number, tip: number): HalvingPosition {
-  if (tip < h0) return { state: "announced", blocksToOpen: h0 - tip };
-  const halving = Math.floor((tip - h0) / HALVING_BLOCKS);
-  if (halving >= TERMINAL_HALVING) return { state: "terminal", halving };
-  const elapsed = (tip - h0) % HALVING_BLOCKS;
-  return { state: "minting", halving, elapsed, remaining: HALVING_BLOCKS - elapsed };
-}
+export { halvingPosition, TERMINAL_HALVING, type HalvingPosition };
 
 /** Share of the current halving period behind us, 0 to 1: what the bar fills to. */
 export function periodShare(p: HalvingPosition): number {

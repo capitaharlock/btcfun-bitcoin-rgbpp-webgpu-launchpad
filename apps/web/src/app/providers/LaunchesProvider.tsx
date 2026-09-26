@@ -14,12 +14,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { FALLBACK_TIP, specFor, type LaunchSpec } from "@/domain/launches";
-import { feed } from "@/adapters/activity-index";
 import { faultIn as activityFault } from "@/domain/activity";
 import type { ActivityEntry } from "@/domain/activity";
 import { idMatches, LAUNCH_ID_PATTERN, type LaunchCommitment } from "@/domain/launches";
 import { createdLocally } from "@/app/launches/create";
 import { resolveAnnouncements, type Heard } from "@/domain/launches";
+import { useServices } from "./ServicesProvider";
 import { useWallet } from "./WalletProvider";
 
 /** How often to look for launches other people announced. */
@@ -41,18 +41,19 @@ const LaunchesContext = createContext<LaunchesContextValue | null>(null);
 
 export function LaunchesProvider({ children }: { children: ReactNode }) {
   const { tipHeight } = useWallet();
+  const { ledger, storage } = useServices();
   const [remote, setRemote] = useState<Heard[]>([]);
   const [indexRead, setIndexRead] = useState(false);
   const [localRevision, setLocalRevision] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const result = await feed({ kind: "launch", limit: 100 });
+      const result = await ledger.feed({ kind: "launch", limit: 100 });
       setRemote(result.entries.flatMap(commitmentIn));
     } finally {
       setIndexRead(true);
     }
-  }, []);
+  }, [ledger]);
 
   useEffect(() => {
     let live = true;
@@ -70,13 +71,13 @@ export function LaunchesProvider({ children }: { children: ReactNode }) {
   const specs = useMemo(() => {
     const valid = (c: LaunchCommitment) => isPlausible(c) && idMatches(c);
     return resolveAnnouncements(
-      createdLocally().filter(valid),
+      createdLocally(storage).filter(valid),
       remote.filter((heard) => valid(heard.commitment)),
     )
       .sort((a, b) => b.at.localeCompare(a.at))
       .map(specFor);
     // `localRevision` is the invalidation signal for the storage-backed list.
-  }, [remote, localRevision]);
+  }, [remote, localRevision, storage]);
 
   const value = useMemo<LaunchesContextValue>(
     () => ({

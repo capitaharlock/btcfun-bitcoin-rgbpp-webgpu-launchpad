@@ -7,7 +7,8 @@
  */
 
 import { laneFrontier, nonceWords } from "@/domain/mining";
-import type { BackendAvailability, BackendProgress, Candidate, MiningBackend } from "@/domain/mining";
+import type { Candidate } from "@/domain/mining";
+import type { BackendAvailability, BackendProgress, MiningBackend } from "@/ports";
 import type { ProgressMsg, StartMsg, WorkerCandidate } from "./miner.worker";
 
 /** Leave one core for the UI thread; a pegged main thread reads as a hang. */

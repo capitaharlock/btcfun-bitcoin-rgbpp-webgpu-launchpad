@@ -14,7 +14,7 @@ import { wordlist } from "@scure/bip39/wordlists/english";
 import { close, loadAll } from "../e2e/load.mjs";
 import { requireMnemonic, runFile } from "../local.mjs";
 
-export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment, certificate, launches, registration] =
+export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment, certificate, launches, registration, certifier, storage] =
   await loadAll(
     "domain/bitcoin/network.ts",
     "domain/bitcoin/keys.ts",
@@ -27,22 +27,26 @@ export const [network, keys, provider, standard, config, launch, ops, bitcoin, s
     "adapters/rgbpp/service.ts",
     "domain/mining/verify.ts",
     "domain/rgbpp/seal.ts",
-    "domain/rgbpp/sale.ts",
+    "domain/rgbpp/sale/index.ts",
     "app/launches/create.ts",
     "domain/activity/events.ts",
     "domain/market/bid.ts",
     "domain/activity/verify.ts",
     "domain/launches/image.ts",
-    "domain/bitcoin/payment.ts",
+    "domain/bitcoin/index.ts",
     "domain/launches/certificate.ts",
     "domain/launches/index.ts",
     "app/launches/registration.ts",
+    "adapters/activity-index/certifier.ts",
+    "adapters/storage/memory.ts",
   );
 export { close };
 
 if (network.ACTIVE.id === "mainnet") throw new Error("the RGB++ scripts are testnet-only");
 export const cfg = config.ACTIVE_RGBPP;
 export const rgbpp = new service.RgbppService(cfg, { origin: "https://btcfun.localhost" });
+/** What the app keeps on the device, kept in memory for the length of a run: the runners keep their own state files. */
+export const store = storage.memoryStore();
 
 // ─── keys ────────────────────────────────────────────────────────────────
 
@@ -106,15 +110,15 @@ export const INDEX = (process.env.INDEX ?? "https://btcfun.rjj.workers.dev").rep
  * from `paid` (a registration sent earlier) so a retry never pays twice.
  */
 export async function register(key, draft, h0, paid = null) {
-  let registration = paid;
-  if (!registration) {
+  let payment = paid;
+  if (!payment) {
     const [free, feeRate] = await Promise.all([rgbpp.freeUtxos(key.address), provider.fastFeeRate(network.ACTIVE)]);
     // Unconfirmed change is spendable: the signer needs the payment seen, not confirmed.
     const plain = bitcoin.plainFunding(free, new Set());
-    registration = await registration.payRegistration(vaultOf(key), draft, h0, plain, feeRate, (hex) => rgbpp.broadcast(hex));
-    console.log(`registration ${draft.symbol}: ${network.txUrl(registration.txid, network.ACTIVE)}`);
+    payment = await registration.payRegistration({ vault: vaultOf(key), store, broadcast: (hex) => rgbpp.broadcast(hex) }, draft, h0, plain, feeRate);
+    console.log(`registration ${draft.symbol}: ${network.txUrl(payment.txid, network.ACTIVE)}`);
   }
-  return { registration, certificate: await registration.certify(draft, registration, { origin: INDEX }) };
+  return { registration: payment, certificate: await registration.certify(certifier.httpCertifier(INDEX), draft, payment) };
 }
 
 // ─── reading the chain ───────────────────────────────────────────────────

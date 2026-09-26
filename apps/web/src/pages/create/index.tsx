@@ -32,6 +32,7 @@ import { ACTIVE } from "@/domain/bitcoin";
 import { group } from "@/ui/format";
 import { REGISTRATION_SATS } from "@/domain/launches";
 import { pendingRegistration, type Registration } from "@/app/launches/registration";
+import { useServices } from "@/app/providers/ServicesProvider";
 import type { LaunchCommitment } from "@/domain/launches";
 import { Chip, PageHead } from "@/ui/primitives";
 import "./create.css";
@@ -46,11 +47,12 @@ import { Bar } from "./WizardChrome";
 
 export function Create() {
   const { step, setStep, draft, set, faults, valid } = useCreateDraft();
+  const { storage } = useServices();
   // A registration already paid for exactly this draft — in this visit or an
   // earlier one. Once it exists the terms are fixed: going back to edit them
   // would make a different launch, one the payment does not cover. Only a
   // valid draft has terms to look one up by.
-  const stored = useMemo(() => (valid ? pendingRegistration(draft) : null), [draft, valid]);
+  const stored = useMemo(() => (valid ? pendingRegistration(storage, draft) : null), [storage, draft, valid]);
   const [paid, setPaid] = useState<Registration | null>(null);
   const registration = paid ?? stored;
   const [launched, setLaunched] = useState<LaunchCommitment | null>(null);

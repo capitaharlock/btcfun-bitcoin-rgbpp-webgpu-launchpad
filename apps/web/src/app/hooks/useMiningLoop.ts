@@ -26,7 +26,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Launch } from "@/domain/launches";
 import { InsufficientFunds } from "@/domain/bitcoin";
-import { fastFeeRate, getTxHex } from "@/adapters/mempool";
 import { ticketKey } from "@/domain/mining";
 import { costsFor, planFor, type Costs, type SigningStep } from "@/domain/mining";
 import { deriveLoop, inProgress, type Loop } from "@/domain/mining";
@@ -37,7 +36,9 @@ import { mintScript } from "@/domain/rgbpp";
 import { armAnchor } from "@/domain/rgbpp";
 import type { Paymaster } from "@/domain/rgbpp";
 import { reward, TICKET_SATS, ticketChallenge } from "@/domain/protocol";
-import { landingTxids, useTokens, type Operation } from "@/app/providers/TokensProvider";
+import { useServices } from "@/app/providers/ServicesProvider";
+import { useTokens, type Operation } from "@/app/providers/TokensProvider";
+import { landingTxids } from "@/app/tokens/operations";
 import { useWallet } from "@/app/providers/WalletProvider";
 import { useAnnounce } from "./useAnnounce";
 import { useMiningSession, type MiningTarget, type UseMiningSession } from "./useMiningSession";
@@ -82,6 +83,7 @@ export interface MiningLoop {
 export function useMiningLoop(launch: Launch, tip: number, focus: boolean): MiningLoop {
   const wallet = useWallet();
   const tokens = useTokens();
+  const { chain, rgbpp } = useServices();
   const announce = useAnnounce();
   const [intentFlag, setIntent] = useStored(`${INTENT_KEY}:${launch.id}`);
   const intent = intentFlag === "1";
@@ -131,25 +133,25 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
   useEffect(() => {
     if (!signs) return;
     let live = true;
-    void fastFeeRate().then((rate) => live && setFeeRate(rate));
+    void chain.fastFeeRate().then((rate) => live && setFeeRate(rate));
     return () => {
       live = false;
     };
-  }, [signs, state.at, armCell]);
+  }, [chain, signs, state.at, armCell]);
 
   // The paymaster's fee, when a ticket creates its cell.
   const needsPaymaster = state.at === "buy" && state.cell === null;
   useEffect(() => {
     if (!needsPaymaster || paymaster !== null) return;
     let live = true;
-    void tokens.service.paymaster().then(
+    void rgbpp.paymaster().then(
       (p) => live && setPaymaster(p),
       () => undefined,
     );
     return () => {
       live = false;
     };
-  }, [needsPaymaster, paymaster, tokens.service]);
+  }, [needsPaymaster, paymaster, rgbpp]);
 
   // Arming carries the ticket that created the cell: kept when this browser
   // signed it, fetched otherwise.
@@ -158,14 +160,14 @@ export function useMiningLoop(launch: Launch, tip: number, focus: boolean): Mini
   useEffect(() => {
     if (!paidTxid || creating?.txid === paidTxid) return;
     let live = true;
-    void (ownHex ? Promise.resolve(ownHex) : getTxHex(paidTxid)).then(
+    void (ownHex ? Promise.resolve(ownHex) : chain.getTxHex(paidTxid)).then(
       (hex) => live && setCreating({ txid: paidTxid, bytes: strippedTx(hex) }),
       (err: unknown) => live && setFailure({ message: `Could not read the ticket transaction: ${String(err)}`, funds: false }),
     );
     return () => {
       live = false;
     };
-  }, [paidTxid, ownHex, creating]);
+  }, [chain, paidTxid, ownHex, creating]);
 
   const mintable = best && ticket ? reward(best.clz, launch.h0, ticket.anchor) : 0n;
 

@@ -17,8 +17,8 @@
 import { ccc } from "@ckb-ccc/core";
 
 import type { Utxo } from "@/domain/bitcoin";
-import type { RgbppConfig } from "@/domain/rgbpp";
-import type { Plan } from "@/domain/rgbpp";
+import type { Paymaster, Plan, RgbppConfig } from "@/domain/rgbpp";
+import type { QueueState, QueueStatus, RgbppCell, RgbppGateway } from "@/ports";
 
 export class ServiceError extends Error {
   constructor(
@@ -30,33 +30,13 @@ export class ServiceError extends Error {
   }
 }
 
-export interface ServiceCell {
-  outPoint: { txHash: ccc.Hex; index: ccc.Hex };
-  cellOutput: {
-    capacity: ccc.Hex;
-    lock: { codeHash: ccc.Hex; hashType: ccc.HashType; args: ccc.Hex };
-    type?: { codeHash: ccc.Hex; hashType: ccc.HashType; args: ccc.Hex } | null;
-  };
-  data: ccc.Hex;
-  typeHash?: ccc.Hex;
-}
-
-export type QueueState = "waiting" | "delayed" | "active" | "completed" | "failed" | "unknown";
-
-export interface QueueStatus {
-  state: QueueState;
-  /** The CKB transaction hash, once submitted. */
-  ckbTxHash: ccc.Hex | null;
-  failure: string | null;
-}
-
 export interface ServiceOptions {
   /** Sent as `Origin` when not running in a browser, which sets it itself. */
   origin?: string;
   fetch?: typeof fetch;
 }
 
-export class RgbppService {
+export class RgbppService implements RgbppGateway {
   private token: Promise<string> | null = null;
   private readonly http: typeof fetch;
 
@@ -100,7 +80,7 @@ export class RgbppService {
     return (await response.json()) as T;
   }
 
-  async paymaster(): Promise<{ address: string; feeSats: number }> {
+  async paymaster(): Promise<Paymaster> {
     const info = await this.call<{ btc_address: string; fee: number }>("/rgbpp/v1/paymaster/info");
     return { address: info.btc_address, feeSats: info.fee };
   }
@@ -114,8 +94,8 @@ export class RgbppService {
   }
 
   /** Every RGB++ cell sealed to one of the address's UTXOs, of any type. */
-  async cells(address: string): Promise<ServiceCell[]> {
-    return this.call<ServiceCell[]>(`/rgbpp/v1/address/${address}/assets?no_cache=true`);
+  async cells(address: string): Promise<RgbppCell[]> {
+    return this.call<RgbppCell[]>(`/rgbpp/v1/address/${address}/assets?no_cache=true`);
   }
 
   async broadcast(hex: string): Promise<string> {

@@ -23,21 +23,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Launch } from "@/domain/launches";
-import { feed } from "@/adapters/activity-index";
 import { faultIn } from "@/domain/activity";
 import type { ActivityEntry, ActivityKind } from "@/domain/activity";
 import { addressOfIdentity } from "@/domain/bitcoin";
-import { getTx, isSpent } from "@/adapters/mempool";
 import type { ChainTx } from "@/domain/bitcoin";
 import { readBid, type Bid } from "@/domain/market";
 import { compareRate, type Order } from "@/domain/market";
 import { bidStatus, tradeOf, type BidStatus, type Trade } from "@/domain/market";
 import { ACTIVE_RGBPP } from "@/domain/rgbpp";
-import { ckbClient } from "@/adapters/ckb";
 import { mintScript, tokenScript } from "@/domain/rgbpp";
 import { decodeAmount, type TokenCell } from "@/domain/rgbpp";
 import { checkListing, type Listing } from "@/domain/rgbpp";
 import { rgbppLock } from "@/domain/rgbpp";
+import type { ChainProvider, CkbCells } from "@/ports";
+import { useServices } from "@/app/providers/ServicesProvider";
 
 const POLL_MS = 30_000;
 /** Events read per kind. The index's own ceiling. */
@@ -106,14 +105,14 @@ function signedListing(entry: ActivityEntry, launches: Map<string, Launch>): Sig
 }
 
 /** The listing, if its cell is still where it says and still for sale. */
-async function live({ listing, launch, entry }: SignedListing): Promise<OpenListing | null> {
+async function live(chains: { ckb: CkbCells; chain: ChainProvider }, { listing, launch, entry }: SignedListing): Promise<OpenListing | null> {
   const token = tokenScript(ACTIVE_RGBPP, mintScript(ACTIVE_RGBPP, launch.terms));
-  const cell = await ckbClient().getCellLive(listing.outPoint, true);
+  const cell = await chains.ckb.liveCell(listing.outPoint);
   if (!cell || !cell.cellOutput.type?.eq(token)) return null;
   if (!cell.cellOutput.lock.eq(rgbppLock(ACTIVE_RGBPP, listing.seal))) return null;
   const amount = decodeAmount(cell.outputData);
   if (amount.toString() !== listing.amount) return null;
-  if (await isSpent(listing.seal.txid, listing.seal.vout)) return null;
+  if (await chains.chain.isSpent(listing.seal.txid, listing.seal.vout)) return null;
 
   return {
     listing,
@@ -129,6 +128,7 @@ async function live({ listing, launch, entry }: SignedListing): Promise<OpenList
 export const asOrder = (l: Listing): Order => ({ priceSats: l.priceSats, amount: BigInt(l.amount) });
 
 export function useMarket(launches: Launch[]): Market {
+  const { chain, ckb, ledger } = useServices();
   const [state, setState] = useState<Omit<Market, "loading" | "reload">>({ listings: [], bids: [], trades: [] });
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -144,7 +144,7 @@ export function useMarket(launches: Launch[]): Market {
     const transaction = async (txid: string): Promise<ChainTx> => {
       const known = settled.current.get(txid);
       if (known) return known;
-      const tx = await getTx(txid);
+      const tx = await chain.getTx(txid);
       if (tx.confirmed) settled.current.set(txid, tx);
       return tx;
     };
@@ -152,10 +152,10 @@ export function useMarket(launches: Launch[]): Market {
     const read = async () => {
       try {
         const kinds: ActivityKind[] = ["offer", "bid", "cancel", "fill"];
-        const [offers, bids, cancels, fills] = await Promise.all(kinds.map((kind) => feed({ kind, limit: DEPTH })));
+        const [offers, bids, cancels, fills] = await Promise.all(kinds.map((kind) => ledger.feed({ kind, limit: DEPTH })));
 
         const signed = offers.entries.map((e) => signedListing(e, byId)).filter((s) => s !== null);
-        const checked = await Promise.all(signed.map((s) => live(s).catch(() => null)));
+        const checked = await Promise.all(signed.map((s) => live({ ckb, chain }, s).catch(() => null)));
         // One cell can be listed only once at a time; keep the newest listing for it.
         const byCell = new Map<string, OpenListing>();
         for (const item of checked) {
@@ -208,7 +208,7 @@ export function useMarket(launches: Launch[]): Market {
       active = false;
       clearInterval(timer);
     };
-  }, [launches, revision]);
+  }, [launches, revision, chain, ckb, ledger]);
 
   return { ...state, loading, reload };
 }

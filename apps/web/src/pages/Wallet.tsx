@@ -18,7 +18,7 @@ import { KeysPanel } from "@/features/wallet/Keys";
 import { WalletActivity } from "@/features/wallet/Operations";
 import { WalletTokens } from "@/features/wallet/Tokens";
 import { useLaunchByToken } from "@/app/hooks/useLaunches";
-import type { Vault } from "@/adapters/vault";
+import type { Vault } from "@/ports";
 import { atoms, group } from "@/ui/format";
 import { positionsOf } from "@/domain/rgbpp";
 import { DECIMALS } from "@/domain/protocol";

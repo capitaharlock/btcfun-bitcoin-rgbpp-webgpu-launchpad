@@ -6,43 +6,23 @@
  * failure degrades to "not remembered" and never throws into the caller.
  */
 
+import { storeOver } from "./store";
+
+/** The browser's storage as the `DeviceStore` port. The one instance the app composes with. */
+export const browserStore = storeOver({
+  get: (key) => localStorage.getItem(key),
+  set: (key, value) => localStorage.setItem(key, value),
+  remove: (key) => localStorage.removeItem(key),
+});
+
 /** The value kept under `key`, or null when there is none or storage is unavailable. */
-export function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
+export const readStored = (key: string): string | null => browserStore.read(key);
 
 /** Keep `value` under `key`, or forget it when null. False when storage refused. */
-export function writeStored(key: string, value: string | null): boolean {
-  try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export const writeStored = (key: string, value: string | null): boolean => browserStore.write(key, value);
 
-/**
- * The JSON array kept under `key`, or empty when there is none, it is not an
- * array, or it does not parse. The elements are not checked: a caller that
- * trusts them only as far as it wrote them re-validates what it relies on.
- */
-export function readStoredList<T>(key: string): T[] {
-  const raw = readStored(key);
-  if (raw === null) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as T[]) : [];
-  } catch {
-    return [];
-  }
-}
+/** See `DeviceStore.readList`. */
+export const readStoredList = <T>(key: string): T[] => browserStore.readList<T>(key);
 
-/** Keep `items` under `key` as JSON. False when storage refused. */
-export function writeStoredList<T>(key: string, items: readonly T[]): boolean {
-  return writeStored(key, JSON.stringify(items));
-}
+/** See `DeviceStore.writeList`. */
+export const writeStoredList = <T>(key: string, items: readonly T[]): boolean => browserStore.writeList(key, items);

@@ -12,9 +12,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { absorb, browserProgressStore, NO_PROGRESS, type ProgressStore, type TicketProgress } from "@/domain/mining";
-import { EMPTY_SAMPLE, type BackendAvailability, type Candidate, type MiningSample } from "@/domain/mining";
+import { absorb, NO_PROGRESS, type TicketProgress } from "@/domain/mining";
+import { EMPTY_SAMPLE, type Candidate, type MiningSample } from "@/domain/mining";
+import type { BackendAvailability } from "@/ports";
 import { MiningSession, type BackendChoice } from "@/app/mining/session";
+import { useServices } from "@/app/providers/ServicesProvider";
 
 /** Improvements kept for the log. Older ones are of no further interest. */
 const LOG_LIMIT = 16;
@@ -47,7 +49,8 @@ export interface UseMiningSession {
   stop: () => void;
 }
 
-export function useMiningSession(target: MiningTarget | null, store: ProgressStore = browserProgressStore): UseMiningSession {
+export function useMiningSession(target: MiningTarget | null): UseMiningSession {
+  const { mining: devices, progress: store } = useServices();
   const [sample, setSample] = useState<MiningSample>(EMPTY_SAMPLE);
   const [log, setLog] = useState<Candidate[]>([]);
   const [running, setRunning] = useState(false);
@@ -63,13 +66,13 @@ export function useMiningSession(target: MiningTarget | null, store: ProgressSto
 
   useEffect(() => {
     let live = true;
-    void MiningSession.probe().then((probed) => {
+    void devices.probe().then((probed) => {
       if (live) setBackends(probed);
     });
     return () => {
       live = false;
     };
-  }, []);
+  }, [devices]);
 
   const save = useCallback(() => {
     if (!target) return;
@@ -125,7 +128,7 @@ export function useMiningSession(target: MiningTarget | null, store: ProgressSto
         setLog((prev) => [candidate, ...prev].slice(0, LOG_LIMIT));
       },
       onFallback: setNotice,
-    });
+    }, devices);
     sessionRef.current = session;
     setRunning(true);
 
@@ -133,7 +136,7 @@ export function useMiningSession(target: MiningTarget | null, store: ProgressSto
       setNotice(err instanceof Error ? err.message : String(err));
       stop();
     });
-  }, [target, choice, stop, save]);
+  }, [target, choice, stop, save, devices]);
 
   return { sample, log, running, progress, notice, choice, setChoice, backends, start, stop };
 }

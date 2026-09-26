@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { MiningSession, type BackendPorts } from "./session";
-import type { BackendProgress, MiningBackend } from "@/domain/mining";
+import { MiningSession } from "./session";
+import type { BackendProgress, MiningBackend, MiningBackends } from "@/ports";
 
 const CHALLENGE = new Uint8Array(32).fill(3);
 
@@ -40,12 +40,13 @@ function deferredPorts(backend: FakeBackend) {
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const ports: BackendPorts = {
+  const ports: MiningBackends = {
     cpu: () => backend,
     gpu: async () => {
       await gate;
       return backend;
     },
+    probe: async () => [],
   };
   return { ports, release };
 }
@@ -91,7 +92,7 @@ describe("MiningSession lifecycle", () => {
     const samples: number[] = [];
     const session = new MiningSession(
       { onSample: (s) => samples.push(s.hashes) },
-      { cpu: () => backend, gpu: async () => backend },
+      { cpu: () => backend, gpu: async () => backend, probe: async () => [] },
     );
 
     await session.start(CHALLENGE, "gpu");
@@ -111,7 +112,7 @@ describe("MiningSession lifecycle", () => {
     let next = first;
     const session = new MiningSession(
       { onSample: () => {} },
-      { cpu: () => next, gpu: async () => next },
+      { cpu: () => next, gpu: async () => next, probe: async () => [] },
     );
 
     await session.start(CHALLENGE, "gpu");
@@ -133,6 +134,7 @@ describe("MiningSession lifecycle", () => {
         gpu: async () => {
           throw new Error("no adapter");
         },
+        probe: async () => [],
       },
     );
 
@@ -145,7 +147,7 @@ describe("MiningSession lifecycle", () => {
     const backend = new FakeBackend();
     const session = new MiningSession(
       { onSample: () => {} },
-      { cpu: () => backend, gpu: async () => backend },
+      { cpu: () => backend, gpu: async () => backend, probe: async () => [] },
     );
 
     expect(session.running).toBe(false);
@@ -163,7 +165,7 @@ describe("MiningSession lifecycle", () => {
     const frontiers: bigint[] = [];
     const session = new MiningSession(
       { onSample: (s) => frontiers.push(s.frontier) },
-      { cpu: () => backend, gpu: async () => backend },
+      { cpu: () => backend, gpu: async () => backend, probe: async () => [] },
     );
 
     await session.start(CHALLENGE, "cpu", 5_000n);

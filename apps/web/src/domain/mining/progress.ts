@@ -16,7 +16,6 @@
  * written before `next` existed still restore their best and resume from 0.
  */
 
-import { readStored, writeStored } from "@/adapters/storage";
 import { NONCE_LIMIT, recompute } from "./verify";
 import type { Candidate } from "./types";
 
@@ -114,24 +113,14 @@ export function writeProgress(raw: string | null, key: string, progress: TicketP
 }
 
 /**
- * Where a ticket's progress is kept. A port so the hook does not care that it
- * is `localStorage`, and so a blocked storage degrades to "starts from 0"
- * instead of an error.
+ * Where a ticket's progress is kept. An interface so the hook does not care
+ * that it is `localStorage` (`adapters/storage/progress.ts` puts it there), and
+ * so a blocked storage degrades to "starts from 0" instead of an error.
  */
 export interface ProgressStore {
   read(key: string, challenge: Uint8Array): TicketProgress;
   write(key: string, progress: TicketProgress, challenge: Uint8Array): void;
 }
-
-export const browserProgressStore: ProgressStore = {
-  read(key, challenge) {
-    return readProgress(readStored(PROGRESS_KEY), key, challenge);
-  },
-  write(key, progress, challenge) {
-    // Storage refused or full: the running session still holds the progress.
-    writeStored(PROGRESS_KEY, writeProgress(readStored(PROGRESS_KEY), key, progress, challenge));
-  },
-};
 
 /**
  * The contiguous frontier of an interleaved sweep.

@@ -15,6 +15,8 @@
 import { ACTIVE, FALLBACK_FEE_RATE, type NetworkConfig } from "@/domain/bitcoin";
 import { TXID_PATTERN } from "@/domain/bitcoin";
 import type { Utxo, AddressBalance, TxStatus, ChainTx } from "@/domain/bitcoin";
+import { MIN_FAST_FEE_RATE, fastFrom } from "@/domain/mining";
+import type { ChainProvider } from "@/ports";
 
 export type { Utxo, AddressBalance, TxStatus, ChainOutput, ChainInput, ChainTx } from "@/domain/bitcoin";
 
@@ -117,14 +119,7 @@ export async function getFeeRate(network: NetworkConfig = ACTIVE): Promise<numbe
   }
 }
 
-/** The floor of the mining fee rate: testnet's "fastest" can read 1 sat/vB and still wait. */
-export const MIN_FAST_FEE_RATE = 3;
-
-/**
- * The fee rate mining transactions pay: the larger of `MIN_FAST_FEE_RATE` and
- * mempool.space's "fastest". A ticket or a mint that waits in the mempool
- * holds the whole round up, so these pay to get into the next block.
- */
+/** The fee rate mining transactions pay: `domain/mining/fees.ts` applied to mempool.space's "fastest". */
 export async function fastFeeRate(network: NetworkConfig = ACTIVE): Promise<number> {
   try {
     const response = await request("/v1/fees/recommended", network);
@@ -133,11 +128,6 @@ export async function fastFeeRate(network: NetworkConfig = ACTIVE): Promise<numb
   } catch {
     return MIN_FAST_FEE_RATE;
   }
-}
-
-/** `fastFeeRate`'s rule, on a quoted "fastest" rate. */
-export function fastFrom(fastest: number): number {
-  return Number.isFinite(fastest) && fastest > 0 ? Math.max(MIN_FAST_FEE_RATE, Math.ceil(fastest)) : MIN_FAST_FEE_RATE;
 }
 
 /** A transaction's full serialization, witness included, as hex. */
@@ -231,3 +221,25 @@ export async function isSpent(txid: string, vout: number, network: NetworkConfig
   return ((await response.json()) as { spent: boolean }).spent;
 }
 
+
+/**
+ * The functions above as the `ChainProvider` port, bound to one network. The
+ * app composes with this (`app/services.ts`); the testnet scripts, which pass
+ * the network explicitly, keep calling the functions.
+ */
+export function mempoolProvider(network: NetworkConfig = ACTIVE): ChainProvider {
+  return {
+    getUtxos: (address) => getUtxos(address, network),
+    getBalance: (address) => getBalance(address, network),
+    getTipHeight: () => getTipHeight(network),
+    getBlockHash: (height) => getBlockHash(height, network),
+    getFeeRate: () => getFeeRate(network),
+    fastFeeRate: () => fastFeeRate(network),
+    getTx: (txid) => getTx(txid, network),
+    getTxHex: (txid) => getTxHex(txid, network),
+    getTxStatus: (txid) => getTxStatus(txid, network),
+    getAddressTxs: (address) => getAddressTxs(address, network),
+    isSpent: (txid, vout) => isSpent(txid, vout, network),
+    broadcast: (rawHex) => broadcast(rawHex, network),
+  };
+}

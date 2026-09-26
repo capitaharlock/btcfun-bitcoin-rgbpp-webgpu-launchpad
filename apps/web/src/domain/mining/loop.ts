@@ -27,7 +27,15 @@ import { MIN_CLZ } from "@/domain/protocol";
 /** The wallet this page has, by kind, or none. Only the kind matters to the loop. */
 export type WalletKind = "passkey" | "local" | "demo";
 
-/** An operation as the loop reads it. `app/providers/TokensProvider` `Operation` satisfies it. */
+/**
+ * An operation as the loop reads it.
+ *
+ * `app/tokens/operations.ts` `Operation` satisfies it structurally, and the
+ * literals are repeated here on purpose: the domain cannot import the app's
+ * type without inverting the dependency, and the loop needs only these fields
+ * — how an operation is stored, displayed or submitted is the app's business.
+ * The app's type is checked against this one where it is defined.
+ */
 export interface LoopOperation {
   kind: "open" | "ticket" | "arm" | "mint" | "transfer" | "list" | "buy" | "cancel";
   btcTxid: string;

@@ -8,8 +8,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { feed, type Feed } from "@/adapters/activity-index";
 import type { ActivityEntry, ActivityKind } from "@/domain/activity";
+import type { Feed } from "@/ports";
+import { useServices } from "@/app/providers/ServicesProvider";
 
 const POLL_MS = 20_000;
 
@@ -28,13 +29,14 @@ export interface ActivityQuery {
 
 export function useActivity(query: ActivityQuery = {}): UseActivity {
   const { launch, kind, limit } = query;
+  const { ledger } = useServices();
   const [state, setState] = useState<Feed>({ entries: [], online: false });
   const [loading, setLoading] = useState(true);
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
   const seen = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
-    const next = await feed({ launch, kind, limit });
+    const next = await ledger.feed({ launch, kind, limit });
     setState(next);
     setLoading(false);
 
@@ -46,7 +48,7 @@ export function useActivity(query: ActivityQuery = {}): UseActivity {
     const arrived = next.entries.filter((e) => !seen.current.has(e.id)).map((e) => e.id);
     for (const id of arrived) seen.current.add(id);
     if (arrived.length > 0) setFresh(new Set(arrived));
-  }, [launch, kind, limit]);
+  }, [ledger, launch, kind, limit]);
 
   useEffect(() => {
     let live = true;

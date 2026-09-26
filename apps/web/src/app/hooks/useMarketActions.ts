@@ -11,15 +11,14 @@ import { useCallback, useMemo } from "react";
 
 import type { Launch } from "@/domain/launches";
 import { payloadRef } from "@/domain/activity";
-import { record } from "@/adapters/activity-index";
 import { signActivity } from "@/domain/activity";
-import { getUtxos } from "@/adapters/mempool";
-import type { Vault } from "@/adapters/vault";
+import type { Vault } from "@/ports";
 import { bidDraft, cancelDraft, composeBid } from "@/domain/market";
 import { ACTIVE_RGBPP } from "@/domain/rgbpp";
 import { planTransfer } from "@/domain/rgbpp";
 import type { TokenCell } from "@/domain/rgbpp";
 import { completePurchase, planPurchase, signListing } from "@/domain/rgbpp";
+import { useServices } from "@/app/providers/ServicesProvider";
 import { useTokens, type Operation } from "@/app/providers/TokensProvider";
 import { useWallet } from "@/app/providers/WalletProvider";
 import { useAnnounce } from "./useAnnounce";
@@ -40,6 +39,7 @@ export interface MarketActions {
 
 export function useMarketActions(): MarketActions {
   const { vault } = useWallet();
+  const { chain, rgbpp, ledger } = useServices();
   const tokens = useTokens();
   const announce = useAnnounce();
 
@@ -70,11 +70,11 @@ export function useMarketActions(): MarketActions {
         from,
         amount,
         to: connected().address,
-        paymaster: await tokens.service.paymaster(),
+        paymaster: await rgbpp.paymaster(),
       });
       return tokens.submit(plan, { kind: "transfer", launchId: launch.id, tokenId: launch.tokenId, atoms: amount.toString() });
     },
-    [tokens, connected],
+    [tokens, rgbpp, connected],
   );
 
   const cancelListing = useCallback<MarketActions["cancelListing"]>(
@@ -84,43 +84,43 @@ export function useMarketActions(): MarketActions {
         from: [cell],
         amount: cell.amount,
         to: connected().address,
-        paymaster: await tokens.service.paymaster(),
+        paymaster: await rgbpp.paymaster(),
       });
       return tokens.submit(plan, { kind: "cancel", launchId: launch.id, tokenId: launch.tokenId, atoms: listing.amount });
     },
-    [tokens, connected],
+    [tokens, rgbpp, connected],
   );
 
   const list = useCallback<MarketActions["list"]>(
     async (launch, cell, priceSats, bid) => {
       const wallet = connected();
-      const utxos = await getUtxos(wallet.address);
+      const utxos = await chain.getUtxos(wallet.address);
       const seal = utxos.find((u) => u.txid === cell.seal.txid && u.vout === cell.seal.vout);
       if (!seal) throw new Error("The output this cell is sealed to is not in your wallet yet.");
       const listing = await wallet.use((key) =>
         signListing(key, { launchId: launch.id, tokenId: launch.tokenId, bid }, cell, seal.value, priceSats),
       );
       const meta = JSON.stringify(listing);
-      await record(await signActivity(wallet, { kind: "offer", launch: launch.id, amount: cell.amount, sats: priceSats, ref: payloadRef(meta), meta }));
+      await ledger.record(await signActivity(wallet, { kind: "offer", launch: launch.id, amount: cell.amount, sats: priceSats, ref: payloadRef(meta), meta }));
     },
-    [connected],
+    [connected, chain, ledger],
   );
 
   const placeBid = useCallback<MarketActions["placeBid"]>(
     async (launch, amount, priceSats) => {
       const wallet = connected();
       const bid = composeBid({ launchId: launch.id, tokenId: launch.tokenId, amount, priceSats }, wallet.address);
-      await record(await signActivity(wallet, bidDraft(bid)));
+      await ledger.record(await signActivity(wallet, bidDraft(bid)));
     },
-    [connected],
+    [connected, ledger],
   );
 
   const cancelBid = useCallback<MarketActions["cancelBid"]>(
     async ({ id, launch }) => {
       const wallet = connected();
-      await record(await signActivity(wallet, cancelDraft(launch.id, id)));
+      await ledger.record(await signActivity(wallet, cancelDraft(launch.id, id)));
     },
-    [connected],
+    [connected, ledger],
   );
 
   return useMemo(

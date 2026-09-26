@@ -14,9 +14,10 @@ import { ccc } from "@ckb-ccc/core";
 
 import type { Launch } from "@/domain/launches";
 import { ACTIVE_RGBPP } from "@/domain/rgbpp";
-import { ckbClient } from "@/adapters/ckb";
 import { decodeAmount } from "@/domain/rgbpp";
 import { mintScript, tokenScript, type LaunchTerms } from "@/domain/rgbpp";
+import type { CkbCells } from "@/ports";
+import { useServices } from "@/app/providers/ServicesProvider";
 
 const POLL_MS = 60_000;
 /** Enough for any launch this demo will see; a larger one says "at least". */
@@ -30,9 +31,9 @@ export interface LaunchStats {
   truncated: boolean;
 }
 
-async function count(script: ccc.Script, onCell: (cell: ccc.Cell) => void): Promise<boolean> {
+async function count(ckb: CkbCells, script: ccc.Script, onCell: (cell: ccc.Cell) => void): Promise<boolean> {
   let seen = 0;
-  for await (const cell of ckbClient().findCellsByType(script, true)) {
+  for await (const cell of ckb.cellsByType(script)) {
     onCell(cell);
     if (++seen >= CELL_LIMIT) return true;
   }
@@ -40,23 +41,24 @@ async function count(script: ccc.Script, onCell: (cell: ccc.Cell) => void): Prom
 }
 
 /** One read of a launch's figures from a CKB indexer. */
-export async function readLaunchStats(terms: LaunchTerms): Promise<LaunchStats> {
+export async function readLaunchStats(ckb: CkbCells, terms: LaunchTerms): Promise<LaunchStats> {
   const mint = mintScript(ACTIVE_RGBPP, terms);
   const token = tokenScript(ACTIVE_RGBPP, mint);
   let supply = 0n;
   let tokenCells = 0;
   let minerCells = 0;
-  const tokensCut = await count(token, (cell) => {
+  const tokensCut = await count(ckb, token, (cell) => {
     supply += decodeAmount(cell.outputData);
     tokenCells++;
   });
-  const minersCut = await count(mint, () => {
+  const minersCut = await count(ckb, mint, () => {
     minerCells++;
   });
   return { supply, tokenCells, minerCells, truncated: tokensCut || minersCut };
 }
 
 export function useLaunchStats(launch: Launch | undefined): { stats: LaunchStats | null; error: string | null } {
+  const { ckb } = useServices();
   const [stats, setStats] = useState<LaunchStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const terms = launch?.terms;
@@ -67,7 +69,7 @@ export function useLaunchStats(launch: Launch | undefined): { stats: LaunchStats
     let live = true;
     const read = async () => {
       try {
-        const next = await readLaunchStats(terms);
+        const next = await readLaunchStats(ckb, terms);
         if (live) {
           setStats(next);
           setError(null);
@@ -82,7 +84,7 @@ export function useLaunchStats(launch: Launch | undefined): { stats: LaunchStats
       live = false;
       clearInterval(timer);
     };
-  }, [terms]);
+  }, [ckb, terms]);
 
   return { stats, error };
 }
@@ -96,6 +98,7 @@ export function useLaunchStats(launch: Launch | undefined): { stats: LaunchStats
  * and the rest of the catalogue is unaffected.
  */
 export function useLaunchesStats(launches: readonly Launch[]): ReadonlyMap<string, LaunchStats> {
+  const { ckb } = useServices();
   const [stats, setStats] = useState<ReadonlyMap<string, LaunchStats>>(new Map());
   // Launches are re-resolved on every new tip, but the reads depend only on
   // which launches exist; keying on their ids keeps a new block from
@@ -110,7 +113,7 @@ export function useLaunchesStats(launches: readonly Launch[]): ReadonlyMap<strin
       for (const { id, terms } of targets) {
         if (!live) return;
         try {
-          const next = await readLaunchStats(terms);
+          const next = await readLaunchStats(ckb, terms);
           if (live) setStats((prev) => new Map(prev).set(id, next));
         } catch {
           // One unreadable launch must not blank the others.
@@ -123,7 +126,7 @@ export function useLaunchesStats(launches: readonly Launch[]): ReadonlyMap<strin
       live = false;
       clearInterval(timer);
     };
-  }, [targets]);
+  }, [ckb, targets]);
 
   return stats;
 }

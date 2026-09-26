@@ -17,7 +17,7 @@ import { termsOf, type LaunchCommitment } from "./announcement";
 import { publicExtras, type LaunchLinks, type LaunchStory } from "./extras";
 import { admissionBytes } from "./certificate";
 import { artFor, type TokenArt } from "./image";
-import { halvingPosition, TERMINAL_HALVING, type HalvingPosition } from "@/features/launch/halvings";
+import { halvingPosition, TERMINAL_HALVING, type HalvingPosition } from "./halvings";
 import type { LaunchTerms } from "@/domain/rgbpp";
 
 /** A launch as announced. */

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { exportLocalSecret, type Vault, type VaultKind } from "@/adapters/vault";
 import { bytesToHex } from "@/domain/codec";
+import type { Vault, VaultKind } from "@/ports";
 import { NETWORK, useWallet } from "@/app/providers/WalletProvider";
 import { Copyable } from "@/ui/Copyable";
 import { Dialog, KV, More, Notice, Panel } from "@/ui/primitives";
@@ -32,7 +32,7 @@ export function KeysPanel({ vault }: { vault: Vault }) {
 /** A browser key's only copy lives in this browser; this is how it leaves. */
 function SecretBackup() {
   const [revealed, setRevealed] = useState(false);
-  const secret = exportLocalSecret();
+  const secret = useWallet().exportSecret();
   if (!secret) return null;
   return (
     <div className="stack-sm">

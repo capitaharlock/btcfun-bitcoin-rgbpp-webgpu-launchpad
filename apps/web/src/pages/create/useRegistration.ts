@@ -11,7 +11,6 @@ import { useEffect, useState } from "react";
 import { useTip } from "@/app/hooks/useLaunches";
 import { InsufficientFunds } from "@/domain/bitcoin";
 import { estimateVsize, opReturnScriptBytes, P2WPKH_SCRIPT_BYTES } from "@/domain/bitcoin";
-import { fastFeeRate } from "@/adapters/mempool";
 import { REGISTRATION_SATS } from "@/domain/launches";
 import { certify, payRegistration, type Registration } from "@/app/launches/registration";
 import { createLaunch } from "@/app/launches/create";
@@ -19,7 +18,9 @@ import type { LaunchCommitment } from "@/domain/launches";
 import type { LaunchDraft } from "@/domain/launches";
 import { plainFunding } from "@/domain/rgbpp";
 import { useLaunchRegistry } from "@/app/providers/LaunchesProvider";
-import { landingTxids, useTokens } from "@/app/providers/TokensProvider";
+import { useServices } from "@/app/providers/ServicesProvider";
+import { useTokens } from "@/app/providers/TokensProvider";
+import { landingTxids } from "@/app/tokens/operations";
 import { useWallet } from "@/app/providers/WalletProvider";
 import { forgetDraft } from "./useCreateDraft";
 
@@ -59,6 +60,7 @@ export function useRegistration({
 }): RegistrationRun {
   const wallet = useWallet();
   const tokens = useTokens();
+  const { chain, rgbpp, ledger, certifier, storage } = useServices();
   const registry = useLaunchRegistry();
   const tip = useTip();
   const [certificate, setCertificate] = useState<string | null>(null);
@@ -68,11 +70,11 @@ export function useRegistration({
 
   useEffect(() => {
     let live = true;
-    void fastFeeRate().then((rate) => live && setFeeRate(rate));
+    void chain.fastFeeRate().then((rate) => live && setFeeRate(rate));
     return () => {
       live = false;
     };
-  }, []);
+  }, [chain]);
 
   const fee = feeRate === null ? null : registrationFee(feeRate);
   const total = fee === null ? null : REGISTRATION_SATS + fee;
@@ -89,20 +91,20 @@ export function useRegistration({
       let paid = registration;
       if (!paid) {
         setPhase("paying");
-        const free = await tokens.service.freeUtxos(vault.address);
+        const free = await rgbpp.freeUtxos(vault.address);
         const utxos = plainFunding(free, landingTxids(tokens.operations));
-        paid = await payRegistration(vault, draft, tip + draft.opensInBlocks, utxos, feeRate, (hex) => tokens.service.broadcast(hex));
+        paid = await payRegistration({ vault, store: storage, broadcast: (hex) => rgbpp.broadcast(hex) }, draft, tip + draft.opensInBlocks, utxos, feeRate);
         onPaid(paid);
         void wallet.refresh();
       }
       let cert = certificate;
       if (!cert) {
         setPhase("certifying");
-        cert = await certify(draft, paid);
+        cert = await certify(certifier, draft, paid);
         setCertificate(cert);
       }
       setPhase("announcing");
-      const commitment = await createLaunch(vault, draft, paid, cert);
+      const commitment = await createLaunch({ vault, ledger, store: storage }, draft, paid, cert);
       registry.refresh();
       forgetDraft();
       onLaunched(commitment);

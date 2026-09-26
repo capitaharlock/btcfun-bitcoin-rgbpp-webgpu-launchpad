@@ -9,20 +9,21 @@
 
 import { useCallback } from "react";
 
-import { record } from "@/adapters/activity-index";
 import { signActivity, type ActivityDraft } from "@/domain/activity";
+import { useServices } from "@/app/providers/ServicesProvider";
 import { useWallet } from "@/app/providers/WalletProvider";
 
 export type Announce = (draft: ActivityDraft) => Promise<void>;
 
 export function useAnnounce(): Announce {
   const { vault } = useWallet();
+  const { ledger } = useServices();
 
   return useCallback(
     async (draft) => {
       if (!vault) return;
       try {
-        await record(await signActivity(vault, draft));
+        await ledger.record(await signActivity(vault, draft));
       } catch (err) {
         // Deliberately swallowed. The action already happened; failing to
         // announce it is a discovery problem, not a correctness one, and
@@ -31,6 +32,6 @@ export function useAnnounce(): Announce {
         console.warn("[activity] could not announce:", err);
       }
     },
-    [vault],
+    [vault, ledger],
   );
 }

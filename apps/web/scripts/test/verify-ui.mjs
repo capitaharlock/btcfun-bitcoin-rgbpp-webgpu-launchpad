@@ -127,7 +127,9 @@ for (const route of ROUTES) {
 
     const result = await page.evaluate(
       async ([choice, duration]) => {
-        const { MiningSession, verifyCandidate } = await import("/src/domain/mining/index.ts");
+        const { MiningSession } = await import("/src/app/mining/session.ts");
+        const { verifyCandidate } = await import("/src/domain/mining/index.ts");
+        const { browserBackends } = await import("/src/adapters/mining/index.ts");
         // A fixed challenge so a run is comparable between invocations.
         const challenge = new Uint8Array(32).map((_, i) => (i * 37) & 0xff);
 
@@ -143,7 +145,7 @@ for (const route of ROUTES) {
             if (!verifyCandidate(challenge, c)) bad++;
           },
           onFallback: (reason) => (notice = reason),
-        });
+        }, browserBackends);
 
         await session.start(challenge, choice);
         await new Promise((r) => setTimeout(r, duration));

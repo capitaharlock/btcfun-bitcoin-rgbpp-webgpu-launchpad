@@ -21,11 +21,15 @@ import {
 } from "react";
 
 import { ACTIVE } from "@/domain/bitcoin";
-import { broadcast, getBalance, getFeeRate, getTipHeight } from "@/adapters/mempool";
 import { buildPayment } from "@/domain/bitcoin";
-import { connectDemo as connectDemoVault, connectPasskey as connectPasskeyVault, createLocal, current as currentVault, forget as forgetVault, importLocal, isPasskeySupported, type Vault } from "@/adapters/vault";
+// The one place outside `app/services.ts` that names an adapter: which vaults
+// a browser can open is this provider's decision, and the port carries no
+// constructor.
+import { connectDemo as connectDemoVault, connectPasskey as connectPasskeyVault, createLocal, current as currentVault, exportLocalSecret, forget as forgetVault, importLocal, isPasskeySupported } from "@/adapters/vault";
 import type { AddressBalance } from "@/domain/bitcoin";
+import type { Vault } from "@/ports";
 import { btc } from "@/ui/format";
+import { useServices } from "./ServicesProvider";
 
 /** How often to refetch the balance and tip while a wallet is connected. */
 const POLL_MS = 15_000;
@@ -54,6 +58,8 @@ interface WalletContextValue {
   restoreLocal: (entropy: Uint8Array) => Promise<void>;
   /** Forget the wallet on this browser. What that loses depends on its kind. */
   logOut: () => void;
+  /** A browser-stored wallet's entropy, so it can be backed up and re-imported. Null for every other kind. */
+  exportSecret: () => Uint8Array | null;
   refresh: () => Promise<void>;
   /** Build, sign and broadcast a payment. Refetches the balance afterwards. */
   pay: (to: string, amountSats: number, memo?: Uint8Array) => Promise<PaymentResult>;
@@ -62,6 +68,7 @@ interface WalletContextValue {
 const WalletContext = createContext<WalletContextValue | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
+  const { chain } = useServices();
   const [vault, setVault] = useState<Vault | null>(null);
   const [balance, setBalance] = useState<AddressBalance | null>(null);
   const [tipHeight, setTipHeight] = useState<number | null>(null);
@@ -86,7 +93,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let live = true;
     const poll = async () => {
       try {
-        const tip = await getTipHeight();
+        const tip = await chain.getTipHeight();
         if (live) setTipHeight(tip);
       } catch {
         // A missing tip degrades the header, not the app. The error surfaced by
@@ -99,7 +106,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       live = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [chain]);
 
   const refresh = useCallback(async () => {
     const address = vault?.address;
@@ -107,7 +114,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     inFlight.current = true;
     setRefreshing(true);
     try {
-      setBalance(await getBalance(address));
+      setBalance(await chain.getBalance(address));
       setError(null);
     } catch (err) {
       setError(describe(err));
@@ -115,7 +122,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       inFlight.current = false;
       setRefreshing(false);
     }
-  }, [vault?.address]);
+  }, [vault?.address, chain]);
 
   useEffect(() => {
     if (!vault) {
@@ -150,11 +157,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Fetch UTXOs and the fee rate at send time rather than trusting the
         // polled snapshot: spending an output that a previous send already
         // consumed produces a rejection the visitor cannot interpret.
-        const [fresh, feeRate] = await Promise.all([getBalance(vault.address), getFeeRate()]);
+        const [fresh, feeRate] = await Promise.all([chain.getBalance(vault.address), chain.getFeeRate()]);
         const signed = await vault.use((key) =>
           buildPayment(key, { to, amountSats, feeRate, utxos: fresh.utxos, memo }),
         );
-        const txid = await broadcast(signed.hex);
+        const txid = await chain.broadcast(signed.hex);
         void refresh();
         return { txid, amountSats, feeSats: signed.selection.fee };
       } catch (err) {
@@ -164,7 +171,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
     },
-    [vault, refresh],
+    [vault, refresh, chain],
   );
 
   const value = useMemo<WalletContextValue>(
@@ -186,6 +193,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setBalance(null);
         setError(null);
       },
+      exportSecret: exportLocalSecret,
       refresh,
       pay,
     }),

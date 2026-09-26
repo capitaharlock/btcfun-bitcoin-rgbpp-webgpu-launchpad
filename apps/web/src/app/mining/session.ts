@@ -8,34 +8,14 @@
  * settling, or the tab losing the GPU when it goes to the background.
  */
 
-import { CpuBackend } from "@/adapters/mining";
-import { GpuBackend } from "@/adapters/mining";
 import { verifyCandidate } from "@/domain/mining";
-import { EMPTY_SAMPLE, type BackendAvailability, type BackendKind, type Candidate, type MiningBackend, type MiningSample } from "@/domain/mining";
+import { EMPTY_SAMPLE, type BackendKind, type Candidate, type MiningSample } from "@/domain/mining";
+import type { MiningBackend, MiningBackends } from "@/ports";
 
 export type BackendChoice = "auto" | BackendKind;
 
 /** Trailing window for the rate estimate. */
 const WINDOW_MS = 2000;
-
-/**
- * How a session obtains a backend.
- *
- * The session decides *which* backend to run and what to do when one is
- * unavailable; it does not need to know how either is constructed. Keeping the
- * two constructors behind a port means the fallback policy is testable without
- * a GPU, and that a third backend — WebGPU compute on a worker, say — slots in
- * without touching the aggregation, the rate window or the self-check.
- */
-export interface BackendPorts {
-  cpu: () => MiningBackend;
-  gpu: () => Promise<MiningBackend>;
-}
-
-const DEFAULT_PORTS: BackendPorts = {
-  cpu: () => new CpuBackend(),
-  gpu: () => GpuBackend.create(),
-};
 
 export interface SessionCallbacks {
   /** Called at frame rate while mining, with the aggregate state. */
@@ -73,15 +53,11 @@ export class MiningSession {
    */
   private generation = 0;
 
+  /** The devices come from the port (`ports/mining.ts`): the session never constructs one itself. */
   constructor(
     private readonly callbacks: SessionCallbacks,
-    private readonly ports: BackendPorts = DEFAULT_PORTS,
+    private readonly ports: MiningBackends,
   ) {}
-
-  /** What each backend reports about itself, for the UI to show before a run. */
-  static async probe(): Promise<BackendAvailability[]> {
-    return [CpuBackend.probe(), await GpuBackend.probe()];
-  }
 
   get running(): boolean {
     return this.backend !== null;

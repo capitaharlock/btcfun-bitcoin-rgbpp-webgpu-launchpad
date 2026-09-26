@@ -86,7 +86,8 @@
       "sources": [
         "PROTOCOL.md",
         ".meshkore/context/decisions/2026-09-24-peer-to-peer-order-book.md",
-        "apps/web/src/domain/rgbpp/sale.ts",
+        "apps/web/src/domain/rgbpp/sale/listing.ts",
+        "apps/web/src/domain/rgbpp/sale/purchase.ts",
         "apps/web/src/domain/market/bid.ts"
       ]
     },

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { useMarketActions } from "@/app/hooks/useMarketActions";
 import type { useMiningLoop } from "@/app/hooks/useMiningLoop";
 import { halvingsAt, HALVING_BLOCKS, reward, UNIT } from "@/domain/protocol";
-import { TERMINAL_HALVING } from "@/features/launch/halvings";
+import { TERMINAL_HALVING } from "./halvings";
 import { isSimulated, placeExample, SHOWCASE, showcase, supplyOf } from "./showcase";
 
 const TIP = 3_000_000;

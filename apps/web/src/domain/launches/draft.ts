@@ -14,7 +14,7 @@ import { encodeTerms, tokenId } from "@/domain/rgbpp";
 import { launchIdFor, termsOf, type LaunchCommitment } from "./announcement";
 import { EXTRAS_WIRE_BUDGET, extrasOf, LINK_KINDS, LINK_RULE, linkFor, MAX_LINK_LENGTH, MAX_STORY_LENGTH, STORY_PARTS, type LinkKind, type StoryPart } from "./extras";
 import { imageFor } from "./image";
-import type { Registration } from "@/app/launches/registration";
+import type { Registration } from "./registration";
 
 export const ACCENTS = [
   "var(--amber)",

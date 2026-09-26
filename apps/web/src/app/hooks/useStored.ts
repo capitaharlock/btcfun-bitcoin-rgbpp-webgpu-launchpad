@@ -8,16 +8,17 @@
 
 import { useCallback, useState } from "react";
 
-import { readStored, writeStored } from "@/adapters/storage";
+import { useServices } from "@/app/providers/ServicesProvider";
 
 export function useStored(key: string): [string | null, (value: string | null) => void] {
-  const [value, setValue] = useState(() => readStored(key));
+  const { storage } = useServices();
+  const [value, setValue] = useState(() => storage.read(key));
   const set = useCallback(
     (next: string | null) => {
-      writeStored(key, next);
+      storage.write(key, next);
       setValue(next);
     },
-    [key],
+    [storage, key],
   );
   return [value, set];
 }

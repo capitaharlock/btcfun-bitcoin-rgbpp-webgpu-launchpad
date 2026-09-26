@@ -9,6 +9,7 @@ import { Launches } from "@/pages/Launches";
 import { LaunchView } from "@/pages/Launch";
 import { NETWORK, WalletProvider, useWallet } from "@/app/providers/WalletProvider";
 import { LaunchesProvider } from "@/app/providers/LaunchesProvider";
+import { ServicesProvider } from "@/app/providers/ServicesProvider";
 import { TokensProvider } from "@/app/providers/TokensProvider";
 import { group } from "@/ui/format";
 import { PixelBursts } from "@/ui/PixelBursts";
@@ -43,13 +44,15 @@ const SECTIONS = [
 
 export default function App() {
   return (
-    <WalletProvider>
-      <LaunchesProvider>
-        <TokensProvider>
-          <Shell />
-        </TokensProvider>
-      </LaunchesProvider>
-    </WalletProvider>
+    <ServicesProvider>
+      <WalletProvider>
+        <LaunchesProvider>
+          <TokensProvider>
+            <Shell />
+          </TokensProvider>
+        </LaunchesProvider>
+      </WalletProvider>
+    </ServicesProvider>
   );
 }
 

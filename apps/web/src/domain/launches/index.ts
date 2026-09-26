@@ -13,8 +13,12 @@ export { EXTRAS_WIRE_BUDGET, LINK_KINDS, LINK_RULE, MAX_LINK_LENGTH, MAX_STORY_L
 export type { LaunchLinks, LaunchStory, LinkKind, StoryPart, TypedExtras } from "./extras";
 export { DEMO_SYMBOL, FEATURED_LAUNCH_IDS, FEATURE_RULE, PLATFORM_IDENTITY, featuredLaunch, isFeatured } from "./featured";
 export type { FeatureRule } from "./featured";
+export { TERMINAL_HALVING, halvingPosition } from "./halvings";
+export type { HalvingPosition } from "./halvings";
 export { MAX_IMAGE_LENGTH, PLATFORM_IMAGES, artFor, imageFor, imageMatches } from "./image";
 export type { ArtSource, TokenArt } from "./image";
+export { paidFor, registrationPayment } from "./registration";
+export type { Registration } from "./registration";
 export { resolveAnnouncements } from "./registry";
 export type { Heard } from "./registry";
 export { SHOWCASE, isSimulated, placeExample, showcase, supplyOf } from "./showcase";

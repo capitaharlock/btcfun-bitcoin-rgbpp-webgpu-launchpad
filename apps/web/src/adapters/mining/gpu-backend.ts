@@ -17,7 +17,8 @@
 import { wordsToHex } from "@/domain/codec";
 import { nonceWords } from "@/domain/mining";
 import { HIT_WORDS, buildKernel } from "./shader";
-import type { BackendAvailability, BackendProgress, Candidate, MiningBackend } from "@/domain/mining";
+import type { Candidate } from "@/domain/mining";
+import type { BackendAvailability, BackendProgress, MiningBackend } from "@/ports";
 
 /** Wall-clock target per dispatch. Big enough to amortise submit+map latency,
  *  small enough that `stop()` lands within a frame or two. */

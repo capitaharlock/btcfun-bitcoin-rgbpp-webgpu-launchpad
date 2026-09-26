@@ -25,6 +25,7 @@
 import { fromBase64, hexToBytes, toBase64 } from "@/domain/codec";
 import { deriveAddress, deriveKey, identityOf, type WalletKey } from "@/domain/bitcoin";
 import { ACTIVE, matchesNetwork, type NetworkConfig } from "@/domain/bitcoin";
+import type { Vault } from "@/ports";
 import * as passkey from "./passkey";
 
 const STORAGE_KEY = "btcfun:vault:v1";
@@ -39,29 +40,13 @@ const STORAGE_KEY = "btcfun:vault:v1";
  */
 const DEMO_ENTROPY_HEX = "8d726fd1f55a135a3563dfb6e8eb786adf7c1ac195354029d1a3f68aa1753fd1";
 
-/** Persisted, non-secret except for `secret` on the local adapter. */
+/** Persisted, non-secret except for `secret` on the local adapter. One shape per `VaultKind` (`ports/vault.ts`). */
 type StoredVault =
   | { kind: "passkey"; address: string; identity: string; credential: passkey.PasskeyRecord }
   /** `secret` is base64 root entropy. Not a secure store. */
   | { kind: "local"; address: string; identity: string; secret: string }
   /** No secret stored: the entropy is `DEMO_ENTROPY_HEX`. */
   | { kind: "demo"; address: string; identity: string };
-
-export type VaultKind = StoredVault["kind"];
-
-export interface Vault {
-  readonly kind: VaultKind;
-  readonly address: string;
-  /** Compressed public key hex. The identity ledger records are signed under. */
-  readonly identity: string;
-  /** Short description of how this wallet is protected, for the UI. */
-  readonly label: string;
-  /**
-   * Derive the key, run `fn`, wipe. The passkey adapter prompts for user
-   * verification here, so call it once per operation, not once per render.
-   */
-  use<T>(fn: (key: WalletKey) => T | Promise<T>): Promise<T>;
-}
 
 export function isPasskeySupported(): boolean {
   return passkey.isSupported();

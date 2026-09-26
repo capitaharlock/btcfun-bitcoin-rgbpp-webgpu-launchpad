@@ -2,7 +2,7 @@ import { Diagram } from "@/features/diagram/Diagram";
 import { group } from "@/ui/format";
 import { SEAL_SATS } from "@/domain/rgbpp";
 import { FUNDS_POLL_MS } from "@/app/hooks/useMiningLoop";
-import { MIN_FAST_FEE_RATE } from "@/adapters/mempool";
+import { MIN_FAST_FEE_RATE } from "@/domain/mining";
 import { ANCHOR_GRACE_BLOCKS, MIN_CLZ, NEW_CELL, PLATFORM_PERCENT, REUSE, TICKET_SATS } from "@/domain/protocol";
 import { DocLink, Technical } from "@/docs/parts";
 import { CIRCUIT, MINER_CELL, MINT_TX, TICKET_TX } from "./diagrams";
