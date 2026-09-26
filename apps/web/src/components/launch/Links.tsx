@@ -11,6 +11,7 @@ import { LINK_KINDS, type LaunchLinks } from "../../lib/launches/create";
 import { ckbMintScriptUrl, ckbTokenUrl } from "../../lib/rgbpp/explorer";
 import { ExplorerIcon, LINK_LABEL, PixelIcon, type ExplorerKind } from "../../ui/PixelIcon";
 import { ExternalLink } from "../../ui/TxLink";
+import "./links.css";
 
 /** A launch's project links as a row of pixel icon buttons. Leaves the page. */
 export function ProjectLinks({ links, symbol, small }: { links: LaunchLinks; symbol: string; small?: boolean }) {

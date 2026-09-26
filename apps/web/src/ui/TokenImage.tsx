@@ -11,6 +11,7 @@ import { memo, useState } from "react";
 
 import type { TokenArt } from "../lib/launches/image";
 import { Sigil, type SigilSize } from "./Sigil";
+import "./sigil.css";
 
 export type TokenImageSize = SigilSize;
 

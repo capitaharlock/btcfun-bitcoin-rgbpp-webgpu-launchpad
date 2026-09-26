@@ -26,7 +26,7 @@
      the RGB++ service and evidence, violet is the person and their wallet, sun
      is a decision, rose is a rejection. The diagram face is the system
      grotesk, because shape sizes are computed from text metrics measured
-     against it (`components/diagram/layout.ts`). */
+     against it (`components/diagram/layout/`). */
   --dg-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --dg-canvas: var(--paper);
   --dg-ink: color-mix(in oklab, var(--shade) 94%, var(--violet));

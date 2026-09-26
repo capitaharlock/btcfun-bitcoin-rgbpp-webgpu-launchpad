@@ -7,6 +7,7 @@
  */
 
 import { useEffect } from "react";
+import "./pixel-bursts.css";
 
 const BURSTING = ".btn.primary, .btn.play, .btn.neon";
 

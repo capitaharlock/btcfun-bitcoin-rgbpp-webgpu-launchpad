@@ -1,0 +1,10 @@
+/* The mining panel (`MinePanel`): counters over the live hash and its log, side
+ * by side where there is room. The wizard's compact variant is in
+ * `wizard/wizard.css`. */
+
+/* ---------- the miner ---------- */
+
+.miner { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+@media (max-width: 1080px) {
+  .miner { grid-template-columns: minmax(0, 1fr); }
+}

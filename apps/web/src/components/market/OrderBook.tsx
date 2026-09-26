@@ -11,6 +11,7 @@ import type { Book, Level } from "../../lib/market/book";
 import { atoms, group, satsPerToken } from "../../lib/format";
 import { DECIMALS } from "../../lib/standard";
 import { More, Panel } from "../../ui/primitives";
+import "./market.css";
 
 export function OrderBook({ book, symbol }: { book: Book; symbol: string }) {
   const deepest = [book.bids.at(-1)?.cumulative ?? 0n, book.asks.at(-1)?.cumulative ?? 0n].reduce((a, b) => (a > b ? a : b));

@@ -26,6 +26,7 @@ import { DECIMALS, MIN_CLZ } from "../../lib/standard";
 import type { Ticket } from "../../lib/mining/loop";
 import { HashFeed, HashLog } from "./HashFeed";
 import { Chip, KV, Notice, Stat } from "../../ui/primitives";
+import "./mine-panel.css";
 
 const CHOICES: Array<{ id: BackendChoice; label: string }> = [
   { id: "auto", label: "Auto" },

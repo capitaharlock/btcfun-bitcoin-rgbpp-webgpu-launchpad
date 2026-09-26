@@ -2,7 +2,7 @@
  *
  * A diagram is declared, not drawn: lanes (one per actor or chain), nodes
  * placed on a lane and a row, and edges between nodes or between the items of
- * a transaction. `layout.ts` turns that into coordinates and orthogonal
+ * a transaction. `layout/` turns that into coordinates and orthogonal
  * routes; `Diagram.tsx` only paints what the layout decided. Keeping the
  * declaration free of pixels is what lets a diagram live in a diff next to
  * the code it describes, and what lets its geometry be unit-tested.

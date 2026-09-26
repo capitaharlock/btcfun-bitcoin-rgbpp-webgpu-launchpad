@@ -11,7 +11,7 @@
 import { memo, useMemo } from "react";
 
 import type { LinkKind } from "../lib/launches/create";
-import { fromBitmap, pixelPath } from "./pixels";
+import { fromBitmap, pixelPath } from "../lib/pixels/pixels";
 
 const ICONS: Record<LinkKind, readonly string[]> = {
   website: [

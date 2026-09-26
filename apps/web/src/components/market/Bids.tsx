@@ -21,6 +21,7 @@ import type { TokenCell } from "../../lib/rgbpp/operations";
 import { DECIMALS } from "../../lib/standard";
 import type { Operation } from "../../state/TokensProvider";
 import { Chip, Field, More, Notice, Panel } from "../../ui/primitives";
+import "./market.css";
 
 interface Props {
   launch: Launch;

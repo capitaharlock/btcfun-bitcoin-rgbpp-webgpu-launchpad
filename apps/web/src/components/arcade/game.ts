@@ -1,6 +1,6 @@
 /* The playable game, as data and rules — no canvas, no clock, no keyboard.
  *
- * The same world as the attract mode (`scene.ts`) under the rules of the
+ * The same world as the attract mode (`scene/`) under the rules of the
  * original cabinet: a formation that marches faster as it thins, bombs, cover
  * that wears away from both sides, three lives, waves that start lower, and a
  * mystery ship across the top. What stays this product's own: every invader is

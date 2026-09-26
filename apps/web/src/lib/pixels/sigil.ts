@@ -13,7 +13,7 @@
  */
 
 import { pixelPath } from "./pixels";
-import { hashSeed, seeded } from "./random";
+import { hashSeed, seeded } from "../random";
 
 export const SIGIL_WIDTH = 11;
 export const SIGIL_HEIGHT = 8;

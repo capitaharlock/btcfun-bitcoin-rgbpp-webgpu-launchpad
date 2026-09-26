@@ -7,7 +7,7 @@
  * little punctuation.
  */
 
-import { fromBitmap, type PixelGrid } from "../pixels";
+import { fromBitmap, type PixelGrid } from "../../lib/pixels/pixels";
 
 export const GLYPH_W = 3;
 export const GLYPH_H = 5;

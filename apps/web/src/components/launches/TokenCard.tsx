@@ -23,6 +23,7 @@ import { HalvingBar } from "../launch/HalvingBar";
 import { ExplorerLinks, launchExplorers, offExplorers, ProjectLinks } from "../launch/Links";
 import { Chip } from "../../ui/primitives";
 import { TokenImage } from "../../ui/TokenImage";
+import "./launches.css";
 
 export type CardAction = "mine" | "soon" | "view";
 

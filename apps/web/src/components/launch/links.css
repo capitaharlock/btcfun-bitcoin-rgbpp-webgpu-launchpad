@@ -1,0 +1,25 @@
+/* A launch's project links (`Links`): square icon buttons, full size on the
+ * launch page and small in a token box, dashed when the link is missing.
+ * Theme tokens only. */
+
+/* ---------- project links ---------- */
+
+.links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.iconlink {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink-dim);
+  transition: transform var(--dur-fast) var(--ease-step), color var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease);
+}
+.iconlink:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; transform: var(--lift); }
+.iconlink svg { width: 18px; height: 18px; display: block; }
+.iconlink path { fill: currentColor; }
+.links.small .iconlink { width: 26px; height: 26px; box-shadow: none; }
+.links.small .iconlink svg { width: 13px; height: 13px; }
+.iconlink.off { color: var(--line-strong); border-style: dashed; box-shadow: none; cursor: not-allowed; }
+.iconlink.off:hover { transform: none; color: var(--line-strong); border-color: var(--line-strong); }

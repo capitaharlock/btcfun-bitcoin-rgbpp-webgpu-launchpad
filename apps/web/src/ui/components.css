@@ -1,5 +1,8 @@
 /* btc.fun — component layer: the shell and the primitives every screen uses.
- * Values come from the theme (`theme-arcade.css`); this file only arranges them. */
+ * Values come from the theme (`theme-arcade.css`); this file only arranges them.
+ * A feature's own styles live beside the component that renders it, imported
+ * by it; those sheets load before this one, so they never rely on order to
+ * beat a primitive of the same specificity. */
 
 /* ---------- shell ---------- */
 
@@ -99,6 +102,45 @@
   border-bottom: var(--border-w) solid var(--line);
 }
 
+/* A row of filter buttons (sort and filter chips on the front page and the
+   activity feed): the same place as the wallet's tab links, drawn as chips. */
+.tabs {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 6px;
+}
+
+.tabs button {
+  --tone: var(--accent);
+  flex: none;
+  white-space: nowrap;
+  appearance: none;
+  height: var(--control-h-sm);
+  padding: 0 14px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink-dim);
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: var(--text-md);
+  letter-spacing: var(--ui-tracking);
+  text-transform: var(--ui-case);
+  cursor: pointer;
+  transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease);
+}
+.tabs button:hover { color: var(--ink); border-color: var(--ink-faint); }
+/* The chosen filter: tinted in its tone, not filled with it. */
+.tabs button.on {
+  color: var(--ink);
+  background: color-mix(in oklab, var(--tone) 14%, var(--bg));
+  border-color: color-mix(in oklab, var(--tone) 60%, transparent);
+}
+.tabs.neon button { --tone: var(--sell); }
+.tabs.cyan button { --tone: var(--cyan); }
+
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
 .main { flex: 1; padding: var(--space-8) var(--gut) 96px; }
@@ -182,18 +224,14 @@
   .nav a { padding: 0 10px; font-size: var(--text-sm); }
   .topbar-right { flex: none; gap: 6px; }
   .topbar-right .chip, .topbar-right .divider { display: none; }
-  /* The address and balance are one tap away; here the pill only has to be
-     the way there, named in words next to its icon. */
-  .topbar-right .walletpill :is(.addr, .bal) { display: none; }
-  .topbar-right .walletpill .who {
-    position: static;
-    width: auto;
-    height: auto;
-    clip-path: none;
-    padding: 0 10px 0 2px;
-  }
   .topbar-right .btn { padding: 0 var(--space-3); }
 }
+
+/* The top bar's right-hand rail: tip chip, divider, wallet. Its gap overrides
+   `.topbar-right`'s on every width, phone included, so it stays after the
+   phone block above. */
+.rail { display: flex; align-items: center; gap: var(--space-2); }
+.rail .divider { width: var(--border-w); height: 24px; background: var(--line-strong); margin: 0 2px; }
 
 /* ---------- chips ---------- */
 
@@ -342,26 +380,6 @@
 .btn.lg { height: var(--control-h-lg); padding: 0 var(--space-6); font-size: var(--text-lg); }
 .btn.lg:active:not([disabled]) { transform: var(--press-lg); }
 .btn.block { width: 100%; }
-
-/* A pixel burst where a button was pressed (`ui/PixelBursts.tsx`). */
-.burst {
-  position: fixed;
-  z-index: 100;
-  width: 4px;
-  height: 4px;
-  pointer-events: none;
-  background: var(--burst, var(--accent));
-  box-shadow:
-    -10px -10px 0 var(--burst, var(--accent)), 10px -10px 0 var(--burst, var(--accent)),
-    -10px 10px 0 var(--burst, var(--accent)), 10px 10px 0 var(--burst, var(--accent)),
-    0 -14px 0 var(--burst, var(--accent)), 0 14px 0 var(--burst, var(--accent)),
-    -14px 0 0 var(--burst, var(--accent)), 14px 0 0 var(--burst, var(--accent));
-  animation: burst 360ms steps(4, end) forwards;
-}
-@keyframes burst {
-  0% { transform: scale(0.4); opacity: 1; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
 
 /* ---------- inputs ---------- */
 
@@ -730,69 +748,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 22px; }
 }
 .copyable .btn { flex: none; }
 
-/* ---------- wallet pill in the top bar ---------- */
-
-.walletpill:hover { text-decoration: none; }
-.walletpill {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: var(--control-h-sm);
-  padding: 0;
-  border: var(--border-w) solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-  white-space: nowrap;
-  overflow: hidden;
-  transition: border-color var(--dur-base) var(--ease);
-}
-.walletpill:hover { border-color: var(--ink-faint); text-decoration: none; }
-.walletpill .icon {
-  align-self: stretch;
-  display: grid;
-  place-items: center;
-  padding: 0 var(--space-2);
-  color: var(--accent);
-}
-.walletpill .icon svg, .walletbutton svg { display: block; flex: none; }
-/* Named in words for assistive technology everywhere; shown on a phone,
-   where the icon stands alone. */
-.walletpill .who {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  font-family: var(--font-ui);
-  font-weight: var(--weight-ui);
-  font-size: var(--text-sm);
-  letter-spacing: var(--ui-tracking);
-  text-transform: var(--ui-case);
-}
-.walletpill[aria-current="page"] { border-color: var(--ink); }
-.walletpill .addr { padding: 0 10px 0 2px; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-dim); }
-.walletpill .bal {
-  align-self: stretch;
-  display: grid;
-  place-items: center;
-  padding: 0 10px;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-  background: color-mix(in oklab, var(--amber) 9%, var(--bg));
-  border-left: var(--border-w) solid var(--line-strong);
-  color: var(--amber);
-}
-
-button.walletpill { appearance: none; cursor: pointer; }
-/* Figures computed against a placeholder height, before the chain tip arrives. */
-.syncing { opacity: 0.45; transition: opacity var(--dur-slow) var(--ease); }
+/* ---------- utilities ---------- */
 
 .align-end { align-items: end; }
-.placebid { margin-top: var(--space-4); }
-.orders.after-notice { margin-top: var(--space-3); }
 .error-text.full { flex-basis: 100%; }
 .scroll-x { overflow-x: auto; }
 .grow { flex: 1; min-width: 0; }
@@ -800,12 +758,6 @@ button.walletpill { appearance: none; cursor: pointer; }
 .check { display: flex; align-items: flex-start; gap: 10px; }
 .check .tiny { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .minted { margin: var(--space-3) 0 0; }
-
-/* A narrow desktop keeps the icon and the balance; the address is on the
-   wallet page, whole. */
-@media (max-width: 1180px) {
-  .topbar-right .walletpill .addr { display: none; }
-}
 
 .linkbutton[disabled] { color: var(--ink-faint); cursor: not-allowed; text-decoration: none; }
 
@@ -831,42 +783,12 @@ button.walletpill { appearance: none; cursor: pointer; }
 .dialog-frame { display: grid; gap: var(--space-5); padding: var(--space-7); }
 .dialog-head { display: flex; align-items: flex-start; gap: var(--space-3); }
 
-/* ---------- wallet ---------- */
-
-/* Two ways to get a wallet, side by side where there is room. */
-.choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: start; }
-.choice {
-  display: grid;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  border: var(--border-w) solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg);
-}
-.choice .eyebrow { margin-bottom: 0; }
-.choice .alt { margin: 0; }
-.choice .more { margin-top: var(--space-1); }
 @media (max-width: 720px) {
-  .choices { grid-template-columns: minmax(0, 1fr); }
   .dialog-frame { padding: var(--space-5) var(--space-4); }
 }
 
-.receive { display: flex; align-items: flex-start; gap: var(--space-4); }
-@media (max-width: 480px) {
-  .receive { flex-direction: column; align-items: center; }
-}
+/* ---------- QR code (`ui/QrCode.tsx`) ---------- */
+
 .qr { width: 136px; height: 136px; flex: none; display: block; }
 .qr-paper { fill: var(--paper); }
 .qr-ink { fill: var(--shade); }
-
-.holdlist { list-style: none; margin: 0; padding: 0; display: grid; }
-.holdlist li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: var(--border-w) solid var(--line);
-}
-.holdlist li:last-child { border-bottom: 0; }
-.holdlist .sym { font-family: var(--font-ui); font-weight: var(--weight-ui); }
-.holdlist .mono { color: var(--amber); }

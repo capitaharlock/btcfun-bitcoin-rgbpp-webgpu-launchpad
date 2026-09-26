@@ -29,10 +29,11 @@ import { compact, group } from "../lib/format";
 import { featuredLaunch } from "../lib/launches/featured";
 import { DECIMALS, HALVING_BLOCKS, MIN_CLZ, PLATFORM_PERCENT, TICKET_SATS } from "../lib/standard";
 import { useLaunchRegistry } from "../state/LaunchesProvider";
-import { ArcadeScene } from "../ui/arcade/ArcadeScene";
+import { ArcadeScene } from "../components/arcade/ArcadeScene";
 import { RewardChart } from "../components/launch/RewardChart";
 import { More, Panel, SectionHead } from "../ui/primitives";
 import { actionFor, TokenCard, type CardAction } from "../components/launches/TokenCard";
+import "../components/launches/launches.css";
 
 type Sort = "hot" | "new" | "halving";
 type Filter = "all" | CardAction;

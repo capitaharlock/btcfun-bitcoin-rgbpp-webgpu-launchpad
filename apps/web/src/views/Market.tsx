@@ -30,6 +30,7 @@ import { useWallet } from "../state/WalletProvider";
 import { Chip, Field, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { TokenImage } from "../ui/TokenImage";
 import { TxLink } from "../ui/TxLink";
+import "../components/market/market.css";
 
 const bidOrder = ({ bid }: PublishedBid): Order => ({ priceSats: bid.priceSats, amount: BigInt(bid.amount) });
 const sealKey = (seal: Seal) => `${seal.txid}:${seal.vout}`;

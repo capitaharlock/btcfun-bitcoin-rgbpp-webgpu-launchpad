@@ -5,7 +5,7 @@
  * radius, a shadow or a duration. A theme is a file that sets these values —
  * under `:root` for the default, under `:root[data-theme="<name>"]` for any
  * other — and the app switches between them with the `data-theme` attribute
- * on <html> (`ui/theme.ts`). Canvas and SVG art read the same properties at
+ * on <html> (`lib/theme.ts`). Canvas and SVG art read the same properties at
  * run time, so they follow the theme too.
  *
  *   type      --font-{display,heading,eyebrow,label,ui,body,mono,numeric}

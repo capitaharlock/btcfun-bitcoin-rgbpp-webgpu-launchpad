@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pixelSigil } from "../pixelSigil";
+import { pixelSigil } from "../../lib/pixels/sigil";
 import { ADVANCE, glyph, GLYPH_H, GLYPH_W, hasGlyph, textWidth } from "./font";
 import {
   bunkerY,

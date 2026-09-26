@@ -133,3 +133,15 @@
 @media (max-width: 720px) {
   .lh-about-box { padding: var(--space-4); }
 }
+
+/* ---------- the story: why and the plan, side by side ---------- */
+
+.story { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.story > section { padding: var(--space-4) var(--space-5); border: var(--border-w) solid var(--line); border-radius: var(--radius-sm); background: var(--bg); }
+.story p { color: var(--ink-dim); font-size: var(--text-base); max-width: 70ch; }
+@media (max-width: 720px) {
+  .story { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Figures computed against a placeholder height, before the chain tip arrives. */
+.syncing { opacity: 0.45; transition: opacity var(--dur-slow) var(--ease); }

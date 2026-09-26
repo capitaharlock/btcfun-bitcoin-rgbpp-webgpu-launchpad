@@ -12,6 +12,7 @@ import { useId, useState } from "react";
 import { hexToBytes } from "../../lib/bytes";
 import { NETWORK, useWallet } from "../../state/WalletProvider";
 import { Dialog, KV, More, Notice } from "../../ui/primitives";
+import "./wallet.css";
 
 /** The chooser, as it appears in the dialog and on the wallet page alike. */
 export function ConnectOptions({ onConnected }: { onConnected?: () => void }) {

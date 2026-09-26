@@ -1,6 +1,6 @@
 /* The front page's arcade: a scene that plays itself until someone picks up
- * the controls, and then a game. The rules are `scene.ts` and `game.ts`, the
- * pictures `draw.ts`, the clock and the input `cabinet.ts`; this component
+ * the controls, and then a game. The rules are `scene/` and `game.ts`, the
+ * pictures `draw.ts`, the clock and the input `cabinet/`; this component
  * gives them the launches, the tip and the theme's colours, and prints what a
  * canvas cannot say — the controls, the sound switch, and the score, as text
  * a screen reader announces.
@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Launch } from "../../data/launches";
 import { group } from "../../lib/format";
 import { reward, UNIT } from "../../lib/standard";
-import { pixelSigil } from "../pixelSigil";
+import { pixelSigil } from "../../lib/pixels/sigil";
 import "./arcade.css";
 import { ATTRACT_HUD, mountCabinet, type Cabinet, type Hud, type Roster } from "./cabinet";
 import type { ScenePalette } from "./draw";

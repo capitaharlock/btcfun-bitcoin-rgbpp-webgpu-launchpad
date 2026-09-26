@@ -1,0 +1,174 @@
+/* The launch catalogue on the front page: its sections, the grid of token boxes
+ * and the box itself (`TokenCard`). Imported by the box and by the front page.
+ *
+ * Colour is meaning, not decoration. A box's frame is its launch's own accent;
+ * what the launch is doing — mining, opening, spent — is said by the chip and
+ * the button, so scanning the grid answers "what can I play" before any word
+ * is read. Values come from the theme. */
+
+/* ---------- catalog ---------- */
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); }
+
+.cardgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--space-6);
+}
+
+/* The front page breathes: each section stands apart, with its heading given
+   room above the boxes it names. Written against the stack each one widens:
+   a component's sheet loads before the global layer, so a bare `.home` would
+   lose to `.stack-lg`'s gap, which has the same specificity. */
+.stack-lg.home { gap: var(--space-16); }
+.stack-md.home-section { gap: var(--space-6); }
+@media (max-width: 720px) {
+  .stack-lg.home { gap: var(--space-12); }
+  .cardgrid { gap: var(--space-6); }
+}
+
+/* ---------- token box ---------- */
+
+.tokencard {
+  --accent: var(--amber);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--line);
+  border-top: var(--frame-w) solid color-mix(in oklab, var(--accent) 60%, transparent);
+  border-radius: var(--radius);
+  overflow: clip;
+  transition:
+    transform var(--dur-fast) var(--ease-step),
+    box-shadow var(--dur-fast) var(--ease-step),
+    border-color var(--dur-base) var(--ease);
+}
+.tokencard:not(.simulated):hover,
+.tokencard:not(.simulated):focus-within {
+  transform: var(--lift);
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  box-shadow: var(--shadow-lg) color-mix(in oklab, var(--accent) 22%, transparent);
+}
+.tokencard.view { --accent: var(--ink-faint); }
+
+/* The picture's stage: the token art on a lit patch of the cabinet floor. */
+.tc-hero {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5) var(--space-4);
+  border-bottom: var(--border-w) solid var(--line);
+  background:
+    radial-gradient(closest-side, color-mix(in oklab, var(--accent) 14%, transparent), transparent),
+    linear-gradient(color-mix(in oklab, var(--ink) 4%, transparent) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, color-mix(in oklab, var(--ink) 4%, transparent) 1px, transparent 1px) 0 0 / 16px 16px,
+    var(--bg);
+}
+.tc-hero .tokenimg.xl, .tc-hero .sigil.xl { width: 168px; height: 168px; }
+.tc-ribbon {
+  --tone: var(--play);
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  padding: 4px var(--space-2);
+  font-family: var(--font-eyebrow);
+  font-size: var(--text-xs);
+  letter-spacing: var(--eyebrow-tracking);
+  text-transform: var(--eyebrow-case);
+  -webkit-font-smoothing: var(--face-smoothing);
+  color: var(--tone);
+  background: color-mix(in oklab, var(--tone) 12%, var(--bg));
+  border: var(--border-w) solid color-mix(in oklab, var(--tone) 45%, transparent);
+  border-radius: var(--radius-sm);
+}
+.tc-ribbon.sim { --tone: var(--warn); }
+
+.tc-body { display: flex; flex-direction: column; gap: var(--space-5); flex: 1; min-width: 0; padding: var(--space-6) var(--space-5); }
+
+.tc-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+.tc-id { min-width: 0; flex: 1; display: grid; gap: var(--space-2); padding-top: 2px; }
+.tc-sym {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+  text-transform: none;
+  letter-spacing: var(--display-tracking);
+  overflow-wrap: anywhere;
+}
+/* The symbol is the box's one link; its hit area is stretched over the whole
+   box, and the buttons sit above it with targets of their own. */
+.tc-link { color: var(--ink); }
+.tc-link:hover { text-decoration: none; color: var(--accent); }
+.tc-link::after { content: ""; position: absolute; inset: 0; z-index: 0; }
+.tc-link:focus-visible { outline: none; }
+.tokencard:has(.tc-link:focus-visible) { outline: var(--focus-w) solid var(--focus); outline-offset: var(--focus-w); }
+.tc-name { font-size: var(--text-sm); color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-badges { display: grid; gap: 6px; justify-items: end; }
+
+.tc-blurb {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--ink-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tc-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.tc-stats > div { padding: var(--space-3); border-right: var(--border-w) solid var(--line); min-width: 0; }
+.tc-stats > div:last-child { border-right: 0; }
+.tc-stats dt {
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  color: var(--ink-faint);
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-stats dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-base);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-stats dd.big {
+  font-family: var(--font-numeric);
+  font-size: var(--text-md);
+  line-height: var(--leading-tight);
+  color: var(--accent);
+  -webkit-font-smoothing: var(--face-smoothing);
+}
+
+.tc-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: auto; }
+.tc-foot .btn, .tc-foot .links, .tc-foot .tc-off { position: relative; z-index: 1; }
+.tc-foot > :is(.btn, .tc-off) { margin-left: auto; }
+/* A switched-off button still explains itself: the wrapper takes the hover the
+   disabled button would swallow. */
+.tc-off { display: inline-flex; cursor: not-allowed; }
+.tc-off .btn[disabled] { pointer-events: none; }
+.tc-note { margin: 0; font-size: var(--text-sm); color: var(--ink-faint); }
+
+/* The featured launch: the same box as every other, first in the grid and
+   marked by its ribbon — the order says "start here", not a different layout. */
+
+/* An example: the same box, marked, unlit. */
+.tokencard.simulated { border-style: dashed; border-top-style: solid; }
+
+.examples-note { max-width: 72ch; margin: 0; }

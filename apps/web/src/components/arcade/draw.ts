@@ -8,8 +8,8 @@
  */
 
 import { group } from "../../lib/format";
-import type { PixelGrid } from "../pixels";
-import { fromBitmap } from "../pixels";
+import type { PixelGrid } from "../../lib/pixels/pixels";
+import { fromBitmap } from "../../lib/pixels/pixels";
 import { ADVANCE, glyph, GLYPH_H, textWidth } from "./font";
 import { bombRect, canRestart, HUD_Y, UFO_SIZE, UFO_Y, ufoRect, type Game } from "./game";
 import { alive, CANNON, CANNON_SIZE, cannonY, groundY, invaderRect, SPRITE_W, TIMING, type Scene, type Tint } from "./scene";

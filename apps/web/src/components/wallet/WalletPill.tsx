@@ -12,6 +12,7 @@ import { useState } from "react";
 import { formatBtc, shortAddress, useWallet } from "../../state/WalletProvider";
 import { WalletMark } from "../../ui/PixelIcon";
 import { ConnectDialog } from "./Connect";
+import "./wallet.css";
 
 export function WalletPill({ active }: { active: boolean }) {
   const { vault, balance } = useWallet();

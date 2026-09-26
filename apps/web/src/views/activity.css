@@ -1,0 +1,74 @@
+/* The public activity feed (`views/Activity.tsx`): a scoreboard of events, one
+ * row per signed announcement, with a coloured light per kind so the feed
+ * scans as a stripe. Theme tokens only. */
+
+/* ---------- activity feed: a scoreboard of events ---------- */
+
+.feed { display: flex; flex-direction: column; }
+
+.feedrow {
+  display: grid;
+  grid-template-columns: 8px 40px minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: var(--border-w) solid var(--line);
+  font-size: var(--text-md);
+}
+.feedrow:last-child { border-bottom: 0; }
+.feedrow:hover { background: var(--surface-2); }
+
+/* A square light per event kind, so the feed is scannable as a stripe. */
+.feedrow .kind { width: 8px; height: 8px; flex: none; border-radius: var(--radius-sm); background: var(--ink-faint); }
+.feedrow .kind.mint { background: var(--amber); }
+.feedrow .kind.offer { background: var(--sell); }
+.feedrow .kind.fill { background: var(--market); }
+.feedrow .kind.transfer { background: var(--cyan); }
+.feedrow .kind.launch { background: var(--lime); }
+.feedrow .kind.bid { background: var(--cyan-deep); }
+
+.feedrow .what { color: var(--ink); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feedrow .what a {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-ui);
+  font-size: var(--text-md);
+  color: var(--ink);
+}
+.feedrow .what a:hover { color: var(--accent); text-decoration: none; }
+.feedrow .figures { display: flex; gap: 14px; justify-content: flex-end; min-width: 0; }
+.feedrow .meta { display: flex; align-items: center; gap: var(--space-3); justify-content: flex-end; }
+.feedrow .who { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); }
+.feedrow .when { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); white-space: nowrap; min-width: 3ch; text-align: right; }
+.feedrow .amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.feedrow .amount .unit { color: var(--ink-dim); }
+/* The row's evidence: the transaction it names, and for a mint the page that re-checks it. */
+.feedrow .tx,
+.feedrow .proof { font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; color: var(--cyan); }
+.feedrow .proof {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border: var(--border-w) solid color-mix(in oklab, var(--amber) 40%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--amber);
+}
+.feedrow .tx:hover,
+.feedrow .proof:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+  .feedrow { grid-template-columns: 8px 40px minmax(0, 1fr) auto; padding: var(--space-3); gap: 10px; }
+  .feedrow .figures { grid-column: 3 / -1; justify-content: flex-start; }
+  .feedrow .meta { grid-column: 4; grid-row: 1; }
+  .feedrow .who { display: none; }
+}
+
+/* Newly arrived rows flash once, in steps, so a live feed reads as live. */
+@keyframes feed-in {
+  0%, 40% { background: color-mix(in oklab, var(--amber) 12%, transparent); }
+  100% { background: transparent; }
+}
+.feedrow.fresh { animation: feed-in 0.9s steps(4, end); }
+
+.feedbar { padding: var(--space-4) var(--space-5); border-bottom: var(--border-w) solid var(--line); }
+.feedempty { padding: var(--space-5); margin: 0; }

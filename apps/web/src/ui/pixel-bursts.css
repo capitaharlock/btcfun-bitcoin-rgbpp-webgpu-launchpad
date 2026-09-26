@@ -1,0 +1,21 @@
+/* A pixel burst where a button was pressed (`PixelBursts`): eight squares
+ * thrown out in four steps, in the pressed button's own colour (`--burst`). */
+
+.burst {
+  position: fixed;
+  z-index: 100;
+  width: 4px;
+  height: 4px;
+  pointer-events: none;
+  background: var(--burst, var(--accent));
+  box-shadow:
+    -10px -10px 0 var(--burst, var(--accent)), 10px -10px 0 var(--burst, var(--accent)),
+    -10px 10px 0 var(--burst, var(--accent)), 10px 10px 0 var(--burst, var(--accent)),
+    0 -14px 0 var(--burst, var(--accent)), 0 14px 0 var(--burst, var(--accent)),
+    -14px 0 0 var(--burst, var(--accent)), 14px 0 0 var(--burst, var(--accent));
+  animation: burst 360ms steps(4, end) forwards;
+}
+@keyframes burst {
+  0% { transform: scale(0.4); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}

@@ -20,6 +20,7 @@ import type { Launch } from "../data/launches";
 import { Chip, More, Notice, PageHead, Panel, Stat } from "../ui/primitives";
 import { TokenImage } from "../ui/TokenImage";
 import { ExternalLink } from "../ui/TxLink";
+import "./activity.css";
 
 type Filter = "all" | ActivityKind;
 

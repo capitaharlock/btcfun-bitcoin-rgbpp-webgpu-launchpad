@@ -10,6 +10,7 @@
 import { group } from "../../lib/format";
 import { divisorLabel, halvingLabel, ladder, LADDER_RUNGS, periodShare, whereNow, type HalvingPosition } from "../../lib/launches/progress";
 import { Meter } from "../../ui/primitives";
+import "./halving-bar.css";
 
 export function HalvingBar({
   position,

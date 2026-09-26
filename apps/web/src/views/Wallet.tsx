@@ -30,6 +30,7 @@ import { QrCode } from "../ui/QrCode";
 import { TokenImage } from "../ui/TokenImage";
 import { ExternalLink, TxLink } from "../ui/TxLink";
 import type { WalletTab } from "../lib/router";
+import "../components/wallet/wallet.css";
 
 export const WALLET_TABS: ReadonlyArray<{ tab: WalletTab; path: string; label: string }> = [
   { tab: "overview", path: "/wallet", label: "Overview" },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pixelSigil, SIGIL_HEIGHT, SIGIL_WIDTH, sigilPaths } from "./pixelSigil";
+import { pixelSigil, SIGIL_HEIGHT, SIGIL_WIDTH, sigilPaths } from "./sigil";
 import { fromBitmap, pixelPath } from "./pixels";
 
 const SEEDS = Array.from({ length: 200 }, (_, i) => `seed-${i}`);

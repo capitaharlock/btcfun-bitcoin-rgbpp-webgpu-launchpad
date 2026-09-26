@@ -13,6 +13,7 @@ import { atoms, group } from "../../lib/format";
 import { DECIMALS } from "../../lib/standard";
 import type { Operation } from "../../state/TokensProvider";
 import { Chip, Notice, Panel } from "../../ui/primitives";
+import "./market.css";
 
 /** Finished bids kept on screen, newest first. */
 const HISTORY = 8;

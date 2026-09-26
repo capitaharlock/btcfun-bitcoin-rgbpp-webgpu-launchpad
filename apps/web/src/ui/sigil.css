@@ -1,0 +1,52 @@
+/* A launch's face at every size: the generated pixel sprite (`Sigil`) and the
+ * picture a promoter supplied (`TokenImage`), which share their sizes so a row
+ * mixing the two still lines up. Imported by both components; values are theme
+ * tokens. */
+
+/* ---------- sigil ---------- */
+
+.sigil {
+  --accent: var(--amber);
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+.sigil svg { width: 100%; height: 100%; display: block; }
+.sigil-base { fill: var(--accent); }
+.sigil-hi { fill: color-mix(in oklab, var(--accent) 45%, var(--paper)); }
+.sigil.sm { width: 24px; height: 24px; }
+.sigil.lg { width: 60px; height: 60px; }
+.sigil.xl { width: 120px; height: 120px; }
+@media (max-width: 720px) {
+  .sigil.xl { width: 84px; height: 84px; }
+}
+/* The two-step march: every sprite on screen steps together, as a formation
+   does. Frame two is hidden until the step. */
+.sigil .f2 { visibility: hidden; }
+.sigil.marching .f1 { animation: march-a 1s steps(1, end) infinite; }
+.sigil.marching .f2 { animation: march-b 1s steps(1, end) infinite; }
+@keyframes march-a { 50% { visibility: hidden; } }
+@keyframes march-b { 50% { visibility: visible; } }
+
+/* ---------- token image ---------- */
+
+/* The token's picture: square and unframed — the art brings its own ground —
+   at the sigil's sizes, so a row of mixed pictures and sigils still lines up. */
+.tokenimg {
+  --accent: var(--amber);
+  display: inline-block;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.tokenimg img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tokenimg.sm { width: 24px; height: 24px; }
+.tokenimg.lg { width: 72px; height: 72px; }
+.tokenimg.xl { width: 200px; height: 200px; }
+@media (max-width: 720px) {
+  .tokenimg.xl { width: 140px; height: 140px; }
+}
