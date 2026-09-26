@@ -10,6 +10,13 @@ the browser, and mint what the result is worth, in that moment, into a Bitcoin
 output you control. The rule is enforced by a script on CKB, not by this app,
 and anyone can recompute any mint from the two chains.
 
+**Try it: <https://btcfun.rjj.workers.dev>** — Bitcoin testnet3 and CKB testnet,
+no real money. Connect with the shared demo wallet (already funded; its key is
+public on purpose) and mine the DEMO launch end to end: ticket, mine, mint.
+Every transaction links to mempool.space and the CKB explorer, and the
+[Proof page](https://btcfun.rjj.workers.dev/#/proof) re-checks any mint from
+the two chains. Docs: <https://btcfun.rjj.workers.dev/#/docs>.
+
 ## How it works
 
 ```text
