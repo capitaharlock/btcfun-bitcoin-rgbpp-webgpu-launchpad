@@ -120,7 +120,8 @@ export default function OverviewPage() {
             <li>
               <strong>Index.</strong> One Cloudflare Worker over D1 serves the app and <code>/api</code>. It stores events
               already signed by their author, checks each signature with the same code the browser uses, and returns them
-              for the browser to check again. It holds no ledger and gives no verdict of its own.
+              for the browser to check again. It holds no ledger and gives no verdict of its own. Its reads, signed writes and certification are separate
+              modules under <code>worker/</code>.
             </li>
             <li>
               The canonical specification is <code>PROTOCOL.md</code> in the repository; these pages follow it.

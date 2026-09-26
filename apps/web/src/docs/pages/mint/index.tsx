@@ -140,7 +140,7 @@ export default function MintPage() {
         <Technical>
           <ul>
             <li>
-              Output order in every operation (<code>lib/rgbpp/operations.ts</code>): the commitment at 0, then the seals
+              Output order in every operation (<code>lib/rgbpp/plans/</code>): the commitment at 0, then the seals
               in the order the plan lists them, then payments, then change. Each seal carries {group(SEAL_SATS)} sats.
               The Bitcoin signer uses one shared <code>commitmentScript</code> encoder for this RGB++ commitment and for
               market purchases.

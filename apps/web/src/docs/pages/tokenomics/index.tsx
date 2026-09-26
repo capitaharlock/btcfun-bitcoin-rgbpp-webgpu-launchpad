@@ -109,7 +109,8 @@ export default function TokenomicsPage() {
           mint script lets no miner into a launch without that signature. A token of this script can therefore be minted
           only where btc.fun admitted its launch — and every ticket of it still pays the shares above. There is no
           exception: the platform's own launches, DEMO included, pay the same registration, and the mint script refuses a
-          certificate that names no payment. The payment only has to be seen by Bitcoin, not confirmed, so creating a
+          certificate that names no payment. The certificate signs the terms together with the registration's txid, in
+          Bitcoin's internal byte order. The payment only has to be seen by Bitcoin, not confirmed, so creating a
           launch is one click that pays, gets the certificate and signs the announcement.
         </p>
       </section>

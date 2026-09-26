@@ -100,7 +100,7 @@ export default function OwnershipPage() {
           <ul>
             <li>
               The RGB++ lock's args are <code>out_index u32 LE ‖ btc_txid</code>, 36 bytes, with the txid in Bitcoin's
-              internal byte order — the reverse of how explorers print it (<code>lib/rgbpp/seal.ts</code>).
+              internal byte order — the reverse of how explorers print it (<code>lib/rgbpp/seal.ts</code>, byte order in <code>lib/bitcoin/txid.ts</code>).
             </li>
             <li>
               A cell created by the transaction still being built carries an all-zero txid, since the txid cannot exist

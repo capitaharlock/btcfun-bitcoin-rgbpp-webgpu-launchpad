@@ -91,7 +91,8 @@ export default function VerificationPage() {
               the commitment is recomputed, and it must equal the first <code>OP_RETURN</code>.
             </li>
             <li>
-              Work: the challenge is <code>sha256(ticket txid ‖ vout)</code> of the ticket the consumed miner cell names
+              Work: the challenge is <code>sha256(ticket txid ‖ vout)</code>, the txid in internal byte order
+              (<code>lib/bitcoin/txid.ts</code>), of the ticket the consumed miner cell names
               (output 1), or else of the output it was sealed to; the hash is <code>sha256d(challenge ‖ nonce)</code> with the nonce the new miner cell carries — or, for a first mint, which turns the miner cell into the token
               cell, the eight-byte nonce in the first witness past the inputs.
             </li>

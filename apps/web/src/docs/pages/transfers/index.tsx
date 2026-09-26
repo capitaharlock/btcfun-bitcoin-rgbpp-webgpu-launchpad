@@ -124,7 +124,7 @@ export default function TransfersPage() {
         <Technical>
           <ul>
             <li>
-              <code>planTransfer</code> in <code>lib/rgbpp/operations.ts</code>: the recipient's cell is sealed to output 1
+              <code>planTransfer</code> in <code>lib/rgbpp/plans/transfer.ts</code>: the recipient's cell is sealed to output 1
               (which pays their address), the sender's change to output 2. The commitment is at output 0 and bitcoin change
               comes last. Its Bitcoin script is encoded by the same <code>commitmentScript</code> function used for mint and
               purchase transactions.
