@@ -48,7 +48,8 @@ const ANATOMY: DiagramSpec = {
   description:
     `Bitcoin inputs: the outputs your token cells are sealed to, and your coins. Outputs in order: 0, the OP_RETURN commitment; 1, ` +
     `${seal} sats to the recipient's address, which their tokens are sealed to; 2, a ${seal}-sat seal for your change, when you keep ` +
-    `some; a paymaster fee when the new cells need CKB capacity your cells lack; then your change in bitcoin. On CKB your token ` +
+    `some; a paymaster fee when the new cells need CKB capacity your cells lack; then your change in bitcoin, chosen by the one ` +
+    `coin-selection rule every transaction here uses (largest coins first, no change below dust). On CKB your token ` +
     `cells are consumed and a cell for the recipient, plus one for your change, are created.`,
   laneWidth: 680,
   lanes: [{ id: "tx" }],
@@ -62,7 +63,7 @@ const ANATOMY: DiagramSpec = {
       tone: "amber",
       inputs: [
         { id: "tokens", label: "Your token outputs", value: seal, detail: "one or more, each carrying a token cell", tone: "violet" },
-        { id: "coins", label: "Your coins", detail: "pay the recipient's output and the fee", tone: "slate" },
+        { id: "coins", label: "Your coins", detail: "pay the recipient's output and the fee, largest first", tone: "slate" },
       ],
       outputs: [
         { id: "commit", label: "0 · OP_RETURN", value: "32 B", detail: "commitment to the CKB transaction", tone: "cyan" },

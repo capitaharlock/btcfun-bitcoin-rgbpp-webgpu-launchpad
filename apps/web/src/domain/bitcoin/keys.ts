@@ -25,8 +25,7 @@ import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { p2wpkh } from "@scure/btc-signer";
 
-import { bytesToHex, hexToBytes } from "@/domain/codec";
-import { signDigestWith, verifySignature } from "@/domain/codec";
+import { bytesToHex, hexToBytes, signDigestWith } from "@/domain/codec";
 import { ACTIVE, type NetworkConfig } from "./network";
 
 export interface WalletKey {
@@ -86,13 +85,11 @@ export function deriveAddress(entropy: Uint8Array, network: NetworkConfig = ACTI
  * record and a transaction input are authorised by provably the same key. The
  * caller hashes; this never hashes for you, because signing something you did
  * not hash yourself is how a signature ends up covering the wrong bytes.
+ * The matching check is `verifySignature` in `domain/codec`, which needs no key.
  */
 export function signDigest(key: WalletKey, digest: Uint8Array): Uint8Array {
   return signDigestWith(key.privateKey, digest);
 }
-
-/** Verify a compact signature against a public key. Never throws on bad input. */
-export const verifyDigest = verifySignature;
 
 /**
  * The address an identity's key receives at, or null if it is not a key.

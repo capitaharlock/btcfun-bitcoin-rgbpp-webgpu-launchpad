@@ -198,7 +198,7 @@ export default function MarketPage() {
             <li>
               A listing is a PSBT with one input (the seal of the token cell for sale) and one output (the price to the
               seller), the input signed with <code>SIGHASH_SINGLE | ANYONECANPAY</code> and not finalised: it pays out more
-              than it takes in until a buyer completes it (<code>domain/rgbpp/sale.ts</code>).
+              than it takes in until a buyer completes it (<code>domain/rgbpp/sale/purchase.ts</code>).
             </li>
             <li>
               The buyer's transaction: the seller's input at 0, then the buyer's funding; outputs are the price at 0, the

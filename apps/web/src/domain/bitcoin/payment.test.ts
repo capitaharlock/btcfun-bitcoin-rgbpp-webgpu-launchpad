@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Transaction } from "@scure/btc-signer";
 
-import { FeeTooLow, InsufficientFunds, MAX_MEMO_BYTES, P2WPKH_SCRIPT_BYTES, buildPayment, estimateVsize, opReturnScriptBytes, selectCoins } from "./payment";
+import { buildPayment } from "./payment";
+import { estimateVsize, MAX_MEMO_BYTES, opReturnScriptBytes, P2WPKH_SCRIPT_BYTES } from "./size";
 import { DUST_SATS } from "./network";
 import { deriveKey } from "./keys";
 import { hexToBytes } from "@/domain/codec";
@@ -16,114 +17,6 @@ function utxo(value: number, n = 0): Utxo {
 
 const FEE_RATE = 2;
 const P2WPKH = P2WPKH_SCRIPT_BYTES;
-const PAY = [P2WPKH];
-
-function select(utxos: Utxo[], amount: number, feeRate = FEE_RATE, outputScripts = PAY) {
-  return selectCoins({ utxos, amount, feeRate, outputScripts });
-}
-
-describe("estimateVsize", () => {
-  it("matches the consensus size of a one-in two-out P2WPKH spend", () => {
-    // base 113 B × 4 + witness 110 WU = 562 WU → 141 vB.
-    expect(estimateVsize(1, [P2WPKH, P2WPKH])).toBe(141);
-  });
-
-  it("grows by an input and by an output", () => {
-    expect(estimateVsize(2, [P2WPKH, P2WPKH]) - estimateVsize(1, [P2WPKH, P2WPKH])).toBe(68);
-    expect(
-      estimateVsize(1, [P2WPKH, P2WPKH, P2WPKH]) - estimateVsize(1, [P2WPKH, P2WPKH]),
-    ).toBe(31);
-  });
-
-  it("charges an OP_RETURN for the bytes it occupies", () => {
-    // An 80-byte memo is a 92 vB output, not a 31 vB one.
-    const memo = opReturnScriptBytes(MAX_MEMO_BYTES);
-    expect(memo).toBe(83);
-    expect(estimateVsize(1, [P2WPKH, P2WPKH, memo])).toBe(233);
-  });
-
-  it("prices every push encoding an OP_RETURN can take", () => {
-    expect(opReturnScriptBytes(0)).toBe(2);
-    expect(opReturnScriptBytes(75)).toBe(77);
-    expect(opReturnScriptBytes(76)).toBe(79); // PUSHDATA1 costs an extra byte
-    expect(opReturnScriptBytes(80)).toBe(83);
-  });
-});
-
-describe("selectCoins", () => {
-  it("uses one input when one suffices", () => {
-    const s = select([utxo(100_000)], 50_000);
-    expect(s.inputs).toHaveLength(1);
-    expect(s.amount).toBe(50_000);
-    expect(s.change).toBeGreaterThan(0);
-  });
-
-  it("always conserves value: inputs = amount + change + fee", () => {
-    const utxos = [utxo(90_000, 1), utxo(40_000, 2), utxo(7_000, 3)];
-    for (const amount of [1_000, 50_000, 95_000, 120_000]) {
-      const s = select(utxos, amount);
-      const gathered = s.inputs.reduce((sum, u) => sum + u.value, 0);
-      expect(s.amount + s.change + s.fee).toBe(gathered);
-    }
-  });
-
-  it("pays at least the fee its own size demands, memo or not", () => {
-    const utxos = [utxo(90_000, 1), utxo(40_000, 2)];
-    const shapes = [PAY, [...PAY, opReturnScriptBytes(MAX_MEMO_BYTES)]];
-    for (const outputs of shapes) {
-      for (const amount of [1_000, 60_000, 100_000]) {
-        const s = select(utxos, amount, FEE_RATE, outputs);
-        expect(s.fee).toBeGreaterThanOrEqual(Math.ceil(s.vsize * FEE_RATE));
-        expect(s.feeRate).toBeGreaterThanOrEqual(FEE_RATE);
-      }
-    }
-  });
-
-  it("adds inputs until the fee for those inputs is covered", () => {
-    const s = select([utxo(50_000, 1), utxo(50_000, 2)], 60_000);
-    expect(s.inputs).toHaveLength(2);
-  });
-
-  it("drops a dust change output and gives the remainder to the miner", () => {
-    const value = 100_000;
-    const feeWithChange = Math.ceil(estimateVsize(1, [P2WPKH, P2WPKH]) * FEE_RATE);
-    const amount = value - feeWithChange - (DUST_SATS - 1);
-    const s = select([utxo(value)], amount);
-    expect(s.change).toBe(0);
-    expect(s.fee).toBe(value - amount);
-    expect(s.vsize).toBe(estimateVsize(1, [P2WPKH]));
-  });
-
-  it("spends the largest UTXOs first", () => {
-    const s = select([utxo(90_000, 1), utxo(10_000, 2)], 5_000);
-    expect(s.inputs[0].value).toBe(90_000);
-    expect(s.inputs).toHaveLength(1);
-  });
-
-  it("reports what was missing when funds fall short", () => {
-    try {
-      select([utxo(10_000)], 50_000);
-      expect.unreachable("should have thrown");
-    } catch (err) {
-      expect(err).toBeInstanceOf(InsufficientFunds);
-      expect((err as InsufficientFunds).available).toBe(10_000);
-      expect((err as InsufficientFunds).required).toBeGreaterThan(50_000);
-    }
-  });
-
-  it("refuses amounts below the dust limit and rates at or below zero", () => {
-    expect(() => select([utxo(100_000)], DUST_SATS - 1)).toThrow(RangeError);
-    expect(() => select([utxo(100_000)], 0)).toThrow(RangeError);
-    expect(() => select([utxo(100_000)], 50_000, 0)).toThrow(RangeError);
-  });
-
-  it("charges more at a higher fee rate", () => {
-    const cheap = select([utxo(100_000)], 50_000, 1);
-    const dear = select([utxo(100_000)], 50_000, 20);
-    expect(dear.fee).toBeGreaterThan(cheap.fee);
-    expect(dear.change).toBeLessThan(cheap.change);
-  });
-});
 
 describe("buildPayment", () => {
   const key = deriveKey(new Uint8Array(32).fill(9));
@@ -242,7 +135,21 @@ describe("buildPayment", () => {
     ).toThrow(RangeError);
   });
 
-  it("exports FeeTooLow so an estimator regression is catchable", () => {
-    expect(new FeeTooLow(141, 233, 1).name).toBe("FeeTooLow");
+  /* Captured from the builder before coin selection moved to `coins.ts`:
+   * signatures are deterministic (RFC 6979), so the same inputs must give
+   * the same bytes, change output and all. */
+  it("builds the same bytes it always did", () => {
+    const build = (amountSats: number, feeRate: number, utxos: Utxo[], memo?: Uint8Array) =>
+      buildPayment(key, { to: RECIPIENT, amountSats, feeRate, utxos, ...(memo ? { memo } : {}) }).hex;
+    expect(build(120_000, 3, funding)).toBe(
+      "0200000000010101000000000000000000000000000000000000000000000000000000000000000100000000ffffffff02c0d4010000000000160014111533ea42a4732c38eca9a3336b4f66bc67f1bbd9360100000000001600148617baee59b13bb164d756bc1cf319c800c14fdd02483045022100beecfd074e59c3cb8c7e67d6e9aa3eb7a554d7b2826204830f678d44fe14b82b02203de16b5384a166130c2c819b6487d9319df61d287e5789dfd682e33efb88a4d601210341bdc80868f66e88187e86a9134e543cd02af98ea71b4b360f5d61257db0e69800000000",
+    );
+    expect(build(220_000, 2, funding, new TextEncoder().encode("btcfun:t1:mesh:7:02ab"))).toBe(
+      "0200000000010201000000000000000000000000000000000000000000000000000000000000000100000000ffffffff02000000000000000000000000000000000000000000000000000000000000000200000000ffffffff03605b030000000000160014111533ea42a4732c38eca9a3336b4f66bc67f1bb4e730000000000001600148617baee59b13bb164d756bc1cf319c800c14fdd0000000000000000176a1562746366756e3a74313a6d6573683a373a303261620247304402206b9855d5fefc3063842c1906b0f13aac44141f22208eb048d175daad40bfc3f3022009e5eba40388979ff55f259f25ef17ca918e476d190711e43ce0118b11478e5a01210341bdc80868f66e88187e86a9134e543cd02af98ea71b4b360f5d61257db0e69802473044022043ba5206d3b84dcb43b5883fca41ab73aa6823a5b37238f8bb24fac2d883e24f02202838a260e7a39630defc8a1bcd5176cd2f60e88ae8ff8331136105c6bceccb8401210341bdc80868f66e88187e86a9134e543cd02af98ea71b4b360f5d61257db0e69800000000",
+    );
+    // Change would be 545 sats: dropped, and paid to the miner instead.
+    expect(build(100_000 - 141 * 2 - 545, 2, [utxo(100_000, 5)])).toBe(
+      "0200000000010105000000000000000000000000000000000000000000000000000000000000000500000000ffffffff026583010000000000160014111533ea42a4732c38eca9a3336b4f66bc67f1bb21020000000000001600148617baee59b13bb164d756bc1cf319c800c14fdd02473044022072fd053bff844631b9cdcbd7563932986f5f77d1e585715ff5ac98a578d235b602207ab016180ad645f3d92f891da1781a3cb7b0704121e36873103a7ab48f8942c801210341bdc80868f66e88187e86a9134e543cd02af98ea71b4b360f5d61257db0e69800000000",
+    );
   });
 });

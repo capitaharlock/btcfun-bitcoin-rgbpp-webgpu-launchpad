@@ -4,7 +4,7 @@ import { activityId, faultIn } from "@/domain/activity";
 import { signActivity, type ActivityDraft } from "@/domain/activity";
 import type { SignedActivity } from "@/domain/activity";
 import { deriveKey, identityOf } from "@/domain/bitcoin";
-import type { Vault } from "@/adapters/vault";
+import type { ActivitySigner } from "@/domain/activity";
 import { TESTNET3 } from "@/domain/bitcoin";
 import { bidDraft, cancelDraft, composeBid, readBid, readiness, type Bid } from "./bid";
 
@@ -12,8 +12,8 @@ const alice = deriveKey(new Uint8Array(32).fill(3), TESTNET3);
 const bob = deriveKey(new Uint8Array(32).fill(4), TESTNET3);
 
 /** A wallet over a fixed key, as the vault presents one to signing code. */
-function vaultOf(key: typeof alice): Vault {
-  return { kind: "local", address: key.address, identity: identityOf(key), label: "test", use: async (fn) => fn(key) };
+function vaultOf(key: typeof alice): ActivitySigner {
+  return { identity: identityOf(key), use: async (fn) => fn(key) };
 }
 
 const terms = { launchId: "mesh-0000000000000000", tokenId: "0x" + "ee".repeat(32), amount: 100_00000000n, priceSats: 20_000 };

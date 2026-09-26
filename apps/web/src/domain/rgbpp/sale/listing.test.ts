@@ -1,18 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ccc } from "@ckb-ccc/core";
-import { OutScript, SigHash, Transaction } from "@scure/btc-signer";
-import { hash160 } from "@scure/btc-signer/utils";
-import { secp256k1 } from "@noble/curves/secp256k1";
+import { Transaction } from "@scure/btc-signer";
 
 import { fromBase64, toBase64 } from "@/domain/codec";
-import { deriveKey } from "@/domain/bitcoin";
-import { TESTNET3 } from "@/domain/bitcoin";
-import { TESTNET } from "./config";
-import { metadataHash, type LaunchTerms } from "./launch";
-import { decodeAmount, type TokenCell } from "./cells/token";
-import { tokenCellCapacity } from "./cells/capacity";
-import { BUYER_SEAL_VOUT, checkListing, completePurchase, planPurchase, signListing } from "./sale";
-import { sealFromArgs } from "./seal";
+import { deriveKey, TESTNET3 } from "@/domain/bitcoin";
+import { TESTNET } from "../config";
+import { metadataHash, type LaunchTerms } from "../launch";
+import type { TokenCell } from "../cells/token";
+import { tokenCellCapacity } from "../cells/capacity";
+import { checkListing, signListing } from "./listing";
 
 const seller = deriveKey(new Uint8Array(32).fill(1), TESTNET3);
 const buyer = deriveKey(new Uint8Array(32).fill(2), TESTNET3);
@@ -72,36 +67,5 @@ describe("listing", () => {
 
   it("refuses a price below dust", () => {
     expect(() => signListing(seller, meta, cell, 546, 100)).toThrow();
-  });
-});
-
-describe("purchase", () => {
-  it("keeps the seller's signature valid after the buyer adds inputs and outputs", () => {
-    const listing = signListing(seller, meta, cell, 546, 30_000);
-    const plan = planPurchase(TESTNET, terms, cell);
-    const funding = [{ txid: "ef".repeat(32), vout: 0, value: 100_000, confirmed: true }];
-    const signed = completePurchase(buyer, listing, plan, funding, 2);
-    const tx = Transaction.fromRaw(ccc.bytesFrom(signed.hex), { allowUnknownOutputs: true });
-
-    // Price to the seller at 0, commitment at 1, the buyer's seal at 2.
-    expect(ccc.hexFrom(tx.getOutput(0).script!)).toBe(ccc.hexFrom(seller.script));
-    expect(tx.getOutput(0).amount).toBe(30_000n);
-    expect(ccc.hexFrom(tx.getOutput(1).script!)).toBe("0x6a20" + plan.commitment.slice(2));
-    expect(ccc.hexFrom(tx.getOutput(BUYER_SEAL_VOUT).script!)).toBe(ccc.hexFrom(buyer.script));
-
-    // The seller's signature, checked against the final transaction.
-    const [signature, pubkey] = tx.getInput(0).finalScriptWitness!;
-    expect(ccc.hexFrom(pubkey)).toBe(ccc.hexFrom(seller.publicKey));
-    const scriptCode = OutScript.encode({ type: "pkh", hash: hash160(seller.publicKey) });
-    const digest = tx.preimageWitnessV0(0, scriptCode, SigHash.SINGLE_ANYONECANPAY, 546n);
-    expect(secp256k1.verify(signature.slice(0, -1), digest, seller.publicKey, { format: "der" } as never)).toBe(true);
-  });
-
-  it("reseals the whole cell to the buyer's output", () => {
-    const plan = planPurchase(TESTNET, terms, cell);
-    const out = ccc.CellOutput.from(plan.virtualTx.outputs[0]);
-    expect(sealFromArgs(out.lock.args).vout).toBe(BUYER_SEAL_VOUT);
-    expect(decodeAmount(plan.virtualTx.outputsData[0])).toBe(cell.amount);
-    expect(plan.needPaymasterCell).toBe(false);
   });
 });

@@ -3,7 +3,8 @@
  * Takes a plan (`operations.ts`) and produces the signed Bitcoin transaction
  * that commits to it: the commitment in an OP_RETURN at output 0, the plan's
  * seals and payments, then change. Its inputs are the sealed UTXOs the plan
- * consumes plus as many plain UTXOs as the outputs and the fee need.
+ * consumes plus as many plain UTXOs as the outputs and the fee need, chosen by
+ * `domain/bitcoin` `selectCoins` with the seals as mandatory inputs.
  *
  * The plain UTXOs must not carry RGB++ cells of their own. Spending one would
  * leave its cells sealed to an output that no longer exists — unspendable for
@@ -11,11 +12,11 @@
  * (`service.ts` `freeUtxos`), and this module never picks a coin by itself.
  */
 
-import { Address, OutScript, Transaction } from "@scure/btc-signer";
+import { Transaction } from "@scure/btc-signer";
 import { ccc } from "@ckb-ccc/core";
 
 import { DUST_SATS, ACTIVE, type NetworkConfig } from "@/domain/bitcoin";
-import { estimateVsize, FeeTooLow, InsufficientFunds, P2WPKH_SCRIPT_BYTES } from "@/domain/bitcoin";
+import { addressScript, assertFeeCovers, estimateVsize, P2WPKH_SCRIPT_BYTES, selectCoins } from "@/domain/bitcoin";
 import type { WalletKey } from "@/domain/bitcoin";
 import type { Utxo } from "@/domain/bitcoin";
 import { SEAL_SATS, type Plan, type PlannedOutput } from "./plans/plan";
@@ -46,7 +47,7 @@ function scriptOf(output: PlannedOutput, own: Uint8Array, network: NetworkConfig
     case "fee":
     case "paymaster":
     case "payment":
-      return OutScript.encode(Address(network.params).decode(output.address));
+      return addressScript(output.address, network);
   }
 }
 
@@ -80,32 +81,16 @@ export function signOperation(
   for (const o of outputs.slice(1)) {
     if (o.amount < BigInt(DUST_SATS)) throw new RangeError("an RGB++ output is below the dust limit");
   }
-  const scripts = outputs.map((o) => o.script.length);
   const spend = outputs.reduce((sum, o) => sum + Number(o.amount), 0);
 
-  const inputs = [...mandatory];
-  let gathered = inputs.reduce((sum, u) => sum + u.value, 0);
-  let change = 0;
-  let fee = 0;
-  const pool = [...free];
-  for (;;) {
-    const withChange = Math.ceil(estimateVsize(inputs.length, [...scripts, key.script.length]) * feeRate);
-    if (inputs.length > 0 && gathered >= spend + withChange) {
-      const remainder = gathered - spend - withChange;
-      if (remainder >= DUST_SATS) {
-        change = remainder;
-        fee = withChange;
-      } else {
-        change = 0;
-        fee = gathered - spend;
-      }
-      break;
-    }
-    const next = pool.shift();
-    if (!next) throw new InsufficientFunds(spend + withChange, gathered);
-    inputs.push(next);
-    gathered += next.value;
-  }
+  const { inputs, change, fee } = selectCoins({
+    utxos: free,
+    amount: spend,
+    feeRate,
+    outputScripts: outputs.map((o) => o.script.length),
+    changeScript: key.script.length,
+    mandatory,
+  });
 
   const tx = new Transaction({ allowUnknownOutputs: true });
   for (const utxo of inputs) {
@@ -119,8 +104,8 @@ export function signOperation(
   if (change > 0) tx.addOutput({ script: key.script, amount: BigInt(change) });
   tx.sign(key.privateKey);
   tx.finalize();
+  assertFeeCovers(fee, tx.vsize, feeRate);
 
-  if (fee < tx.vsize * feeRate) throw new FeeTooLow(fee, tx.vsize, feeRate);
   return { hex: tx.hex, txid: tx.id, vsize: tx.vsize, fee, funding: inputs.slice(mandatory.length) };
 }
 

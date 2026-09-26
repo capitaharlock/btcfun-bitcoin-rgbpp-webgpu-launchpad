@@ -1,7 +1,7 @@
 /* The market: an order book between people, one token at a time.
  *
  * Asks are listings — seller-signed halves of a Bitcoin transaction that a
- * buyer completes alone (`domain/rgbpp/sale.ts`). Bids are signed intentions
+ * buyer completes alone (`domain/rgbpp/sale/purchase.ts`). Bids are signed intentions
  * that lock nothing (`domain/market/bid.ts`); a holder meets one by signing a
  * listing for its exact terms, and the bidder completes it. Nobody holds
  * anything in between — not the seller's tokens, not the buyer's money, not
