@@ -15,7 +15,7 @@
 .meshkore/scripts/
 
 # Build and tooling
-node_modules/
+node_modules
 dist/
 *.tsbuildinfo
 .vite/
