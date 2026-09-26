@@ -24,4 +24,4 @@ bidder completes. Flowcharts and transaction anatomy for transfer and sale.
 
 ## Resolution
 
-Diagrams on `src/docs/pages/ownership` (a token cell sealed to a Bitcoin output and what the RGB++ lock checks), `transfers` (flow and transaction anatomy from `planTransfer`) and `market` (ask flow, purchase anatomy from `lib/rgbpp/sale.ts` with the SINGLE|ANYONECANPAY pair highlighted, and the bid flow as a signed intention met by an ordinary listing), consistent with `PROTOCOL.md` §5 and decision `2026-09-24-peer-to-peer-order-book`.
+Diagrams on `src/docs/pages/ownership` (a token cell sealed to a Bitcoin output and what the RGB++ lock checks), `transfers` (flow and transaction anatomy from `planTransfer`) and `market` (ask flow, purchase anatomy from `domain/rgbpp/sale.ts` with the SINGLE|ANYONECANPAY pair highlighted, and the bid flow as a signed intention met by an ordinary listing), consistent with `PROTOCOL.md` §5 and decision `2026-09-24-peer-to-peer-order-book`.

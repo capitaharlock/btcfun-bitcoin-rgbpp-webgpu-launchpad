@@ -5,7 +5,7 @@
  * radius, a shadow or a duration. A theme is a file that sets these values —
  * under `:root` for the default, under `:root[data-theme="<name>"]` for any
  * other — and the app switches between them with the `data-theme` attribute
- * on <html> (`lib/theme.ts`). Canvas and SVG art read the same properties at
+ * on <html> (`ui/theme.ts`). Canvas and SVG art read the same properties at
  * run time, so they follow the theme too.
  *
  *   type      --font-{display,heading,eyebrow,label,ui,body,mono,numeric}
@@ -36,7 +36,7 @@
  *   motion    --dur-{fast,base,slow}, --ease, --ease-out, --ease-step, --blink
  *   texture   --scanlines, --backdrop-grid (0 or 1: opacity multipliers)
  *
- * The six launch accents (`lib/launches/draft.ts` ACCENTS) name
+ * The six launch accents (`domain/launches/draft.ts` ACCENTS) name
  * --amber --cyan --magenta --violet --mint --warn inside signed
  * announcements, so those six names are permanent; only their values belong
  * to a theme.

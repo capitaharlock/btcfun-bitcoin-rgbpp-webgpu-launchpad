@@ -3,7 +3,7 @@
  * The end-to-end runner has to exercise the *same* code the browser runs —
  * a second implementation of coin selection or challenge derivation would
  * test itself rather than the product. Vite's SSR loader resolves imports
- * exactly as the app does, so `lib/bitcoin/payment.ts` here is the file that
+ * exactly as the app does, so `domain/bitcoin/payment.ts` here is the file that
  * ships, extensionless imports and all.
  *
  * No new dependency: Vite is already how this app is built.
@@ -49,6 +49,7 @@ export async function open() {
     logLevel: "error",
     optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true },
+    resolve: { alias: { "@": `${root}src` } },
     appType: "custom",
     // The app reads these through `import.meta.env`; in Node there is no
     // index.html to inject them, so they are defined here instead. An unset
@@ -64,7 +65,7 @@ export async function open() {
   return server;
 }
 
-/** Import one module from `src/`, e.g. `load("lib/bitcoin/payment.ts")`. */
+/** Import one module from `src/`, e.g. `load("domain/bitcoin/payment.ts")`. */
 export async function load(path) {
   const s = await open();
   return s.ssrLoadModule(`/src/${path}`);

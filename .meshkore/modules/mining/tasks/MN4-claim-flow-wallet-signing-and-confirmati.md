@@ -27,4 +27,4 @@ Wire claim/signing for the first wallet and present provisional, CKB-confirmed a
 
 ## Resolution
 
-Every operation is tracked through explicit stages — broadcast, confirmed and queued, settled on CKB, failed — in `state/TokensProvider.tsx`, and each screen names the stage it is waiting on.
+Every operation is tracked through explicit stages — broadcast, confirmed and queued, settled on CKB, failed — in `app/providers/TokensProvider.tsx`, and each screen names the stage it is waiting on.

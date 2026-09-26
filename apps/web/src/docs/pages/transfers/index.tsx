@@ -1,8 +1,8 @@
-import { Diagram } from "../../../components/diagram/Diagram";
-import type { DiagramSpec } from "../../../components/diagram/model";
-import { group } from "../../../lib/format";
-import { SEAL_SATS } from "../../../lib/rgbpp/operations";
-import { DocLink, Technical } from "../../parts";
+import { Diagram } from "@/features/diagram/Diagram";
+import type { DiagramSpec } from "@/features/diagram/model";
+import { group } from "@/ui/format";
+import { SEAL_SATS } from "@/domain/rgbpp";
+import { DocLink, Technical } from "@/docs/parts";
 
 const seal = group(SEAL_SATS);
 
@@ -124,7 +124,7 @@ export default function TransfersPage() {
         <Technical>
           <ul>
             <li>
-              <code>planTransfer</code> in <code>lib/rgbpp/plans/transfer.ts</code>: the recipient's cell is sealed to output 1
+              <code>planTransfer</code> in <code>domain/rgbpp/plans/transfer.ts</code>: the recipient's cell is sealed to output 1
               (which pays their address), the sender's change to output 2. The commitment is at output 0 and bitcoin change
               comes last. Its Bitcoin script is encoded by the same <code>commitmentScript</code> function used for mint and
               purchase transactions.

@@ -23,4 +23,4 @@ and after. Explains when tokens are delivered and where their data lives.
 
 ## Resolution
 
-`apps/web/src/docs/pages/mint/diagrams.ts`: the open → ticket → mine → mint flowchart with the mint script's checks (both payments, anchor within 144 blocks, clz ≥ 16, exact amount → armed / rejected / minted), the miner cell's 13-byte data through idle → armed → idle, and the anatomy of the ticket and mint transactions in the output order of `lib/rgbpp/operations.ts` (commitment, seals, promoter 9,500, platform 500, paymaster, change) with each CKB cell's seal and the OP_RETURN commitment drawn.
+`apps/web/src/docs/pages/mint/diagrams.ts`: the open → ticket → mine → mint flowchart with the mint script's checks (both payments, anchor within 144 blocks, clz ≥ 16, exact amount → armed / rejected / minted), the miner cell's 13-byte data through idle → armed → idle, and the anatomy of the ticket and mint transactions in the output order of `domain/rgbpp/index.ts` (commitment, seals, promoter 9,500, platform 500, paymaster, change) with each CKB cell's seal and the OP_RETURN commitment drawn.

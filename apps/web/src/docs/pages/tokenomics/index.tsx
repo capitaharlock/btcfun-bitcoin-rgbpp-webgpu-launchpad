@@ -1,21 +1,9 @@
-import { Diagram } from "../../../components/diagram/Diagram";
-import type { DiagramSpec } from "../../../components/diagram/model";
-import { atoms, group } from "../../../lib/format";
-import { REGISTRATION_SATS } from "../../../lib/launches/certificate";
-import {
-  ANCHOR_GRACE_BLOCKS,
-  DECIMALS,
-  HALVING_BLOCKS,
-  MIN_CLZ,
-  NEW_CELL,
-  PAYMASTER_BUDGET_SATS,
-  PLATFORM_PERCENT,
-  REUSE,
-  reward,
-  terminalHalving,
-  TICKET_SATS,
-} from "../../../lib/standard";
-import { DocLink, Formula, Technical } from "../../parts";
+import { Diagram } from "@/features/diagram/Diagram";
+import type { DiagramSpec } from "@/features/diagram/model";
+import { atoms, group } from "@/ui/format";
+import { REGISTRATION_SATS } from "@/domain/launches";
+import { ANCHOR_GRACE_BLOCKS, DECIMALS, HALVING_BLOCKS, MIN_CLZ, NEW_CELL, PAYMASTER_BUDGET_SATS, PLATFORM_PERCENT, REUSE, reward, terminalHalving, TICKET_SATS } from "@/domain/protocol";
+import { DocLink, Formula, Technical } from "@/docs/parts";
 
 const tokens = (clz: number, halvings: number) => atoms(reward(clz, 0, halvings * HALVING_BLOCKS), DECIMALS, 0);
 
@@ -162,7 +150,7 @@ k      = halvings between the launch's opening and the ticket's anchor`}</Formul
         <Technical>
           <ul>
             <li>
-              Constants (<code>PROTOCOL.md</code> §4, <code>lib/standard.ts</code>, <code>contracts/mint-core</code>):
+              Constants (<code>PROTOCOL.md</code> §4, <code>domain/protocol/standard.ts</code>, <code>contracts/mint-core</code>):
               decimals {DECIMALS}, unit 10^8 atoms, halving {group(HALVING_BLOCKS)} blocks, minimum clz {MIN_CLZ}, ticket{" "}
               {group(TICKET_SATS)} sats, paymaster budget {group(PAYMASTER_BUDGET_SATS)}, platform {PLATFORM_PERCENT} % of the
               rest rounded down, anchor

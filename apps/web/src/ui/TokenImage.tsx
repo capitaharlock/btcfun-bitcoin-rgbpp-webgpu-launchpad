@@ -2,14 +2,14 @@
  *
  * One component for every surface — catalogue, token page, market, activity,
  * holdings — so a token looks the same everywhere. It shows the launch's art
- * when there is some (`lib/launches/image.ts`) and falls back to the launch's
+ * when there is some (`domain/launches/image.ts`) and falls back to the launch's
  * pixel sigil when there is none or the picture fails to load, so a broken
  * link degrades to the mark the launch always had rather than to a hole.
  */
 
 import { memo, useState } from "react";
 
-import type { TokenArt } from "../lib/launches/image";
+import type { TokenArt } from "@/domain/launches";
 import { Sigil, type SigilSize } from "./Sigil";
 import "./sigil.css";
 

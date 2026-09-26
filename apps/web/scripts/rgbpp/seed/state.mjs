@@ -5,7 +5,7 @@
  * owns it; the steps import `state` and `write` from here.
  */
 
-import { create, network, stateFile } from "../kit.mjs";
+import { launches, network, stateFile } from "../kit.mjs";
 
 /** How many mints `advance --loop` gives each launch before it stops. */
 export const ROUNDS = Number(process.env.ROUNDS ?? 2);
@@ -18,4 +18,4 @@ export const { state, write } = stateFile("seed", {
 });
 
 /** A recorded launch's terms on the active network. */
-export const launchTerms = (c) => create.termsOf(c, network.ACTIVE);
+export const launchTerms = (c) => launches.termsOf(c, network.ACTIVE);

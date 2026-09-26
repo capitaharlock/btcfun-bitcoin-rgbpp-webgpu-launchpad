@@ -1,32 +1,32 @@
 /* The shell: providers, the top bar, the footer and the page the route names.
  *
- * Routing itself lives in `lib/router.ts` and `hooks/useRoute.ts`, so the
+ * Routing itself lives in `app/router.ts` and `app/hooks/useRoute.ts`, so the
  * views depend on the router and never on the shell that renders them.
  */
 
 import { lazy, Suspense } from "react";
-import { Launches } from "./views/Launches";
-import { LaunchView } from "./views/Launch";
-import { NETWORK, WalletProvider, useWallet } from "./state/WalletProvider";
-import { LaunchesProvider } from "./state/LaunchesProvider";
-import { TokensProvider } from "./state/TokensProvider";
-import { group } from "./lib/format";
-import { PixelBursts } from "./ui/PixelBursts";
-import { BitcoinMark } from "./ui/PixelIcon";
-import { Chip } from "./ui/primitives";
-import { DemoBadge } from "./components/wallet/DemoBadge";
-import { WalletPill } from "./components/wallet/WalletPill";
-import { useRoute } from "./hooks/useRoute";
+import { Launches } from "@/pages/Launches";
+import { LaunchView } from "@/pages/Launch";
+import { NETWORK, WalletProvider, useWallet } from "@/app/providers/WalletProvider";
+import { LaunchesProvider } from "@/app/providers/LaunchesProvider";
+import { TokensProvider } from "@/app/providers/TokensProvider";
+import { group } from "@/ui/format";
+import { PixelBursts } from "@/ui/PixelBursts";
+import { BitcoinMark } from "@/ui/PixelIcon";
+import { Chip } from "@/ui/primitives";
+import { DemoBadge } from "@/features/wallet/DemoBadge";
+import { WalletPill } from "@/features/wallet/WalletPill";
+import { useRoute } from "@/app/hooks/useRoute";
 
 // Sections a visitor may never open load on demand; the front page and a
 // launch page, where nearly everyone starts, ship with the first chunk.
-const Lab = lazy(() => import("./views/Lab").then((m) => ({ default: m.Lab })));
-const ProofView = lazy(() => import("./views/Proof").then((m) => ({ default: m.ProofView })));
-const WalletView = lazy(() => import("./views/Wallet").then((m) => ({ default: m.WalletView })));
-const Market = lazy(() => import("./views/Market").then((m) => ({ default: m.Market })));
-const Activity = lazy(() => import("./views/Activity").then((m) => ({ default: m.Activity })));
-const Create = lazy(() => import("./views/create").then((m) => ({ default: m.Create })));
-const Docs = lazy(() => import("./views/Docs").then((m) => ({ default: m.Docs })));
+const Lab = lazy(() => import("@/pages/Lab").then((m) => ({ default: m.Lab })));
+const ProofView = lazy(() => import("@/pages/Proof").then((m) => ({ default: m.ProofView })));
+const WalletView = lazy(() => import("@/pages/Wallet").then((m) => ({ default: m.WalletView })));
+const Market = lazy(() => import("@/pages/Market").then((m) => ({ default: m.Market })));
+const Activity = lazy(() => import("@/pages/Activity").then((m) => ({ default: m.Activity })));
+const Create = lazy(() => import("@/pages/create/index").then((m) => ({ default: m.Create })));
+const Docs = lazy(() => import("@/pages/Docs").then((m) => ({ default: m.Docs })));
 
 /**
  * The four things you can do, in the order you would do them.

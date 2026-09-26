@@ -23,16 +23,16 @@ verification. *Implemented* does not mean *run live*: see the next section.
 
 | Capability | What it actually does | Where |
 |---|---|---|
-| Standard reward | `floor(10^8 × clz² / 2^k)` in exact integers, Rust and TypeScript checked against the same vectors | `contracts/mint-core`, `lib/standard.ts`, `contracts/vectors/reward.json` |
+| Standard reward | `floor(10^8 × clz² / 2^k)` in exact integers, Rust and TypeScript checked against the same vectors | `contracts/mint-core`, `domain/protocol/standard.ts`, `contracts/vectors/reward.json` |
 | Mint script | Rust `no_std` type script enforcing open, ticket, mint and close of a miner cell, the promoter payment, the anchor window and the exact reward; 24 CKB-VM tests including the rejected cases | `contracts/mint`, `contracts/tests` |
 | Mint script on CKB testnet | Deployed with `hash_type: data1` in an unspendable cell, code hash `0xb8af59e9…c72f`; cycles per whole transaction: open ~42k, ticket ~273k, mint ~313k | `contracts/deployments/testnet.json` |
-| RGB++ operations | Plans for open, ticket, mint and transfer; the commitment, pinned by test to the RGB++ SDK and lock; the signed Bitcoin side; hand-off to the RGB++ queue service | `lib/rgbpp/` |
-| Token identity | A launch is identity, promoter address and opening height; its terms are the mint script args, so the xUDT type hash commits to them | `lib/rgbpp/launch.ts`, `lib/launches/create.ts` |
-| Browser mining | CPU workers and a WebGPU kernel over the ticket's challenge, reward shown live; every GPU candidate re-hashed on the CPU | `lib/mining/` |
-| Wallet | WebAuthn PRF → BIP39 → BIP84, P2WPKH on testnet3; a standard mnemonic, so coins are sweepable elsewhere | `lib/bitcoin/` |
-| Holdings and transfers | Balances read from xUDT cells sealed to the wallet's outputs; a transfer is one Bitcoin transaction | `views/Holdings.tsx` |
-| Sales | Seller signs its token UTXO and price with `SIGHASH_SINGLE \| ANYONECANPAY`; the buyer completes and broadcasts alone | `lib/rgbpp/sale.ts`, `views/Market.tsx` |
-| Proof page | Recomputes a mint from the Bitcoin and CKB transactions: commitment, ticket, hash, amount | `lib/rgbpp/verify.ts`, `views/Proof.tsx` |
+| RGB++ operations | Plans for open, ticket, mint and transfer; the commitment, pinned by test to the RGB++ SDK and lock; the signed Bitcoin side; hand-off to the RGB++ queue service | `domain/rgbpp/` |
+| Token identity | A launch is identity, promoter address and opening height; its terms are the mint script args, so the xUDT type hash commits to them | `domain/rgbpp/launch.ts`, `app/launches/create.ts` |
+| Browser mining | CPU workers and a WebGPU kernel over the ticket's challenge, reward shown live; every GPU candidate re-hashed on the CPU | `domain/mining/` |
+| Wallet | WebAuthn PRF → BIP39 → BIP84, P2WPKH on testnet3; a standard mnemonic, so coins are sweepable elsewhere | `domain/bitcoin/` |
+| Holdings and transfers | Balances read from xUDT cells sealed to the wallet's outputs; a transfer is one Bitcoin transaction | `pages/Holdings.tsx` |
+| Sales | Seller signs its token UTXO and price with `SIGHASH_SINGLE \| ANYONECANPAY`; the buyer completes and broadcasts alone | `domain/rgbpp/sale.ts`, `pages/Market.tsx` |
+| Proof page | Recomputes a mint from the Bitcoin and CKB transactions: commitment, ticket, hash, amount | `domain/rgbpp/verify.ts`, `pages/Proof.tsx` |
 | Activity index | One Cloudflare Worker over D1 storing signed announcements and listings; re-verified by every reader, never authoritative | `worker/` |
 | Browser suite | 65 tests over simulated Bitcoin, RGB++ and CKB, with the mint rules as the oracle | `apps/web/e2e/` |
 

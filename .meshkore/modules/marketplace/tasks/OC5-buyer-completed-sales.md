@@ -26,4 +26,4 @@ broadcasts it with no action from the seller (`PROTOCOL.md` §5.1).
 
 ## Resolution
 
-`lib/rgbpp/sale.ts` signs a listing with SIGHASH_SINGLE|ANYONECANPAY over the token cell's UTXO and the price, and completes a purchase for the buyer; a unit test verifies the seller's signature on the final transaction. Listings are shown only after their PSBT, signer, live cell and unspent seal check out. Browser tests cover a sale completed while the seller is away, cancellation, and tampered listings.
+`domain/rgbpp/sale.ts` signs a listing with SIGHASH_SINGLE|ANYONECANPAY over the token cell's UTXO and the price, and completes a purchase for the buyer; a unit test verifies the seller's signature on the final transaction. Listings are shown only after their PSBT, signer, live cell and unspent seal check out. Browser tests cover a sale completed while the seller is away, cancellation, and tampered listings.

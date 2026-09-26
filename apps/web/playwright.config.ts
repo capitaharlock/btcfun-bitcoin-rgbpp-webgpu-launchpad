@@ -13,7 +13,7 @@
  * `HEADED=1` shows the browser; `SLOWMO=<ms>` slows it enough to follow.
  */
 
-import { TEST_CERT_KEY } from "./src/lib/launches/certificate";
+import { TEST_CERT_KEY } from "./src/domain/launches/certificate-key";
 import { defineConfig, devices } from "@playwright/test";
 import { PLATFORM_IDENTITY } from "./e2e/support/platform";
 

@@ -5,7 +5,7 @@
  * can re-check a certificate and the payment it names from the two chains.
  */
 
-import { registrationFault, signCertificate } from "../src/lib/launches/certificate";
+import { registrationFault, signCertificate } from "../src/domain/launches/certificate";
 import type { Env } from "./index";
 import { error, json, MAX_BODY_BYTES } from "./http";
 

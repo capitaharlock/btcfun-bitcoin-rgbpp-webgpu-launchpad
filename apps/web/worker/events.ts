@@ -4,8 +4,8 @@
  * client runs; it is never taken as evidence that what it describes happened.
  */
 
-import { activityId, faultIn } from "../src/lib/activity/verify";
-import type { SignedActivity } from "../src/lib/activity/types";
+import { activityId, faultIn } from "../src/domain/activity/verify";
+import type { SignedActivity } from "../src/domain/activity/types";
 import type { Env } from "./index";
 import { error, json, MAX_BODY_BYTES } from "./http";
 

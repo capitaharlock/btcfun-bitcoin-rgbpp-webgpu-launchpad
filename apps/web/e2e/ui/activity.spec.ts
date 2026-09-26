@@ -2,10 +2,10 @@
 
 import { secp256k1 } from "@noble/curves/secp256k1";
 
-import { activityDigest, activityId } from "../../src/lib/activity/verify";
-import { ACTIVITY_VERSION, type ActivityKind, type SignedActivity } from "../../src/lib/activity/types";
-import { bytesToHex } from "../../src/lib/bytes";
-import { signDigestWith } from "../../src/lib/signatures";
+import { activityDigest, activityId } from "../../src/domain/activity/verify";
+import { ACTIVITY_VERSION, type ActivityKind, type SignedActivity } from "../../src/domain/activity/types";
+import { bytesToHex } from "../../src/domain/codec/bytes";
+import { signDigestWith } from "../../src/domain/codec/signatures";
 import { test, expect } from "../support/fixtures";
 import { announce, browserKeyOn, secondVisitor } from "../support/flows";
 import type { RgbppSim } from "../support/rgbpp";

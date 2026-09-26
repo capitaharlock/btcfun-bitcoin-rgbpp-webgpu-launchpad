@@ -20,7 +20,7 @@ import type { Page } from "@playwright/test";
 import { ccc } from "@ckb-ccc/core";
 import { Address, OutScript, TEST_NETWORK } from "@scure/btc-signer";
 
-import type { SignedActivity } from "../../../src/lib/activity/types";
+import type { SignedActivity } from "../../../src/domain/activity/types";
 import type { ChainSim } from "../chain";
 import { CKB_RPC, RGBPP_SERVICE } from "../endpoints";
 import { answerRpc } from "./ckb-node";

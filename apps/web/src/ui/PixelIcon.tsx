@@ -5,13 +5,13 @@
  * are suggested rather than reproduced: at nine pixels a logo is a sketch,
  * and the accessible name — never the drawing — says where a link goes.
  * Only the glyphs live here; the launch's rows of links that use them are in
- * `components/launch/Links.tsx`.
+ * `features/launch/Links.tsx`.
  */
 
 import { memo, useMemo } from "react";
 
-import type { LinkKind } from "../lib/launches/create";
-import { fromBitmap, pixelPath } from "../lib/pixels/pixels";
+import type { LinkKind } from "@/domain/launches";
+import { fromBitmap, pixelPath } from "@/ui/pixels/pixels";
 
 const ICONS: Record<LinkKind, readonly string[]> = {
   website: [

@@ -1,5 +1,5 @@
-import { ACTIVE } from "../../../lib/bitcoin/network";
-import { Technical } from "../../parts";
+import { ACTIVE } from "@/domain/bitcoin";
+import { Technical } from "@/docs/parts";
 
 export default function TestnetPage() {
   return (

@@ -5,5 +5,5 @@
     "types": ["@cloudflare/workers-types"],
     "noEmit": true
   },
-  "include": ["*.ts", "../src/lib/activity/verify.ts", "../src/lib/activity/types.ts", "../src/lib/launches/certificate.ts"]
+  "include": ["*.ts", "../src/domain/activity/verify.ts", "../src/domain/activity/types.ts", "../src/domain/launches/certificate.ts"]
 }

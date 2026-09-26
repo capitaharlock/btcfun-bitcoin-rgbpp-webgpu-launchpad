@@ -4,12 +4,12 @@
 
 import { ccc } from "@ckb-ccc/core";
 
-import { displayTxid } from "../lib/bitcoin/txid";
-import { TESTNET } from "../lib/rgbpp/config";
-import { metadataHash, type LaunchTerms } from "../lib/rgbpp/launch";
-import { minerCellCapacity, tokenCellCapacity } from "../lib/rgbpp/cells/capacity";
-import type { MinerCell } from "../lib/rgbpp/cells/miner";
-import type { SealedCell } from "../lib/rgbpp/cells/sealed";
+import { displayTxid } from "@/domain/bitcoin";
+import { TESTNET } from "@/domain/rgbpp";
+import { metadataHash, type LaunchTerms } from "@/domain/rgbpp";
+import { minerCellCapacity, tokenCellCapacity } from "@/domain/rgbpp";
+import type { MinerCell } from "@/domain/rgbpp";
+import type { SealedCell } from "@/domain/rgbpp";
 
 export const terms: LaunchTerms = {
   h0: 4_800_000,

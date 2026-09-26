@@ -10,7 +10,7 @@ created: 2026-09-23
 updated: 2026-09-24
 ---
 
-The proof page recomputes commitment, ticket, disarm, work and amount of any mint from chain data (`apps/web/src/views/Proof.tsx`, `lib/rgbpp/verify.ts`). What remains is portability and declared trust roots.
+The proof page recomputes commitment, ticket, disarm, work and amount of any mint from chain data (`apps/web/src/pages/Proof.tsx`, `domain/rgbpp/verify.ts`). What remains is portability and declared trust roots.
 
 ## Execution
 

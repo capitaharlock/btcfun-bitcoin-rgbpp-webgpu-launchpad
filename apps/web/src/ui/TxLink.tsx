@@ -9,8 +9,8 @@
 
 import type { ReactNode } from "react";
 
-import { addressUrl, txUrl } from "../lib/bitcoin/network";
-import { ckbTxUrl } from "../lib/rgbpp/explorer";
+import { addressUrl, txUrl } from "@/domain/bitcoin";
+import { ckbTxUrl } from "@/domain/rgbpp";
 
 interface LinkAttrs {
   className?: string;

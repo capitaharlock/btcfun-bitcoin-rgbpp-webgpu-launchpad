@@ -10,7 +10,7 @@
 
 import { memo, useMemo } from "react";
 
-import { pixelSigil, SIGIL_HEIGHT, SIGIL_WIDTH, sigilPaths } from "../lib/pixels/sigil";
+import { pixelSigil, SIGIL_HEIGHT, SIGIL_WIDTH, sigilPaths } from "@/ui/pixels/sigil";
 import "./sigil.css";
 
 export type SigilSize = "sm" | "md" | "lg" | "xl";

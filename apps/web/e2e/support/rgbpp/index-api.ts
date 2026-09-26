@@ -8,9 +8,9 @@
 
 import type { Route } from "@playwright/test";
 
-import type { SignedActivity } from "../../../src/lib/activity/types";
-import { activityId, faultIn } from "../../../src/lib/activity/verify";
-import { registrationFault, signCertificate, TEST_CERT_SECRET } from "../../../src/lib/launches/certificate";
+import type { SignedActivity } from "../../../src/domain/activity/types";
+import { activityId, faultIn } from "../../../src/domain/activity/verify";
+import { registrationFault, signCertificate, TEST_CERT_SECRET } from "../../../src/domain/launches/certificate";
 import { hex } from "../bytes";
 import type { RgbppSim } from "./index";
 import { PLATFORM_SCRIPT } from "./oracle";

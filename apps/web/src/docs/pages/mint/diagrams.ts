@@ -1,11 +1,11 @@
 /* The mint circuit, as data. Output order and amounts follow
- * `lib/rgbpp/plans/` (`planTicket`, `planArm`, `planMint`) and
+ * `domain/rgbpp/plans/` (`planTicket`, `planArm`, `planMint`) and
  * `bitcoin.ts`: commitment at 0, seals next, then payments, then change. */
 
-import type { DiagramSpec } from "../../../components/diagram/model";
-import { group } from "../../../lib/format";
-import { SEAL_SATS } from "../../../lib/rgbpp/operations";
-import { ANCHOR_GRACE_BLOCKS, MIN_CLZ, NEW_CELL, REUSE, TICKET_SATS } from "../../../lib/standard";
+import type { DiagramSpec } from "@/features/diagram/model";
+import { group } from "@/ui/format";
+import { SEAL_SATS } from "@/domain/rgbpp";
+import { ANCHOR_GRACE_BLOCKS, MIN_CLZ, NEW_CELL, REUSE, TICKET_SATS } from "@/domain/protocol";
 
 const seal = group(SEAL_SATS);
 

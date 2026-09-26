@@ -53,7 +53,7 @@ script refuses an all-zero registration.
   past the inputs; the check waits for the arming, where the witness is ours.
   A paid cell of an uncertified launch can never be armed; the app never offers
   such a launch.
-- **Shared implementation.** `apps/web/src/lib/launches/certificate.ts` is used
+- **Shared implementation.** `apps/web/src/domain/launches/certificate.ts` is used
   by the browser, the Worker and the scripts; `contracts/mint-core` has the
   Rust side; `contracts/vectors/reward.json` (`admission`) holds a vector both
   reproduce byte for byte, signed with a published test key (`0x42` × 32).

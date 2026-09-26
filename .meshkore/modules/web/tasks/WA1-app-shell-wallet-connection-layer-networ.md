@@ -26,4 +26,4 @@ Build the smallest React/TypeScript shell for the selected wallet and network, r
 
 ## Resolution
 
-The app's own passkey wallet (`apps/web/src/lib/bitcoin/vault.ts`, `passkey.ts`, `state/WalletProvider.tsx`) signs every demo flow — open, ticket, mint, transfer and sale (`lib/rgbpp/operations.ts`, `lib/rgbpp/sale.ts`). An address on another network is refused and a provider outage degrades the page rather than breaking it (`e2e/ui/wallet.spec.ts`, `create-wizard.spec.ts`, `holdings.spec.ts`, `navigation.spec.ts`). Confirmation on the live networks is OC8; wallets beyond the app's own are an open decision (`PROTOCOL.md` §2).
+The app's own passkey wallet (`apps/web/src/adapters/vault/vault.ts`, `passkey.ts`, `app/providers/WalletProvider.tsx`) signs every demo flow — open, ticket, mint, transfer and sale (`domain/rgbpp/index.ts`, `domain/rgbpp/sale.ts`). An address on another network is refused and a provider outage degrades the page rather than breaking it (`e2e/ui/wallet.spec.ts`, `create-wizard.spec.ts`, `holdings.spec.ts`, `navigation.spec.ts`). Confirmation on the live networks is OC8; wallets beyond the app's own are an open decision (`PROTOCOL.md` §2).

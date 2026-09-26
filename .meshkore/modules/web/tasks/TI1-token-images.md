@@ -30,13 +30,13 @@ know to click.
 
 ## Resolution
 
-- `lib/launches/progress.ts` (position, labels, ladder), `components/launch/HalvingBar.tsx`.
-- `data/showcase.ts`: six examples (halving 0, 2, 3, 9, spent, opening) whose supply is the sum of
+- `features/launch/halvings.ts` (position, labels, ladder), `features/launch/HalvingBar.tsx`.
+- `domain/launches/showcase.ts`: six examples (halving 0, 2, 3, 9, spent, opening) whose supply is the sum of
   their mint tallies at `reward()`; `showcase.test.ts` checks it and, with `@ts-expect-error`, that
   an example cannot reach the miner or the market.
-- `lib/launches/featured.ts`: `FEATURED_LAUNCH_IDS` (empty) and DEMO-by-`PLATFORM_IDENTITY`
+- `domain/launches/featured.ts`: `FEATURED_LAUNCH_IDS` (empty) and DEMO-by-`PLATFORM_IDENTITY`
   (`VITE_PLATFORM_IDENTITY`, the seed wallet by default; the browser suite builds with its own key).
-- `lib/launches/image.ts`: `imageFor`, `imageMatches`, `PLATFORM_IMAGES`, `artFor`; `image` is signed
+- `domain/launches/image.ts`: `imageFor`, `imageMatches`, `PLATFORM_IMAGES`, `artFor`; `image` is signed
   in `commitmentId` only when present, so older announcements keep their digest. The wizard's step 3
   takes an image; it does not hash it into the terms.
 - `ui/TokenImage.tsx` on the catalogue (hero), token page (xl, with "verified" / "≠ terms" pips),

@@ -24,4 +24,4 @@ reads balances from the chain instead of the local ledger.
 
 ## Resolution
 
-The app builds open, ticket, mint and transfer as plans (`lib/rgbpp/operations.ts`), signs the committing Bitcoin transaction, and hands the CKB side to the RGB++ queue; balances are the xUDT cells sealed to the wallet's outputs. The local signed ledger is removed. Funding never spends a seal, including one of an operation still landing.
+The app builds open, ticket, mint and transfer as plans (`domain/rgbpp/index.ts`), signs the committing Bitcoin transaction, and hands the CKB side to the RGB++ queue; balances are the xUDT cells sealed to the wallet's outputs. The local signed ledger is removed. Funding never spends a seal, including one of an operation still landing.

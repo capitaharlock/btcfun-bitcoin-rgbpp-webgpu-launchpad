@@ -20,7 +20,7 @@ export async function fundedWallet(app: App, sim: ChainSim, sats = 200_000): Pro
 
 /**
  * The platform's key, funded. On the testnet showcase the site offers mining
- * only on the platform's DEMO launch (`lib/launches/featured.ts`), so a spec
+ * only on the platform's DEMO launch (`domain/launches/featured.ts`), so a spec
  * that mines announces DEMO under this key.
  */
 export async function platformWallet(app: App, sim: ChainSim, sats = 200_000): Promise<Wallet> {

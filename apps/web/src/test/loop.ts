@@ -1,8 +1,8 @@
 /* Fixtures for the mining loop tests: miner cells, operations and a loop
  * input to vary one fact at a time. Never imported by the app. */
 
-import { deriveLoop, type LoopInput, type LoopOperation } from "../lib/mining/loop";
-import type { MinerCell } from "../lib/rgbpp/operations";
+import { deriveLoop, type LoopInput, type LoopOperation } from "@/domain/mining";
+import type { MinerCell } from "@/domain/rgbpp";
 
 export const cell = (state: "idle" | "armed" | "paid", txid = "aa".repeat(32), anchor = 900): MinerCell => ({
   outPoint: { txHash: "0x" + "12".repeat(32), index: 0 },

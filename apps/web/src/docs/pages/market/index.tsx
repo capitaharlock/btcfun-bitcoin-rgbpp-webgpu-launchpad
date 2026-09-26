@@ -1,10 +1,10 @@
-import { Diagram } from "../../../components/diagram/Diagram";
-import type { DiagramSpec } from "../../../components/diagram/model";
-import { DUST_SATS } from "../../../lib/bitcoin/network";
-import { group } from "../../../lib/format";
-import { SEAL_SATS } from "../../../lib/rgbpp/operations";
-import { BUYER_SEAL_VOUT } from "../../../lib/rgbpp/sale";
-import { DocLink, Technical } from "../../parts";
+import { Diagram } from "@/features/diagram/Diagram";
+import type { DiagramSpec } from "@/features/diagram/model";
+import { DUST_SATS } from "@/domain/bitcoin";
+import { group } from "@/ui/format";
+import { SEAL_SATS } from "@/domain/rgbpp";
+import { BUYER_SEAL_VOUT } from "@/domain/rgbpp";
+import { DocLink, Technical } from "@/docs/parts";
 
 const seal = group(SEAL_SATS);
 
@@ -198,7 +198,7 @@ export default function MarketPage() {
             <li>
               A listing is a PSBT with one input (the seal of the token cell for sale) and one output (the price to the
               seller), the input signed with <code>SIGHASH_SINGLE | ANYONECANPAY</code> and not finalised: it pays out more
-              than it takes in until a buyer completes it (<code>lib/rgbpp/sale.ts</code>).
+              than it takes in until a buyer completes it (<code>domain/rgbpp/sale.ts</code>).
             </li>
             <li>
               The buyer's transaction: the seller's input at 0, then the buyer's funding; outputs are the price at 0, the

@@ -24,4 +24,4 @@ mints now, and the blocks left before the next halving.
 
 ## Resolution
 
-`lib/standard.ts` reproduces the shared vectors; the mining panel shows "mintable now" — the standard reward for the best hash at the ticket's rate — and the launch page shows supply, token cells and miner cells read from CKB.
+`domain/protocol/standard.ts` reproduces the shared vectors; the mining panel shows "mintable now" — the standard reward for the best hash at the ticket's rate — and the launch page shows supply, token cells and miner cells read from CKB.

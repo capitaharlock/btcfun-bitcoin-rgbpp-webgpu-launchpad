@@ -1,9 +1,9 @@
-import { Diagram } from "../../../components/diagram/Diagram";
-import type { DiagramSpec } from "../../../components/diagram/model";
-import { group } from "../../../lib/format";
-import { TICKET_SATS } from "../../../lib/standard";
-import { KV } from "../../../ui/primitives";
-import { DocLink, Technical } from "../../parts";
+import { Diagram } from "@/features/diagram/Diagram";
+import type { DiagramSpec } from "@/features/diagram/model";
+import { group } from "@/ui/format";
+import { TICKET_SATS } from "@/domain/protocol";
+import { KV } from "@/ui/primitives";
+import { DocLink, Technical } from "@/docs/parts";
 
 const MAP: DiagramSpec = {
   title: "Who does what",

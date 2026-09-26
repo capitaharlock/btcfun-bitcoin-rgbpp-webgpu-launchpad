@@ -1,7 +1,7 @@
 /* history: publish the live run's launch (`rgbpp:live`) with the mint,
  * transfer and sale it completed, so the index shows the first real round. */
 
-import { activity, alice, bob, create, network, stateFile, vaultOf } from "../../kit.mjs";
+import { activity, alice, bob, launches, network, stateFile, vaultOf } from "../../kit.mjs";
 import { publish } from "../publish.mjs";
 
 export async function history() {
@@ -21,9 +21,9 @@ export async function history() {
     creator: vaultOf(bob).identity,
     at: live.steps[0]?.at ?? new Date().toISOString(),
   };
-  commitment.id = create.launchIdFor(commitment.symbol, commitment.tokenId);
-  if (!create.idMatches(commitment, network.ACTIVE)) throw new Error("the live launch does not reproduce its token id");
-  await publish(bob, { kind: "launch", launch: commitment.id, ref: create.commitmentId(commitment), meta: JSON.stringify(commitment) });
+  commitment.id = launches.launchIdFor(commitment.symbol, commitment.tokenId);
+  if (!launches.idMatches(commitment, network.ACTIVE)) throw new Error("the live launch does not reproduce its token id");
+  await publish(bob, { kind: "launch", launch: commitment.id, ref: launches.commitmentId(commitment), meta: JSON.stringify(commitment) });
   const done = (name) => live.steps.find((s) => s.step === name && s.queue === "completed" || s.step === name && s.ckbTxHash);
   const mint = done("mint");
   if (mint) await publish(alice, { kind: "mint", launch: commitment.id, amount: BigInt(live.mined.atoms), ref: mint.btcTxid, txid: mint.btcTxid });

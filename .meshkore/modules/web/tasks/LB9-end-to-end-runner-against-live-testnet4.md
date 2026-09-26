@@ -32,7 +32,7 @@ check balances sum to supply and the winning candidate still re-verifies.
 ## Design
 
 **It runs the app's own modules.** `scripts/e2e/load.mjs` uses Vite's SSR loader,
-so `lib/bitcoin/payment.ts` in a run is the file that ships, extensionless
+so `domain/bitcoin/payment.ts` in a run is the file that ships, extensionless
 imports and all. A second implementation of coin selection or challenge
 derivation would only test itself. No new dependency — Vite is already how the
 app is built.

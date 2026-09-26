@@ -1,10 +1,10 @@
-import { Diagram } from "../../../components/diagram/Diagram";
-import { group } from "../../../lib/format";
-import { SEAL_SATS } from "../../../lib/rgbpp/operations";
-import { FUNDS_POLL_MS } from "../../../hooks/useMiningLoop";
-import { MIN_FAST_FEE_RATE } from "../../../lib/bitcoin/provider";
-import { ANCHOR_GRACE_BLOCKS, MIN_CLZ, NEW_CELL, PLATFORM_PERCENT, REUSE, TICKET_SATS } from "../../../lib/standard";
-import { DocLink, Technical } from "../../parts";
+import { Diagram } from "@/features/diagram/Diagram";
+import { group } from "@/ui/format";
+import { SEAL_SATS } from "@/domain/rgbpp";
+import { FUNDS_POLL_MS } from "@/app/hooks/useMiningLoop";
+import { MIN_FAST_FEE_RATE } from "@/adapters/mempool";
+import { ANCHOR_GRACE_BLOCKS, MIN_CLZ, NEW_CELL, PLATFORM_PERCENT, REUSE, TICKET_SATS } from "@/domain/protocol";
+import { DocLink, Technical } from "@/docs/parts";
 import { CIRCUIT, MINER_CELL, MINT_TX, TICKET_TX } from "./diagrams";
 
 export default function MintPage() {
@@ -140,7 +140,7 @@ export default function MintPage() {
         <Technical>
           <ul>
             <li>
-              Output order in every operation (<code>lib/rgbpp/plans/</code>): the commitment at 0, then the seals
+              Output order in every operation (<code>domain/rgbpp/plans/</code>): the commitment at 0, then the seals
               in the order the plan lists them, then payments, then change. Each seal carries {group(SEAL_SATS)} sats.
               The Bitcoin signer uses one shared <code>commitmentScript</code> encoder for this RGB++ commitment and for
               market purchases.

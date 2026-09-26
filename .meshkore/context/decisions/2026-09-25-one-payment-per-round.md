@@ -44,7 +44,7 @@ re-arms the idle cell and no paymaster is paid.
 Before signing the ticket, the wallet must hold the ticket, its network fee
 and the network fees still to come in the round (the arming, when there is
 one, and the mint). Fees are paid at `max(3 sat/vB, mempool.space "fastest")`
-and sized by the rule that signs (`lib/rgbpp/bitcoin.ts` `fundingNeeded`).
+and sized by the rule that signs (`domain/rgbpp/transaction.ts` `fundingNeeded`).
 Nothing signs by itself: every transaction waits for its own press, for every
 wallet.
 

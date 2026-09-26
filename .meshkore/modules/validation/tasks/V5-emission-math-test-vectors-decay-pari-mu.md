@@ -27,4 +27,4 @@ Implement the adopted reference arithmetic in Rust and TypeScript. Use exact int
 
 ## Resolution
 
-`contracts/vectors/reward.json`, generated independently in Python, is reproduced by the Rust (`mint-core`) and TypeScript (`lib/standard.ts`) implementations of the reward and the ticket challenge.
+`contracts/vectors/reward.json`, generated independently in Python, is reproduced by the Rust (`mint-core`) and TypeScript (`domain/protocol/standard.ts`) implementations of the reward and the ticket challenge.

@@ -1,7 +1,7 @@
-import { Diagram } from "../../../components/diagram/Diagram";
-import type { DiagramSpec } from "../../../components/diagram/model";
-import { MIN_CLZ } from "../../../lib/standard";
-import { Technical } from "../../parts";
+import { Diagram } from "@/features/diagram/Diagram";
+import type { DiagramSpec } from "@/features/diagram/model";
+import { MIN_CLZ } from "@/domain/protocol";
+import { Technical } from "@/docs/parts";
 
 const VERIFY: DiagramSpec = {
   title: "What the Proof page checks",
@@ -82,7 +82,7 @@ export default function VerificationPage() {
         <Technical>
           <ul>
             <li>
-              <code>verifyMint</code> (<code>lib/rgbpp/verify.ts</code>) takes data, not a network: the Bitcoin outputs, the
+              <code>verifyMint</code> (<code>domain/rgbpp/verify.ts</code>) takes data, not a network: the Bitcoin outputs, the
               CKB transaction and its consumed cells. Fetching is the caller's business, so the checks are unit-tested and
               can be fed from any node.
             </li>
@@ -92,7 +92,7 @@ export default function VerificationPage() {
             </li>
             <li>
               Work: the challenge is <code>sha256(ticket txid ‖ vout)</code>, the txid in internal byte order
-              (<code>lib/bitcoin/txid.ts</code>), of the ticket the consumed miner cell names
+              (<code>domain/bitcoin/txid.ts</code>), of the ticket the consumed miner cell names
               (output 1), or else of the output it was sealed to; the hash is <code>sha256d(challenge ‖ nonce)</code> with the nonce the new miner cell carries — or, for a first mint, which turns the miner cell into the token
               cell, the eight-byte nonce in the first witness past the inputs.
             </li>

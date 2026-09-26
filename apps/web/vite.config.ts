@@ -1,8 +1,11 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  // `@/` is the app's own source: cross-module imports name the module, never a relative walk.
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: { port: 5273 },
   build: {
     rollupOptions: {

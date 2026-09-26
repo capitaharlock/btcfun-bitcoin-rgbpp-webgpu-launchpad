@@ -9,7 +9,7 @@
  */
 
 import { ccc } from "@ckb-ccc/core";
-import { TEST_CERT_KEY, admitted } from "../../../src/lib/launches/certificate";
+import { TEST_CERT_KEY, admitted } from "../../../src/domain/launches/certificate";
 
 import { reverse, sha256 } from "../bytes";
 import type { ChainSim } from "../chain";

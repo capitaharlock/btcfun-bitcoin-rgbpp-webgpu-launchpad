@@ -14,27 +14,29 @@ import { wordlist } from "@scure/bip39/wordlists/english";
 import { close, loadAll } from "../e2e/load.mjs";
 import { requireMnemonic, runFile } from "../local.mjs";
 
-export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment, certificate] =
+export const [network, keys, provider, standard, config, launch, ops, bitcoin, service, verify, seal, sale, create, events, bid, activity, image, payment, certificate, launches, registration] =
   await loadAll(
-    "lib/bitcoin/network.ts",
-    "lib/bitcoin/keys.ts",
-    "lib/bitcoin/provider.ts",
-    "lib/standard.ts",
-    "lib/rgbpp/config.ts",
-    "lib/rgbpp/launch.ts",
-    "lib/rgbpp/operations.ts",
-    "lib/rgbpp/bitcoin.ts",
-    "lib/rgbpp/service.ts",
-    "lib/mining/verify.ts",
-    "lib/rgbpp/seal.ts",
-    "lib/rgbpp/sale.ts",
-    "lib/launches/create.ts",
-    "lib/activity/events.ts",
-    "lib/market/bid.ts",
-    "lib/activity/verify.ts",
-    "lib/launches/image.ts",
-    "lib/bitcoin/payment.ts",
-    "lib/launches/certificate.ts",
+    "domain/bitcoin/network.ts",
+    "domain/bitcoin/keys.ts",
+    "adapters/mempool/provider.ts",
+    "domain/protocol/standard.ts",
+    "domain/rgbpp/config.ts",
+    "domain/rgbpp/launch.ts",
+    "domain/rgbpp/index.ts",
+    "domain/rgbpp/transaction.ts",
+    "adapters/rgbpp/service.ts",
+    "domain/mining/verify.ts",
+    "domain/rgbpp/seal.ts",
+    "domain/rgbpp/sale.ts",
+    "app/launches/create.ts",
+    "domain/activity/events.ts",
+    "domain/market/bid.ts",
+    "domain/activity/verify.ts",
+    "domain/launches/image.ts",
+    "domain/bitcoin/payment.ts",
+    "domain/launches/certificate.ts",
+    "domain/launches/index.ts",
+    "app/launches/registration.ts",
   );
 export { close };
 
@@ -109,10 +111,10 @@ export async function register(key, draft, h0, paid = null) {
     const [free, feeRate] = await Promise.all([rgbpp.freeUtxos(key.address), provider.fastFeeRate(network.ACTIVE)]);
     // Unconfirmed change is spendable: the signer needs the payment seen, not confirmed.
     const plain = bitcoin.plainFunding(free, new Set());
-    registration = await create.payRegistration(vaultOf(key), draft, h0, plain, feeRate, (hex) => rgbpp.broadcast(hex));
+    registration = await registration.payRegistration(vaultOf(key), draft, h0, plain, feeRate, (hex) => rgbpp.broadcast(hex));
     console.log(`registration ${draft.symbol}: ${network.txUrl(registration.txid, network.ACTIVE)}`);
   }
-  return { registration, certificate: await create.certify(draft, registration, { origin: INDEX }) };
+  return { registration, certificate: await registration.certify(draft, registration, { origin: INDEX }) };
 }
 
 // ─── reading the chain ───────────────────────────────────────────────────

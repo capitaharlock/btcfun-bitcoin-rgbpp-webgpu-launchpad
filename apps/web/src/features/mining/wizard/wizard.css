@@ -1,0 +1,299 @@
+/* The mining wizard: its rail, the frame of steps, the round's ledger and the bar.
+ *
+ * Theme tokens only, so both themes carry it. Labels, buttons and step text
+ * are in the body face at 15px or more; the pixel face is kept for the step
+ * numbers, where it reads as a heading, not as prose. The launch header that
+ * holds it is styled in `features/launch/launch.css`. */
+
+/* ---------- the wizard ---------- */
+
+.wz { display: grid; gap: var(--space-4); min-width: 0; }
+
+/* The rail: every step at a glance, and the way to move between them. */
+.wz-rail { display: flex; align-items: center; gap: var(--space-2); }
+.wz-rail ol {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wz-tab {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wz-tab:hover { background: var(--surface-2); }
+.wz-tab[aria-current="step"] { border-color: var(--accent); color: var(--ink); }
+.wz-tab-title { font-size: var(--text-base); font-weight: 600; min-width: 0; }
+.wz-tab .wz-status { margin-left: auto; }
+
+/* The frame shows one step; the track holds all four side by side. */
+/* One height for every step — the tallest's, with a floor — so the bar under
+   the frame never moves: content sits at the top of its step. */
+.wz-frame { overflow: hidden; }
+.wz-track {
+  display: flex;
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: transform var(--dur-slow) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wz-track { transition: none; }
+}
+.wz-step {
+  flex: 0 0 100%;
+  display: grid;
+  align-content: start;
+  min-height: 21rem;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.wz-step.active { border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); }
+.wz-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: var(--frame-w) solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-faint);
+  font-family: var(--font-numeric);
+  font-size: var(--text-sm);
+  -webkit-font-smoothing: var(--face-smoothing);
+}
+.wz-tab.active .wz-mark { border-color: var(--accent); color: var(--accent); }
+.wz-tab.done .wz-mark {
+  border-color: var(--positive);
+  background: color-mix(in oklab, var(--positive) 14%, transparent);
+  color: var(--positive);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+}
+.wz-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-4); }
+.wz-head h3 { font-size: var(--text-xl); }
+.wz-step.todo .wz-head h3 { color: var(--ink-dim); }
+.wz-tab.todo .wz-status { color: var(--ink-faint); }
+.wz-status {
+  font-family: var(--font-label);
+  font-size: var(--text-md);
+  color: var(--ink-faint);
+}
+:is(.wz-step, .wz-tab).active .wz-status { color: var(--accent); font-weight: 600; }
+:is(.wz-step, .wz-tab).done .wz-status { color: var(--positive); }
+.wz-line { margin: 0; font-size: var(--text-base); color: var(--ink); line-height: var(--leading-snug); }
+.wz-step.todo .wz-line { color: var(--ink-faint); }
+.wz-body { display: grid; gap: var(--space-3); margin-top: var(--space-2); min-width: 0; }
+.wz-copy { margin: 0; font-size: var(--text-base); color: var(--ink-dim); line-height: var(--leading-body); max-width: 72ch; }
+.wz-copy b { color: var(--ink); font-weight: 600; }
+
+/* A completed step's transaction. */
+.wz-traces { display: grid; gap: var(--space-2); }
+.wz-trace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-base);
+}
+.wz-trace-label { min-width: 6.5em; color: var(--ink-faint); font-family: var(--font-label); }
+.wz-trace-failure { flex-basis: 100%; color: var(--negative); font-size: var(--text-md); }
+
+/* What a ticket pays, line by line. */
+.wz-bill {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  max-width: 520px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.wz-bill > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-w) solid var(--line);
+  font-size: var(--text-base);
+}
+.wz-bill > div:first-child { border-top: 0; }
+.wz-bill dt { color: var(--ink-dim); min-width: 0; overflow-wrap: anywhere; }
+.wz-bill dd { margin: 0; color: var(--ink); font-family: var(--font-mono); white-space: nowrap; }
+
+.wz-fund {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-w) solid color-mix(in oklab, var(--warn) 50%, var(--line));
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--warn) 5%, var(--bg));
+}
+.wz-fund .copyable code { overflow-wrap: anywhere; }
+
+.wz-working {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-base);
+}
+
+/* The spinner: a ring with one lit quarter. Held still for reduced motion. */
+.wz-spin {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid color-mix(in oklab, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: wz-turn 0.8s linear infinite;
+}
+@keyframes wz-turn { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+  .wz-spin { animation: none; border-right-color: currentColor; }
+}
+
+.wz-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .wz-step { padding: var(--space-4); }
+  .wz-tab { justify-content: center; padding: var(--space-2); }
+  .wz-tab :is(.wz-tab-title, .wz-status) { display: none; }
+  .wz-head h3 { font-size: var(--text-lg); }
+  .wz-body .btn.lg { width: 100%; }
+  .wz-trace { gap: var(--space-1) var(--space-3); }
+  .wz-trace-label { flex-basis: 100%; }
+}
+
+
+
+/* The ticket step: the ticket drawn beside what it costs and the one button. */
+.wz-sent {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+.wz-ticket { width: 100%; height: auto; }
+.wz-ticket-body {
+  fill: color-mix(in oklab, var(--accent) 10%, var(--bg));
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.wz-ticket-tear { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 5; }
+.wz-ticket text { fill: var(--ink); font-family: var(--font-numeric); }
+.wz-ticket-k { font-size: 11px; fill: var(--ink-dim); letter-spacing: 0.08em; }
+.wz-ticket-sym { font-size: 26px; }
+.wz-ticket-stub { font-size: 14px; fill: var(--accent); }
+.wz-ticket.paid .wz-ticket-stub { fill: var(--positive); }
+
+
+@media (max-width: 720px) {
+  .wz-sent { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .wz-ticket { max-width: 220px; }
+}
+
+/* The bar: back on the left, what the step asks for on the right. */
+.wz-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--border-w) solid var(--line);
+}
+.wz-bar-say { flex: 1; min-width: 0; color: var(--ink-dim); font-size: var(--text-base); }
+.wz-bar-act { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-3); }
+.wz-bar .btn { gap: var(--space-2); }
+.wz-bar .btn.working[disabled] { --btn-ink: var(--ink); --btn-edge: var(--line-strong); cursor: progress; }
+@media (max-width: 720px) {
+  .wz-bar { flex-wrap: wrap; }
+  .wz-bar-say { order: -1; flex-basis: 100%; }
+  .wz-bar-act { flex: 1; }
+  .wz-bar-act .btn { flex: 1; }
+}
+
+/* The bill's subtotal and total. */
+.wz-bill > div.strong { background: var(--surface-1); }
+.wz-bill > div.strong :is(dt, dd) { color: var(--ink); font-weight: 600; }
+
+/* The miner, laid out to fit the frame: totals across the top, the feed and
+   the device on the left, the log and the challenge on the right. */
+.miner.compact { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+.miner-totals { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.miner-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.miner.compact .hashlog { max-height: 132px; overflow-y: auto; }
+@media (max-width: 900px) {
+  .miner-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .miner-body { grid-template-columns: minmax(0, 1fr); }
+}
+
+.wz-mint-sum { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 720px; }
+@media (max-width: 720px) {
+  .wz-mint-sum { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The ticket on its way to a mint, under the miner's counters. */
+.wz-ready { display: grid; gap: var(--space-2); }
+
+/* How far each step has got: green confirmed, cyan waiting for a block,
+   accent waiting for you, faint later. Tones override the rail's position. */
+.wz-tab.tone-done .wz-status { color: var(--positive); }
+.wz-tab.tone-wait .wz-status { color: var(--cyan); }
+.wz-tab.tone-act .wz-status { color: var(--accent); font-weight: 600; }
+.wz-tab.tone-todo .wz-status { color: var(--ink-faint); font-weight: 400; }
+.wz-tab.tone-wait .wz-mark { border-color: var(--cyan); color: var(--cyan); }
+.wz-tab.tone-done .wz-mark {
+  border-color: var(--positive);
+  background: color-mix(in oklab, var(--positive) 14%, transparent);
+  color: var(--positive);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+}
+
+/* The round's transactions, one line. */
+.wz-ledger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.wz-ledger li { display: flex; align-items: baseline; gap: var(--space-2); }
+.wz-ledger li + li::before { content: "→"; color: var(--ink-faint); margin-right: var(--space-3); }
+.wz-ledger-k { color: var(--ink-dim); }
+.wz-ledger-v { font-weight: 600; }
+.wz-ledger .tone-done :is(.wz-dot, .wz-ledger-v) { color: var(--positive); }
+.wz-ledger .tone-wait :is(.wz-dot, .wz-ledger-v) { color: var(--cyan); }
+.wz-ledger .tone-act :is(.wz-dot, .wz-ledger-v) { color: var(--accent); }
+.wz-ledger .tone-todo :is(.wz-dot, .wz-ledger-v) { color: var(--ink-faint); font-weight: 400; }
+.wz-count { color: var(--ink); font-weight: 600; }

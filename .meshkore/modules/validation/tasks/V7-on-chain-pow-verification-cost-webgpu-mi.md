@@ -27,4 +27,4 @@ Benchmark SHA256d and Eaglesong candidate evaluation in CKB-VM and a throwaway W
 
 ## Resolution
 
-SHA-256d over a 40-byte preimage is selected. Browser and script accept the same vectors (`contracts/vectors/reward.json`, reproduced by `contracts/mint-core` and `apps/web/src/lib/standard.ts`); work against another ticket is refused in `contracts/tests/src/mint/`. A whole mint transaction costs 312,518 cycles (OC2), which includes the hash evaluation. Browser hashrate is measured on real runs on CPU workers and WebGPU (`apps/web/src/lib/mining`, LB2, MN8). Eaglesong was not pursued.
+SHA-256d over a 40-byte preimage is selected. Browser and script accept the same vectors (`contracts/vectors/reward.json`, reproduced by `contracts/mint-core` and `apps/web/src/domain/protocol/standard.ts`); work against another ticket is refused in `contracts/tests/src/mint/`. A whole mint transaction costs 312,518 cycles (OC2), which includes the hash evaluation. Browser hashrate is measured on real runs on CPU workers and WebGPU (`apps/web/src/domain/mining`, LB2, MN8). Eaglesong was not pursued.

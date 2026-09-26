@@ -27,4 +27,4 @@ Build the integrated mine/submit/reveal experience. A lightweight mock may be te
 
 ## Resolution
 
-`apps/web/src/components/mining/MinePanel.tsx` and `MinerSteps.tsx` walk open, ticket, mine and mint with the reward of the best hash shown live, explicit start and stop, a backend choice, and the stage each step is waiting on; a mint is then checkable by txid on the proof page. Covered by `e2e/ui/mining.spec.ts` and `e2e/ui/time.spec.ts`. Device-aware resource handling stays in MN2.
+`apps/web/src/features/mining/MinePanel.tsx` and `MinerSteps.tsx` walk open, ticket, mine and mint with the reward of the best hash shown live, explicit start and stop, a backend choice, and the stage each step is waiting on; a mint is then checkable by txid on the proof page. Covered by `e2e/ui/mining.spec.ts` and `e2e/ui/time.spec.ts`. Device-aware resource handling stays in MN2.

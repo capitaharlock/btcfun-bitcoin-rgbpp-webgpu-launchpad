@@ -15,7 +15,7 @@ import { PAYMASTER_ADDRESS, PLATFORM_ADDRESS } from "../support/rgbpp";
 
 test.describe.configure({ timeout: 240_000 });
 
-/** The shared demo wallet's address (`lib/bitcoin/vault.ts`). */
+/** The shared demo wallet's address (`adapters/vault/vault.ts`). */
 const DEMO_ADDRESS = "tb1qjjq482m9pj7dvge0l2r07a3fcyflktrzgzf6tz";
 
 // The standard's split, restated as the page must show it (PROTOCOL.md §4).

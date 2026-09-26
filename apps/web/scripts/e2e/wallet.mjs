@@ -36,7 +36,7 @@ export class WalletMissing extends Error {
 
 /** Refuse to touch anything but testnet. */
 export async function assertTestnet() {
-  const { ACTIVE } = await load("lib/bitcoin/network.ts");
+  const { ACTIVE } = await load("domain/bitcoin/network.ts");
   if (ACTIVE.id === "mainnet") {
     throw new Error(
       `The end-to-end runner is testnet-only; this build points at ${ACTIVE.id}. ` +
@@ -82,7 +82,7 @@ async function entropyOf(mnemonic) {
 }
 
 async function addressFor(mnemonic) {
-  const { deriveAddress } = await load("lib/bitcoin/keys.ts");
+  const { deriveAddress } = await load("domain/bitcoin/keys.ts");
   return deriveAddress(await entropyOf(mnemonic));
 }
 
@@ -97,7 +97,7 @@ export async function testVault() {
   const stored = await read();
   if (!stored) throw new WalletMissing();
 
-  const { deriveKey, identityOf } = await load("lib/bitcoin/keys.ts");
+  const { deriveKey, identityOf } = await load("domain/bitcoin/keys.ts");
   const entropy = await entropyOf(stored.mnemonic);
 
   const probe = deriveKey(entropy);
@@ -123,7 +123,7 @@ export async function testVault() {
 
 /** Confirmed and pending balance, in satoshis. */
 export async function balanceOf(address) {
-  const { getBalance } = await load("lib/bitcoin/provider.ts");
+  const { getBalance } = await load("adapters/mempool/provider.ts");
   return getBalance(address);
 }
 

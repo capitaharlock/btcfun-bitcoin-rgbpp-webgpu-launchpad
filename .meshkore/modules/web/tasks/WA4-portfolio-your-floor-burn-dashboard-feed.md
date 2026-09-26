@@ -27,4 +27,4 @@ Show outstanding allocations, holdings and net redemption estimates in the reser
 
 ## Resolution
 
-`apps/web/src/views/Holdings.tsx` reads balances straight from the xUDT cells sealed to the wallet, sends and receives, explains the fee and why sealed outputs never pay it, and shows each transfer as sent, queued, settled or failed. Covered by `e2e/ui/holdings.spec.ts` and the phone-layout project. Redemption value, claims and refunds were withdrawn by the standard tokenomics.
+`apps/web/src/pages/Holdings.tsx` reads balances straight from the xUDT cells sealed to the wallet, sends and receives, explains the fee and why sealed outputs never pay it, and shows each transfer as sent, queued, settled or failed. Covered by `e2e/ui/holdings.spec.ts` and the phone-layout project. Redemption value, claims and refunds were withdrawn by the standard tokenomics.

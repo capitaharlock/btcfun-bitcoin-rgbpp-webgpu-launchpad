@@ -1,7 +1,7 @@
 /* The platform's key, for the test build only.
  *
  * The production build names the seed wallet's identity as the platform's
- * (`src/lib/launches/featured.ts`); the suite builds with this one instead
+ * (`src/domain/launches/featured.ts`); the suite builds with this one instead
  * (`playwright.config.ts`), so a test can announce the platform's DEMO launch
  * by restoring the secret below. Both halves live here so they cannot drift.
  */

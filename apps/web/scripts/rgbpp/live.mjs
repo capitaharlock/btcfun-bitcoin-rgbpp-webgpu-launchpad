@@ -25,8 +25,7 @@
  */
 
 import {
-  alice as aliceKey, bob, cellsOf, cfg, close, create, creatingTx, demo, events, INDEX, launch, network, ops, provider, register, rgbpp, sale,
-  sealedUtxos, certificate, savedTerms, standard, stateFile, submit as send, termsFrom, vaultOf, verify,
+  alice as aliceKey, bob, cellsOf, certificate, cfg, close, creatingTx, demo, events, INDEX, launch, launches, network, ops, provider, register, registration, rgbpp, sale, savedTerms, sealedUtxos, standard, stateFile, submit as send, termsFrom, vaultOf, verify,
 } from "./kit.mjs";
 
 /** Who mines: Alice, or the shared demo wallet. */
@@ -55,7 +54,7 @@ const steps = {
     const draft = {
       symbol, name: "Live QA", blurb: "The btc.fun live testnet run, registered like anyone's launch.", accent: "var(--cyan)",
       promoter: bob.address, opensInBlocks: 1,
-      links: Object.fromEntries(create.LINK_KINDS.map((k) => [k, ""])), story: { why: "", plan: "" }, image: "",
+      links: Object.fromEntries(launches.LINK_KINDS.map((k) => [k, ""])), story: { why: "", plan: "" }, image: "",
     };
     // A registration already paid for this draft is resumed, never paid twice.
     const paid = state.registration?.symbol === symbol ? state.registration : null;
@@ -63,12 +62,12 @@ const steps = {
     const { registration, certificate: cert } = await register(alice, draft, h0, paid);
     state.registration = { ...registration, symbol };
     write();
-    const commitment = create.commitmentFor(draft, vaultOf(alice).identity, registration, cert, network.ACTIVE);
-    if (!create.idMatches(commitment, network.ACTIVE)) throw new Error("the certificate does not verify");
-    const signed = await events.signActivity(vaultOf(alice), { kind: "launch", launch: commitment.id, ref: create.commitmentId(commitment), meta: JSON.stringify(commitment) });
+    const commitment = launches.commitmentFor(draft, vaultOf(alice).identity, registration, cert, network.ACTIVE);
+    if (!launches.idMatches(commitment, network.ACTIVE)) throw new Error("the certificate does not verify");
+    const signed = await events.signActivity(vaultOf(alice), { kind: "launch", launch: commitment.id, ref: launches.commitmentId(commitment), meta: JSON.stringify(commitment) });
     const res = await fetch(`${INDEX}/api/activity`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(signed) });
     if (!res.ok) throw new Error(`index refused the launch: ${res.status} ${await res.text()}`);
-    const terms = create.termsOf(commitment, network.ACTIVE);
+    const terms = launches.termsOf(commitment, network.ACTIVE);
     state.launch = {
       id: commitment.id,
       meta: { name: draft.name, symbol, description: draft.blurb, imageHash: "" },

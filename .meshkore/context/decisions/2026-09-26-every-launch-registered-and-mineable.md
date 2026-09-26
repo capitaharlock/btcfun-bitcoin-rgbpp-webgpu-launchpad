@@ -47,4 +47,4 @@ the opening block and says why.
   (`scripts/rgbpp/kit.mjs` `register`). The key still exists as the Worker's
   `CERT_KEY`.
 - The narrower "finish a ticket on a closed launch" path is gone with the
-  closed state (`lib/mining/loop.ts`): every listed launch is open.
+  closed state (`domain/mining/loop.ts`): every listed launch is open.

@@ -17,7 +17,7 @@
  * mint that never occurred or a purchase nobody paid for, and this Worker holds
  * no ledger to replay against and no Bitcoin node to confirm with. It therefore
  * returns no verdict of its own — no `verified` flag — and its rows must never
- * be totalled into a supply or a volume. `src/lib/activity/types.ts` states the
+ * be totalled into a supply or a volume. `src/domain/activity/types.ts` states the
  * same boundary for the client.
  *
  * ONE EXCEPTION: THE CERTIFICATE. `POST /api/certify` is the one place btc.fun

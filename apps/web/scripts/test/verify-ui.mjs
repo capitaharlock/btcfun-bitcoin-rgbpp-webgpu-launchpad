@@ -127,7 +127,7 @@ for (const route of ROUTES) {
 
     const result = await page.evaluate(
       async ([choice, duration]) => {
-        const { MiningSession, verifyCandidate } = await import("/src/lib/mining/index.ts");
+        const { MiningSession, verifyCandidate } = await import("/src/domain/mining/index.ts");
         // A fixed challenge so a run is comparable between invocations.
         const challenge = new Uint8Array(32).map((_, i) => (i * 37) & 0xff);
 

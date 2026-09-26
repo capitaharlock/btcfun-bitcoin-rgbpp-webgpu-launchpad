@@ -2,12 +2,12 @@
  * published test key (`TEST_CERT_SECRET`), which test builds trust. Never
  * imported by the app. */
 
-import { deriveKey } from "../lib/bitcoin/keys";
-import { TESTNET3, type NetworkConfig } from "../lib/bitcoin/network";
-import { bytesToHex, hexToBytes } from "../lib/bytes";
-import type { LaunchCommitment } from "../lib/launches/announcement";
-import { registrationCommitment, signCertificate, TEST_CERT_SECRET } from "../lib/launches/certificate";
-import { commitmentFor, draftTerms, NO_LINKS, NO_STORY, type LaunchDraft } from "../lib/launches/draft";
+import { deriveKey } from "@/domain/bitcoin";
+import { TESTNET3, type NetworkConfig } from "@/domain/bitcoin";
+import { bytesToHex, hexToBytes } from "@/domain/codec";
+import type { LaunchCommitment } from "@/domain/launches";
+import { registrationCommitment, signCertificate, TEST_CERT_SECRET } from "@/domain/launches";
+import { commitmentFor, draftTerms, NO_LINKS, NO_STORY, type LaunchDraft } from "@/domain/launches";
 
 /** An identity that announces launches in tests. */
 export const TEST_CREATOR = "02" + "11".repeat(32);

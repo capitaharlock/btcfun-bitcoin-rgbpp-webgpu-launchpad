@@ -1,8 +1,8 @@
-import { Diagram } from "../../../components/diagram/Diagram";
-import type { DiagramSpec } from "../../../components/diagram/model";
-import { group } from "../../../lib/format";
-import { SEAL_SATS } from "../../../lib/rgbpp/operations";
-import { DocLink, Technical } from "../../parts";
+import { Diagram } from "@/features/diagram/Diagram";
+import type { DiagramSpec } from "@/features/diagram/model";
+import { group } from "@/ui/format";
+import { SEAL_SATS } from "@/domain/rgbpp";
+import { DocLink, Technical } from "@/docs/parts";
 
 const OWNERSHIP: DiagramSpec = {
   title: "A token cell is sealed to a Bitcoin output",
@@ -100,7 +100,7 @@ export default function OwnershipPage() {
           <ul>
             <li>
               The RGB++ lock's args are <code>out_index u32 LE ‖ btc_txid</code>, 36 bytes, with the txid in Bitcoin's
-              internal byte order — the reverse of how explorers print it (<code>lib/rgbpp/seal.ts</code>, byte order in <code>lib/bitcoin/txid.ts</code>).
+              internal byte order — the reverse of how explorers print it (<code>domain/rgbpp/seal.ts</code>, byte order in <code>domain/bitcoin/txid.ts</code>).
             </li>
             <li>
               A cell created by the transaction still being built carries an all-zero txid, since the txid cannot exist
@@ -109,7 +109,7 @@ export default function OwnershipPage() {
             </li>
             <li>
               The commitment is <code>sha256d("RGB++" ‖ version ‖ counts ‖ inputs ‖ outputs with their data)</code> of the
-              CKB transaction, 32 bytes after <code>OP_RETURN OP_PUSHBYTES_32</code> (<code>lib/rgbpp/commitment.ts</code>
+              CKB transaction, 32 bytes after <code>OP_RETURN OP_PUSHBYTES_32</code> (<code>domain/rgbpp/commitment.ts</code>
               ). It is pinned by test to the RGB++ SDK and lock.
             </li>
             <li>

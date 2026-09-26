@@ -72,7 +72,7 @@ into implemented, pending and absent, with the task that unblocks each.
 
 The portal's docs (`#/docs`, linked from the footer) explain every circuit —
 the mint, delivery, ownership, transfers, the order book, verification — with
-flowcharts declared as data (`apps/web/src/components/diagram/`). Each page
+flowcharts declared as data (`apps/web/src/features/diagram/`). Each page
 lists the files it describes in `apps/web/src/docs/sources.json`, and
 `npm run docs:check` fails when one of those files was committed after its
 page, or has uncommitted changes the page does not. `npm run deploy` runs it

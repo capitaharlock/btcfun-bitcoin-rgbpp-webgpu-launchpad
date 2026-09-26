@@ -41,7 +41,7 @@ m/84'/1'/0'/0/0 of the entropy named. Derivations live in
 |---|---|---|---|---|
 | Alice — e2e wallet, promoter in `rgbpp:live` | `tb1q93pwzegduvqq2mahaxy6vq0ydnz5yqv9kz7qc4` | the mnemonic's | us only | 14,088 sats |
 | Bob — second party in `rgbpp:live` | `tb1qp3em8ca7qz99mxvezuhr74flkpftnpfenyhuqq` | `sha256(alice ‖ "btcfun/bob")` | us only | 199,035 sats |
-| Demo — the site's shared "demo wallet" | `tb1qjjq482m9pj7dvge0l2r07a3fcyflktrzgzf6tz` | `sha256(alice ‖ "btcfun/demo")`, published as `DEMO_ENTROPY_HEX` in `apps/web/src/lib/bitcoin/vault.ts` | **anyone** — the secret is public | 187,844 sats |
+| Demo — the site's shared "demo wallet" | `tb1qjjq482m9pj7dvge0l2r07a3fcyflktrzgzf6tz` | `sha256(alice ‖ "btcfun/demo")`, published as `DEMO_ENTROPY_HEX` in `apps/web/src/adapters/vault/vault.ts` | **anyone** — the secret is public | 187,844 sats |
 
 The three stay separate on purpose: the live run needs two independent parties
 (promoter and buyer), and the demo wallet is public, so any balance there can be
