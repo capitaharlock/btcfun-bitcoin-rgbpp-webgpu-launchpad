@@ -1,0 +1,6 @@
+/* `Clamp`: a block of prose clamped to two lines. Its "more" button is the
+ * global `.linkbutton` (`ui/styles/controls.css`), which features use on
+ * their own too. */
+
+.clamp { margin: 0; }
+.clamp.shut { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

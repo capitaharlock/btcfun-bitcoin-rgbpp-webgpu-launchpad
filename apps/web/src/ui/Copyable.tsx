@@ -7,6 +7,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import "./copyable.css";
+
 const FEEDBACK_MS = 1600;
 
 /** Copy a value on a click, and say so for a moment: "Copied" only once the clipboard took it. */

@@ -1,0 +1,33 @@
+/* btc.fun — typography utilities: the eyebrow over a title, and the one-class
+ * tones and sizes a feature applies to a word or a line. */
+
+/* The small label over a title, with a block marker so a column of panels
+   reads as a menu. */
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-eyebrow);
+  font-weight: var(--weight-eyebrow);
+  font-size: var(--text-xs);
+  letter-spacing: var(--eyebrow-tracking);
+  text-transform: var(--eyebrow-case);
+  color: var(--ink-faint);
+  -webkit-font-smoothing: var(--face-smoothing);
+}
+.eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: currentColor;
+}
+.muted { color: var(--ink-dim); }
+.faint { color: var(--ink-faint); }
+.tiny { font-size: var(--text-sm); }
+.right { text-align: right; }
+.error-text { color: var(--negative); font-size: var(--text-sm); }.error-text.full { flex-basis: 100%; }
+.anywhere { overflow-wrap: anywhere; }
+.minted { margin: var(--space-3) 0 0; }

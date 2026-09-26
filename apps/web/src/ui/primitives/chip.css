@@ -1,0 +1,37 @@
+/* `Chip`: a small labelled tag in one of the signal tones, and the LED it
+ * carries when live. */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  font-size: var(--text-xs);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  color: var(--ink-dim);
+  background: var(--surface-2);
+  border: var(--border-w) solid var(--line);
+  white-space: nowrap;
+}
+.chip .mono { text-transform: none; font-size: var(--text-xs); letter-spacing: 0; }
+.chip.amber  { --tone: var(--amber); }
+.chip.cyan   { --tone: var(--cyan); }
+.chip.violet { --tone: var(--violet); }
+.chip.ok     { --tone: var(--positive); }
+.chip.warn   { --tone: var(--warn); }
+.chip.danger { --tone: var(--negative); }
+.chip:is(.amber, .cyan, .violet, .ok, .warn, .danger) {
+  color: var(--tone);
+  background: color-mix(in oklab, var(--tone) 9%, var(--bg));
+  border-color: color-mix(in oklab, var(--tone) 32%, transparent);
+}
+
+/* A square "LED". Blinks in steps rather than fading: a light that is on or
+   off, like the hardware it imitates. */
+.dot { width: 6px; height: 6px; flex: none; border-radius: var(--radius-sm); background: currentColor; }
+.dot.live { animation: blink var(--blink) steps(1, end) infinite; }

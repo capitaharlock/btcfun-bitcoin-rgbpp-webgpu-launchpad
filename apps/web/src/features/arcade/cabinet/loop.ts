@@ -111,7 +111,7 @@ function tick(rig: Rig): void {
   }
   game.events = [];
   if (game.phase.kind === "over" && !state.saved) {
-    writeHiScore(game.score);
+    writeHiScore(rig.o.store, game.score);
     rig.hi = Math.max(rig.hi, game.score);
     state.saved = true;
   }
@@ -202,7 +202,7 @@ export function resume(rig: Rig): void {
 export function exit(rig: Rig): void {
   releaseAll(rig);
   if (rig.state.mode === "game" && !rig.state.saved) {
-    writeHiScore(rig.state.game.score);
+    writeHiScore(rig.o.store, rig.state.game.score);
     rig.hi = Math.max(rig.hi, rig.state.game.score);
   }
   toAttract(rig, "attract");

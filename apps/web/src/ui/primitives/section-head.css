@@ -1,0 +1,5 @@
+/* `SectionHead`: a section's title line, with a small invader beside the heading. */
+
+.sectionhead { display: flex; align-items: center; gap: var(--space-3); }
+.sectionhead h2 { display: flex; align-items: baseline; gap: 10px; }
+.sectionhead .count { font-family: var(--font-numeric); font-size: var(--text-sm); color: var(--accent); }

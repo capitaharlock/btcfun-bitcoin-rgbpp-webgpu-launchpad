@@ -1,0 +1,5 @@
+/* `QrCode`: dark modules on paper in every theme, sized as a fixed tile. */
+
+.qr { width: 136px; height: 136px; flex: none; display: block; }
+.qr-paper { fill: var(--paper); }
+.qr-ink { fill: var(--shade); }

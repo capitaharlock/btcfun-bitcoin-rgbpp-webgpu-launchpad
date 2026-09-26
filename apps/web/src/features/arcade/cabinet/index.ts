@@ -2,7 +2,7 @@
  *
  * Three modes. Attract plays itself (`scene/`) and points at launches.
  * Ready is the same scene holding for a player who has picked up the controls
- * — the canvas has focus — until Space, Enter or a tap. Game is `game.ts`.
+ * — the canvas has focus — until Space, Enter or a tap. Game is `game/`.
  *
  * The clock is a fixed step: however the frames arrive, the rules advance in
  * equal slices, so a game plays the same at 60 Hz and 144 Hz. It stops when
@@ -63,7 +63,7 @@ export function mountCabinet(o: CabinetOptions): Cabinet {
     fireQueued: false,
     pressedIn: null,
     reported: ATTRACT_HUD,
-    hi: readHiScore(),
+    hi: readHiScore(o.store),
   };
 
   const rig: Rig = Object.assign(base, { state: { mode: "attract" as const, ...attractScene(base) } });

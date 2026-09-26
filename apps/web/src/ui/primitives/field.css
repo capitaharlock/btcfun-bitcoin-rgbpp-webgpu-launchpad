@@ -1,0 +1,19 @@
+/* `Field`: a label over a control. The controls themselves (`.input`,
+ * `.swatch`, ranges) are global classes in `ui/styles/controls.css`. */
+
+.field { display: grid; gap: var(--space-2); }
+.field > label {
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  font-size: var(--text-md);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  color: var(--ink);
+}
+/* A hint or a fault under the label is prose, not a label. */
+.field > label .faint {
+  font-family: var(--font-body);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}

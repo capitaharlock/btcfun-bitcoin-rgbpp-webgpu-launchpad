@@ -7,7 +7,7 @@
  * This module is the world both modes share — the formation, the bunkers, a
  * hash in flight, an explosion — and the attract mode's rules: `stepScene`
  * plays itself, endlessly, and nobody loses. The playable rules (lives, bombs,
- * waves) are `game.ts`, built from the same pieces. Everything advances by a
+ * waves) are `game/`, built from the same pieces. Everything advances by a
  * time step with an injected random source, so it is deterministic under test
  * and the reduced-motion still frame is the same picture on every load.
  *

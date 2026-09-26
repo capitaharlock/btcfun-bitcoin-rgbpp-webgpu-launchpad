@@ -1,6 +1,6 @@
 /* The front page's arcade: a scene that plays itself until someone picks up
- * the controls, and then a game. The rules are `scene/` and `game.ts`, the
- * pictures `draw.ts`, the clock and the input `cabinet/`; this component
+ * the controls, and then a game. The rules are `scene/` and `game/`, the
+ * pictures `draw/`, the clock and the input `cabinet/`; this component
  * gives them the launches, the tip and the theme's colours, and prints what a
  * canvas cannot say — the controls, the sound switch, and the score, as text
  * a screen reader announces.
@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useServices } from "@/app/providers/ServicesProvider";
 import type { Launch } from "@/domain/launches";
 import { group } from "@/ui/format";
 import { reward, UNIT } from "@/domain/protocol";
@@ -102,6 +103,8 @@ export function ArcadeScene({
   /** A launch was clicked or tapped twice. */
   onPick: (launch: Launch) => void;
 }) {
+  // The device store the preferences live in: one instance for the app, so it is safe to read once on mount.
+  const { storage } = useServices();
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cabinet = useRef<Cabinet | null>(null);
@@ -109,7 +112,7 @@ export function ArcadeScene({
   const reduced = useMedia("(prefers-reduced-motion: reduce)");
   const touch = useMedia("(pointer: coarse)");
   const [hud, setHud] = useState<Hud>(ATTRACT_HUD);
-  const [soundOn, setSoundOn] = useState(readSoundOn);
+  const [soundOn, setSoundOn] = useState(() => readSoundOn(storage));
   const playRef = useRef<HTMLButtonElement>(null);
   /** Set on leaving a game, so the focus lands on Play instead of falling to the page. */
   const refocus = useRef(false);
@@ -125,7 +128,7 @@ export function ArcadeScene({
     const host = hostRef.current;
     const canvas = canvasRef.current;
     if (!host || !canvas) return;
-    const audio = createSound(readSoundOn());
+    const audio = createSound(readSoundOn(storage));
     sound.current = audio;
 
     const roster = (): Roster => {
@@ -157,6 +160,7 @@ export function ArcadeScene({
         refocus.current = true;
       },
       sound: audio,
+      store: storage,
     });
     return () => {
       cabinet.current?.dispose();
@@ -179,9 +183,9 @@ export function ArcadeScene({
     const on = !soundOn;
     // Inside the click, so the browser lets the audio start.
     sound.current?.setEnabled(on);
-    writeSoundOn(on);
+    writeSoundOn(storage, on);
     setSoundOn(on);
-  }, [soundOn]);
+  }, [soundOn, storage]);
 
   const count = launches.length;
   const playing = IN_GAME.has(hud.mode);

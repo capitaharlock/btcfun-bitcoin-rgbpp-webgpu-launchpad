@@ -1,0 +1,42 @@
+/* `More`: the disclosure everything beyond a screen's first line lives behind.
+ * Native <details>, so it opens from the keyboard, is announced as expandable,
+ * and needs no state of its own. */
+
+.more { border-top: var(--border-w) solid var(--line); }
+.more > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  list-style: none;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: var(--text-md);
+  letter-spacing: var(--ui-tracking);
+  text-transform: var(--ui-case);
+  color: var(--ink-dim);
+  user-select: none;
+}
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary::before {
+  content: "+";
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+.more[open] > summary::before { content: "−"; }
+.more > summary:hover { color: var(--ink); }
+.more > .more-body { padding: 2px 0 var(--space-4); display: grid; gap: var(--space-3); }
+.more > .more-body > p { margin: 0; font-size: var(--text-md); }
+.more.boxed {
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  padding: 0 var(--space-4);
+  background: var(--surface-1);
+}

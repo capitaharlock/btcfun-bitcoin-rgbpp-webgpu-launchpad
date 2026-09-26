@@ -1,0 +1,23 @@
+/* `Panel`: a framed surface and its title line. Values are theme tokens. */
+
+.panel {
+  position: relative;
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+}
+.panel.tight { padding: var(--space-5); }
+.panel.flush { padding: 0; overflow: hidden; }
+
+.panel-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.panel-head h2, .panel-head h3 { margin-right: auto; }
+
+@media (max-width: 720px) {
+  .panel { padding: var(--space-5) var(--space-4); }
+}

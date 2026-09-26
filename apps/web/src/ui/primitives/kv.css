@@ -1,0 +1,5 @@
+/* `KV`: keys left, figures right in mono. */
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3) var(--space-5); font-size: var(--text-md); margin: 0; }
+.kv dt { color: var(--ink-faint); }
+.kv dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; overflow-wrap: anywhere; }

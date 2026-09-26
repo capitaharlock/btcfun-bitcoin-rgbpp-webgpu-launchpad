@@ -10,6 +10,7 @@ import { memo, useMemo } from "react";
 import qrcode from "qrcode-generator";
 
 import { pixelPath } from "@/ui/pixels/pixels";
+import "./qr-code.css";
 
 /** ISO/IEC 18004 §9.1: four light modules on every side. */
 const QUIET = 4;

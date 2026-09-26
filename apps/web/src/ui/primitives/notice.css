@@ -1,0 +1,22 @@
+/* `Notice`: a framed remark, neutral unless it warns. */
+
+.notice {
+  /* Block, not flex: notice bodies are prose with inline <b>/<a>, and a flex
+     container would turn each text node into its own column. */
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  /* Neutral by default: most notices here are caveats, not warnings. Colour is
+     reserved for the tones below so a real failure still stands out, in the
+     whole frame rather than a stripe down one side. */
+  --tone: var(--line);
+  background: var(--surface-1);
+  border: var(--border-w) solid color-mix(in oklab, var(--tone) 60%, var(--line));
+  border-radius: var(--radius-sm);
+  color: var(--ink-dim);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+.notice.cyan { --tone: var(--cyan); background: color-mix(in oklab, var(--cyan) 5%, var(--bg)); }
+.notice.warn { --tone: var(--warn); background: color-mix(in oklab, var(--warn) 5%, var(--bg)); }
+.notice.danger { --tone: var(--negative); background: color-mix(in oklab, var(--negative) 6%, var(--bg)); }
+.notice b { color: var(--ink); font-weight: 600; }

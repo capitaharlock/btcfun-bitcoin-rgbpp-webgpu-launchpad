@@ -1,6 +1,6 @@
 /* The arcade scene's shapes: the world as plain data — formation, invaders,
- * hashes in flight, debris, bunkers, sky — so the rules (`step.ts`, `game.ts`)
- * and the painter (`draw.ts`) share one description of it. */
+ * hashes in flight, debris, bunkers, sky — so the rules (`step.ts`, `game/`)
+ * and the painter (`draw/`) share one description of it. */
 
 import type { PixelGrid } from "@/ui/pixels/pixels";
 

@@ -4,6 +4,7 @@
  * own file while every part still sees the same, current values.
  */
 
+import type { DeviceStore } from "@/ports";
 import type { Pointer, ScenePalette } from "../draw";
 import type { Game } from "../game";
 import type { InvaderSpec, Scene } from "../scene";
@@ -39,6 +40,8 @@ export interface CabinetOptions {
   /** The player left for the attract mode and the canvas let go of the focus: the page says where it goes. */
   exited(): void;
   sound: Sound;
+  /** Where the hi-score is kept between visits. */
+  store: DeviceStore;
 }
 
 export type State =

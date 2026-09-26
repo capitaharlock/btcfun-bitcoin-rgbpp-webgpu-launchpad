@@ -1,0 +1,37 @@
+/* `Stat`: a scoreboard counter — label, figure, unit. The grids that arrange
+ * several (`.statrow`, `.scoreboard`) are layout, in `ui/styles/layout.css`. */
+
+.stat { display: grid; gap: var(--space-2); align-content: start; }
+.stat .k {
+  font-family: var(--font-label);
+  font-weight: var(--weight-label);
+  font-size: var(--text-xs);
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  color: var(--ink-faint);
+}
+.stat .v {
+  font-family: var(--font-numeric);
+  font-weight: var(--weight-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+  color: var(--ink);
+  -webkit-font-smoothing: var(--face-smoothing);
+  overflow-wrap: anywhere;
+}
+.stat .v.sm { font-size: var(--text-base); }
+.stat .v.amber { color: var(--amber); }
+.stat .v.cyan { color: var(--cyan); }
+.stat .v.violet { color: var(--violet); }
+.stat .v.ok { color: var(--positive); }
+.stat .v.danger { color: var(--negative); }
+.stat .u {
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  margin-left: 6px;
+  letter-spacing: var(--label-tracking);
+  /* A unit wraps whole, never letter by letter under the figure. */
+  display: inline-block;
+  white-space: nowrap;
+}

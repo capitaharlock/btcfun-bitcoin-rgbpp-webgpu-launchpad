@@ -1,0 +1,24 @@
+/* `Dialog`: a cabinet window — square, framed in ink, a hard shadow in the
+ * accent. The native <dialog> supplies the modality; this only draws it. */
+
+.dialog {
+  width: min(480px, calc(100vw - 2 * var(--gut)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--gut));
+  padding: 0;
+  border: var(--border-w) solid var(--line-strong);
+  border-top: var(--frame-w) solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg) var(--shade);
+  overflow: auto;
+}
+.dialog.wide { width: min(760px, calc(100vw - 2 * var(--gut))); }
+.dialog::backdrop { background: color-mix(in oklab, var(--shade) 78%, transparent); }
+.dialog-frame { display: grid; gap: var(--space-5); padding: var(--space-7); }
+.dialog-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+
+@media (max-width: 720px) {
+  .dialog-frame { padding: var(--space-5) var(--space-4); }
+}

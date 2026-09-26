@@ -1,7 +1,7 @@
 /* The attract mode's rules: build a scene, then advance it by a time step —
  * the formation marches, the cannon aims ahead and fires, hits burst into
  * debris and a floating reward, and bunkers shot to rubble are rebuilt. The
- * pieces `game.ts` reuses (march, explode, sky, effects) live here too. */
+ * pieces `game/` reuses (march, explode, sky, effects) live here too. */
 
 import { group } from "@/ui/format";
 import { bunkerLeft, bunkerY, freshBunker, placeBunkers } from "./bunker";

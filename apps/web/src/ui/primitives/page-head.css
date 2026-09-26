@@ -1,0 +1,4 @@
+/* `PageHead`: a page's title line — heading left, status and actions right. */
+
+.pagehead { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-4); }
+.pagehead .lede { margin: var(--space-3) 0 0; color: var(--ink-dim); font-size: var(--text-lg); max-width: 64ch; }

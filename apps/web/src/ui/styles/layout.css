@@ -1,0 +1,66 @@
+/* btc.fun — layout classes a page composes with: grids, stacks, rows, rules,
+ * and the frames that arrange several counters. Arrangement only — what goes
+ * in a cell is a primitive (`ui/primitives/`) or a feature's own markup. */
+
+.grid { display: grid; gap: var(--space-5); }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.split { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+
+@media (max-width: 1080px) {
+  .split, .g3, .g4 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .g2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+.rule { height: var(--border-w); background: var(--line); margin: var(--space-4) 0; }
+
+/* One column that may shrink below its content: an implicit `auto` column is
+   sized to the widest child, so a single long row widened the whole stack. */
+.stack-sm, .stack-md, .stack-lg { display: grid; grid-template-columns: minmax(0, 1fr); }
+.stack-sm { gap: var(--space-2); }
+.stack-md { gap: var(--space-4); }
+.stack-lg { gap: var(--space-8); }
+.row { display: flex; align-items: center; gap: var(--space-3); }
+.row.wrapped { flex-wrap: wrap; }
+.spacer { flex: 1; }
+
+.statrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-5);
+}
+
+/* A scoreboard: counters in cells divided by rules, like a cabinet's HUD. */
+.scoreboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+}
+.scoreboard > * {
+  padding: var(--space-4);
+  border-right: var(--border-w) solid var(--line);
+  border-bottom: var(--border-w) solid var(--line);
+  margin: 0 calc(-1 * var(--border-w)) calc(-1 * var(--border-w)) 0;
+}
+
+/* A divider of pixel blocks, stepping like a ruined bunker's edge. */
+.pixel-rule {
+  height: 8px;
+  opacity: calc(0.7 * var(--backdrop-grid));
+  background:
+    repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 8px) 0 0 / 100% 4px no-repeat,
+    repeating-linear-gradient(90deg, transparent 0 4px, var(--line) 4px 8px) 0 4px / 100% 4px no-repeat;
+}
+
+/* Small flex helpers. */
+.align-end { align-items: end; }
+.scroll-x { overflow-x: auto; }
+.grow { flex: 1; min-width: 0; }
+.check { display: flex; align-items: flex-start; gap: 10px; }
+.check .tiny { flex: 1; min-width: 0; overflow-wrap: anywhere; }
